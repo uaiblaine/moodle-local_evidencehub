@@ -99,6 +99,7 @@ class hub_page implements renderable, templatable {
         $total = hub_kpis::pager_count($kpis, $filter);
         $identity = $query->identity_fields();
         $data += [
+            'templateid' => $filter->templateid,
             'hidden' => $this->hidden_fields($filter),
             'downloadfields' => array_merge($this->hidden_fields($filter), [
                 ['name' => 'templateid', 'value' => $filter->templateid],
@@ -292,7 +293,8 @@ class hub_page implements renderable, templatable {
 
     /**
      * The grid's rows: the download's cells ({@see hub_download::row()}, so a restricted pair shows its
-     * status only in both), with the pair's key, the link to the worker's evidence and the pill.
+     * status only in both), with the pair's key, the link to the worker's evidence, the pill and what
+     * the inspection drawer's button needs.
      *
      * @param array $records The page of hub_query::page().
      * @param hub_download $download The download of the same grid.
@@ -303,8 +305,13 @@ class hub_page implements renderable, templatable {
         $rows = [];
         foreach ($records as $record) {
             $cells = $download->row($record);
+            $names = (object) ['worker' => $cells['worker'], 'competency' => $cells['competency']];
             $rows[] = [
                 'pair' => $record->userid . ':' . $record->competencyid,
+                'userid' => (int) $record->userid,
+                'competencyid' => (int) $record->competencyid,
+                'inspectlabel' => get_string('actioninspectlabel', 'local_evidencehub', $names),
+                'drawertitle' => get_string('drawertitle', 'local_evidencehub', $names),
                 'workername' => $cells['worker'],
                 'workerurl' => (new \moodle_url('/local/evidencehub/evidence.php', ['userid' => $record->userid]))->out(false),
                 'identity' => array_map(fn(string $field): array => ['value' => $cells[$field]], $identity),

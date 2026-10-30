@@ -110,6 +110,14 @@ final class hub_page_test extends \advanced_testcase {
 
         $html = $output->render_from_template('local_evidencehub/hub_page', $export);
         $this->assertStringContainsString('value="' . $this->pair($worker, $c1) . '"', $html);
+
+        // Each row opens its pair's drawer; the hub carries what the fragment needs.
+        $this->assertSame($templateid, $export['templateid']);
+        $this->assertSame([(int) $worker->id, $c1], [$export['rows'][0]['userid'], $export['rows'][0]['competencyid']]);
+        $names = (object) ['worker' => fullname($worker), 'competency' => 'C1'];
+        $this->assertSame(get_string('drawertitle', 'local_evidencehub', $names), $export['rows'][0]['drawertitle']);
+        $this->assertStringContainsString('data-action="inspect" data-userid="' . $worker->id . '"', $html);
+        $this->assertStringContainsString('data-templateid="' . $templateid . '"', $html);
     }
 
     /**
@@ -138,10 +146,19 @@ final class hub_page_test extends \advanced_testcase {
             $export['rows'][0]['workername'],
             $export['rows'][0]['competency'],
         ]);
+        $names = (object) ['worker' => $name . ' X', 'competency' => $name];
+        $this->assertSame(get_string('drawertitle', 'local_evidencehub', $names), $export['rows'][0]['drawertitle']);
+        $this->assertSame(get_string('actioninspectlabel', 'local_evidencehub', $names), $export['rows'][0]['inspectlabel']);
         $html = $output->render_from_template('local_evidencehub/hub_page', $export);
         $this->assertStringContainsString('Safety &amp; Health &lt; 2', $html);
         $this->assertStringNotContainsString('&amp;amp;', $html);
         $this->assertStringNotContainsString('&amp;lt;', $html);
+        // The drawer button's attributes escape the plain names once too.
+        $escaped = 'Safety &amp; Health &lt; 2 X: Safety &amp; Health &lt; 2';
+        $this->assertStringContainsString('data-title="' . $escaped . '"', $html);
+        $inspect = get_string('actioninspectlabel', 'local_evidencehub', (object) ['worker' => '%W', 'competency' => '%C']);
+        $label = str_replace(['%W', '%C'], ['Safety &amp; Health &lt; 2 X', 'Safety &amp; Health &lt; 2'], $inspect);
+        $this->assertStringContainsString('aria-label="' . $label . '"', $html);
     }
 
     /**

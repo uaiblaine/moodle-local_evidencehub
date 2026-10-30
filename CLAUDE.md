@@ -80,6 +80,8 @@ policies.php      framework list / one framework's policies (output/policy_frame
                   output/framework_policies, amd/src/policies); settings.php adds its admin entry
 index.php         the hub (output/hub_page, amd/src/hub_page); entries: settings.php (system) and
                   lib.php's category More menu; db/caches.php hubkpis + hubgeneration
+                  drawer: amd/src/drawer (core/modal subclass, templates/drawer), body from lib.php's
+                  output_fragment_pair (output/pair_drawer, templates/pair_drawer)
 classes/local/    status, meta, audit, export: stored constants and their labels
                   meta also holds the YYYYMMDD date helpers; types: the seeded default types
                   details: THE details API (save, verify, reject, the reset rule); all callers use it
@@ -160,6 +162,12 @@ tests/generator/  writes rows directly (create_status() stays direct for the tas
 - **Templates print plain spellings**: `format_string(..., ['escape' => false])` into double stashes.
 - **"Today" is the site's calendar day** (`core_date::get_server_timezone_object()`), read from
   `\core\clock`, so tests freeze it with `mock_clock_with_frozen()`.
+- **The drawer's fragment checks everything itself** (`local_evidencehub_output_fragment_pair()`):
+  core's `core_get_fragment` validates only the context, so view, read access, competency and
+  template are re-checked there, never trusted to the hub page.
+- **The drawer's side-sheet class is in its template** (`templates/drawer.mustache`), and it slides
+  in with a CSS animation: core's `.modal` goes from `display: none` to block in one step, which a
+  transition cannot animate (S0 spike: a class added after `create()` lost the first slide).
 - **`settings.php` only adds an admin page**, so `marketplace_readiness_test` carries the
   local_dictionaries variant of the settings check (an external page and no setting is accepted).
 

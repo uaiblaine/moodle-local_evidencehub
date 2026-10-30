@@ -1,0 +1,245 @@
+{{!
+    This file is part of Moodle - http://moodle.org/
+
+    Moodle is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    Moodle is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
+}}
+{{!
+    @template local_evidencehub/pair_drawer
+
+    The body of the inspection drawer of one (worker, competency) pair.
+
+    Classes required for JS:
+    * none
+
+    Data attributes required for JS:
+    * data-region="local-evidencehub-pair" on the root, with data-userid and data-competencyid
+    * data-action="verify|edit|recycle" on the action buttons, with data-id (meta id for verify,
+      core evidence id for edit) or data-recyclefrom (meta id, 0 for none)
+
+    Context variables required for this template:
+    * userid, competencyid - The pair.
+    * worker - name, hasidentity, identity (label, value).
+    * competencyname, competencyidnumber - The competency.
+    * status - label, badgeclass, daysleft of the effective status pill.
+    * hasproficiency, proficiency (label, badgeclass) - Core's proficiency, when the viewer may read it.
+    * canrecycle, recyclefrom - Register recycling.
+    * hasplan, planurl - Open in learning plan.
+    * hasdeciding, decidinginforce, deciding - The deciding evidence, as a history item with
+      hoursline, authcode, hasfiles and files (filename, url).
+    * policy, policysource - The resolved policy.
+    * hashistory, history - Every linked evidence: userevidenceid, name, viewurl, metaid, hasdetails,
+      restricted, typename, state, statelabel, interval, issuedate, expirydate, noexpiry, issuer,
+      hours, verifylabel, verifybadge, decidedby, gap, canverify, canedit.
+    * hasaudit, audit - date, action, actor, evidence, note.
+    * footer - When the status was computed and its next change.
+
+    Example context (json):
+    {
+        "userid": 12,
+        "competencyid": 7,
+        "worker": {"name": "Ana Souza", "hasidentity": true, "identity": [{"label": "Email address", "value": "ana@example.com"}]},
+        "competencyname": "Work at height",
+        "competencyidnumber": "NR35",
+        "status": {"label": "Due, critical", "badgeclass": "bg-danger text-white", "daysleft": "18 days left"},
+        "hasproficiency": true,
+        "proficiency": {"label": "Proficient", "badgeclass": "bg-success text-white"},
+        "canrecycle": true,
+        "recyclefrom": 4,
+        "hasplan": true,
+        "planurl": "https://example.com/admin/tool/lp/user_competency_in_plan.php",
+        "hasdeciding": true,
+        "decidinginforce": true,
+        "deciding": [{
+            "userevidenceid": 9, "name": "Recycling 2024", "viewurl": "https://example.com/", "metaid": 4,
+            "hasdetails": true, "restricted": false, "typename": "Regulatory training certificate (NR)",
+            "issuedate": "2024-11-20", "expirydate": "2026-11-16", "noexpiry": false, "issuer": "Training centre",
+            "hoursline": "8 (policy minimum 8)", "authcode": "35-2024-88123", "verifylabel": "Verified",
+            "verifybadge": "bg-success text-white", "decidedby": "By Mia Manager on 22/11/24, 10:00",
+            "hasfiles": true, "files": [{"filename": "certificate.pdf", "url": "https://example.com/certificate.pdf"}]
+        }],
+        "policy": "Regulatory · Verified evidence only · Alerts 60 and 30 days before expiry · Blocks readiness when expired",
+        "policysource": "The framework",
+        "hashistory": true,
+        "history": [{
+            "userevidenceid": 9, "name": "Recycling 2024", "viewurl": "https://example.com/", "metaid": 4,
+            "hasdetails": true, "restricted": false, "typename": "Regulatory training certificate (NR)",
+            "state": "inforce", "statelabel": "In force", "interval": "2024-11-20 → 2026-11-16",
+            "issuer": "Training centre", "hours": "8", "verifylabel": "Verified", "verifybadge": "bg-success text-white",
+            "gap": "", "canverify": true, "canedit": true
+        }, {
+            "userevidenceid": 5, "name": "Initial training", "viewurl": "https://example.com/", "metaid": 2,
+            "hasdetails": true, "restricted": false, "typename": "Regulatory training certificate (NR)",
+            "state": "expired", "statelabel": "Expired", "interval": "2022-10-03 → 2024-10-03",
+            "issuer": "Training centre", "hours": "8", "verifylabel": "Verified", "verifybadge": "bg-success text-white",
+            "gap": "Gap of 47 days before the next record", "canverify": true, "canedit": true
+        }],
+        "hasaudit": true,
+        "audit": [{"date": "22/11/24, 10:00", "action": "Verified", "actor": "Mia Manager", "evidence": "Recycling 2024", "note": ""}],
+        "footer": "Status computed 29/10/26, 01:00 · next change 2026-10-30"
+    }
+}}
+<div class="local-evidencehub-pair" data-region="local-evidencehub-pair" data-userid="{{userid}}" data-competencyid="{{competencyid}}">
+    <div class="local-evidencehub-pair-header mb-3">
+        {{#worker}}
+        <p class="text-muted small mb-1">
+            <span>{{name}}</span>
+            {{#identity}}<span> · {{label}}: {{value}}</span>{{/identity}}
+        </p>
+        {{/worker}}
+        <h3 class="h5 mb-1">{{competencyname}}</h3>
+        {{#competencyidnumber}}
+        <p class="text-muted small mb-2">{{competencyidnumber}}</p>
+        {{/competencyidnumber}}
+        <p class="mb-2 local-evidencehub-pair-pills">
+            {{#status}}
+            <span class="badge {{badgeclass}}" data-region="status">{{label}}</span>
+            {{#daysleft}}<span class="small">{{daysleft}}</span>{{/daysleft}}
+            {{/status}}
+            {{#hasproficiency}}{{#proficiency}}
+            <span class="badge {{badgeclass}}" data-region="proficiency">{{label}}</span>
+            {{/proficiency}}{{/hasproficiency}}
+        </p>
+        <div class="d-flex flex-wrap gap-2">
+            {{#canrecycle}}
+            <button type="button" class="btn btn-primary btn-sm" data-action="recycle" data-recyclefrom="{{recyclefrom}}">{{#str}} actionrecycle, local_evidencehub {{/str}}</button>
+            {{/canrecycle}}
+            {{#hasplan}}
+            <a class="btn btn-secondary btn-sm" href="{{planurl}}">{{#str}} actionopenplan, local_evidencehub {{/str}}</a>
+            {{/hasplan}}
+        </div>
+    </div>
+
+    <section class="local-evidencehub-pair-section mb-3" data-region="deciding">
+        {{#decidinginforce}}<h4 class="h6">{{#str}} drawerinforce, local_evidencehub {{/str}}</h4>{{/decidinginforce}}
+        {{^decidinginforce}}<h4 class="h6">{{#str}} drawerdeciding, local_evidencehub {{/str}}</h4>{{/decidinginforce}}
+        {{#hasdeciding}}
+        {{#deciding}}
+        <p class="mb-1"><a href="{{viewurl}}">{{name}}</a> <span class="text-muted">{{typename}}</span></p>
+        {{#restricted}}
+        <p class="text-muted mb-0">{{#str}} detailsrestricted, local_evidencehub {{/str}}</p>
+        {{/restricted}}
+        {{^restricted}}
+        <dl class="row mb-2 local-evidencehub-details">
+            <dt class="col-sm-4">{{#str}} issuedate, local_evidencehub {{/str}}</dt>
+            <dd class="col-sm-8 local-evidencehub-date">{{issuedate}}</dd>
+            <dt class="col-sm-4">{{#str}} expirydate, local_evidencehub {{/str}}</dt>
+            <dd class="col-sm-8 local-evidencehub-date">{{#noexpiry}}{{#str}} noexpiry, local_evidencehub {{/str}}{{/noexpiry}}{{^noexpiry}}{{expirydate}}{{/noexpiry}}</dd>
+            {{#issuer}}
+            <dt class="col-sm-4">{{#str}} issuer, local_evidencehub {{/str}}</dt>
+            <dd class="col-sm-8">{{issuer}}</dd>
+            {{/issuer}}
+            {{#authcode}}
+            <dt class="col-sm-4">{{#str}} authcode, local_evidencehub {{/str}}</dt>
+            <dd class="col-sm-8">{{authcode}}</dd>
+            {{/authcode}}
+            {{#hoursline}}
+            <dt class="col-sm-4">{{#str}} hours, local_evidencehub {{/str}}</dt>
+            <dd class="col-sm-8">{{hoursline}}</dd>
+            {{/hoursline}}
+            <dt class="col-sm-4">{{#str}} verification, local_evidencehub {{/str}}</dt>
+            <dd class="col-sm-8"><span class="badge {{verifybadge}}">{{verifylabel}}</span> {{#decidedby}}<span class="text-muted small">{{decidedby}}</span>{{/decidedby}}</dd>
+        </dl>
+        {{#hasfiles}}
+        <ul class="list-unstyled mb-0 local-evidencehub-files" aria-label="{{#str}} drawerfiles, local_evidencehub {{/str}}">
+            {{#files}}
+            <li><a href="{{url}}">{{#pix}} t/download, core {{/pix}}{{filename}}</a></li>
+            {{/files}}
+        </ul>
+        {{/hasfiles}}
+        {{/restricted}}
+        {{/deciding}}
+        {{/hasdeciding}}
+        {{^hasdeciding}}
+        <p class="text-muted mb-0">{{#str}} drawernoinforce, local_evidencehub {{/str}}</p>
+        {{/hasdeciding}}
+    </section>
+
+    <section class="local-evidencehub-pair-section mb-3" data-region="policy">
+        <h4 class="h6">{{#str}} drawerpolicy, local_evidencehub {{/str}}</h4>
+        <p class="mb-0">{{policy}}</p>
+        <p class="text-muted small mb-0">{{#str}} source, local_evidencehub {{/str}}: {{policysource}}</p>
+    </section>
+
+    <section class="local-evidencehub-pair-section mb-3" data-region="history">
+        <h4 class="h6">{{#str}} drawerhistory, local_evidencehub {{/str}}</h4>
+        {{#hashistory}}
+        <ol class="list-unstyled local-evidencehub-timeline mb-0">
+            {{#history}}
+            <li class="local-evidencehub-timeline-item mb-2" data-region="history-item" data-userevidenceid="{{userevidenceid}}">
+                <p class="mb-1"><a href="{{viewurl}}">{{name}}</a> {{#typename}}<span class="text-muted">{{typename}}</span>{{/typename}}</p>
+                {{#restricted}}
+                <p class="text-muted mb-1">{{#str}} detailsrestricted, local_evidencehub {{/str}}</p>
+                {{/restricted}}
+                {{^restricted}}
+                <p class="mb-1">
+                    <span class="fw-semibold" data-region="state">{{statelabel}}</span>
+                    {{#interval}}<span class="local-evidencehub-date">{{interval}}</span>{{/interval}}
+                    {{#hasdetails}}<span class="badge {{verifybadge}}">{{verifylabel}}</span>{{/hasdetails}}
+                </p>
+                {{#hasdetails}}
+                <p class="text-muted small mb-1">
+                    {{#issuer}}<span>{{issuer}}</span>{{/issuer}}
+                    {{#hours}}<span> · {{#str}} hours, local_evidencehub {{/str}}: {{hours}}</span>{{/hours}}
+                </p>
+                {{/hasdetails}}
+                {{#gap}}
+                <p class="small mb-1 local-evidencehub-gap" data-region="gap">{{gap}}</p>
+                {{/gap}}
+                {{/restricted}}
+                <div class="d-flex flex-wrap gap-2">
+                    {{#canverify}}
+                    <button type="button" class="btn btn-secondary btn-sm" data-action="verify" data-id="{{metaid}}">{{#str}} actionverify, local_evidencehub {{/str}}</button>
+                    {{/canverify}}
+                    {{#canedit}}
+                    <button type="button" class="btn btn-secondary btn-sm" data-action="edit" data-id="{{userevidenceid}}">{{#str}} actioneditdetails, local_evidencehub {{/str}}</button>
+                    {{/canedit}}
+                </div>
+            </li>
+            {{/history}}
+        </ol>
+        {{/hashistory}}
+        {{^hashistory}}
+        <p class="text-muted mb-0">{{#str}} drawerhistoryempty, local_evidencehub {{/str}}</p>
+        {{/hashistory}}
+    </section>
+
+    <section class="local-evidencehub-pair-section mb-3" data-region="audit">
+        <h4 class="h6">{{#str}} draweraudit, local_evidencehub {{/str}}</h4>
+        {{#hasaudit}}
+        <table class="table table-sm local-evidencehub-audit mb-0">
+            <thead>
+                <tr>
+                    <th scope="col">{{#str}} date {{/str}}</th>
+                    <th scope="col">{{#str}} drawerauditaction, local_evidencehub {{/str}}</th>
+                    <th scope="col">{{#str}} note, local_evidencehub {{/str}}</th>
+                </tr>
+            </thead>
+            <tbody>
+                {{#audit}}
+                <tr data-region="audit-row">
+                    <td class="local-evidencehub-date">{{date}}</td>
+                    <td>{{action}}{{#actor}} · {{actor}}{{/actor}}<br><span class="text-muted small">{{evidence}}</span></td>
+                    <td>{{note}}</td>
+                </tr>
+                {{/audit}}
+            </tbody>
+        </table>
+        {{/hasaudit}}
+        {{^hasaudit}}
+        <p class="text-muted mb-0">{{#str}} drawerauditempty, local_evidencehub {{/str}}</p>
+        {{/hasaudit}}
+    </section>
+
+    <p class="text-muted small mb-0" data-region="footer">{{footer}}</p>
+</div>

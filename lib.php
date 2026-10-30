@@ -46,3 +46,52 @@ function local_evidencehub_extend_navigation_category_settings(navigation_node $
     $node->set_force_into_more_menu(true);
     $navigation->add_node($node);
 }
+
+/**
+ * The inspection drawer of one (worker, competency) pair of the hub, as core_get_fragment serves it.
+ *
+ * Core only validates the context: every check is made here, never trusted to the hub page that
+ * opened the drawer. The context must be the system or a category where the viewer holds
+ * local/evidencehub:view; the viewer must read the worker's evidence (the fact the hub's SQL cut
+ * reads); the competency must exist and be readable by the viewer (core's competencyview or
+ * competencymanage in its framework's context); a template, when given, must be one the hub offers there.
+ *
+ * @param array $args The fragment's context, and userid, competencyid and optionally templateid.
+ * @return string The drawer's body.
+ * @throws moodle_exception When a check refuses.
+ */
+function local_evidencehub_output_fragment_pair(array $args): string {
+    global $PAGE;
+    $context = $args['context'];
+    \local_evidencehub\local\hub_access::require_view($context);
+    \core_competency\api::require_enabled();
+
+    $userid = (int) clean_param($args['userid'] ?? 0, PARAM_INT);
+    $competencyid = (int) clean_param($args['competencyid'] ?? 0, PARAM_INT);
+    $templateid = (int) clean_param($args['templateid'] ?? 0, PARAM_INT);
+
+    $user = \core_user::get_user($userid);
+    if (!$user || $user->deleted) {
+        throw new moodle_exception('invaliduser');
+    }
+    if (!\core_competency\user_evidence::can_read_user($userid)) {
+        throw new required_capability_exception(
+            context_user::instance($userid),
+            'moodle/competency:userevidenceview',
+            'nopermissions',
+            ''
+        );
+    }
+    if (!\core_competency\competency::record_exists($competencyid)) {
+        throw new moodle_exception('invalidrecord', 'error', '', 'competency');
+    }
+    // Its name, ID number and policy are printed: core's own read check of the competency.
+    \core_competency\api::read_competency($competencyid);
+    if ($templateid) {
+        \local_evidencehub\local\hub_access::require_template($templateid, $context);
+    }
+
+    $drawer = new \local_evidencehub\output\pair_drawer($context, $userid, $competencyid, $templateid);
+    $output = $PAGE->get_renderer('core');
+    return $output->render_from_template('local_evidencehub/pair_drawer', $drawer->export_for_template($output));
+}

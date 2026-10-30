@@ -14,16 +14,21 @@
 // along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
 
 /**
- * The evidence hub's grid: the checkbox in the heading selects or clears every row of the page.
+ * The evidence hub's grid: the checkbox in the heading selects or clears every row of the page, and
+ * each row's button opens the pair's inspection drawer.
  *
  * @module     local_evidencehub/hub_page
  * @copyright  2026 Anderson Blaine
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
+import {open as openDrawer} from 'local_evidencehub/drawer';
+import Notification from 'core/notification';
+
 const REGION = '[data-region="local-evidencehub-hub"]';
 const SELECTALL = '[data-action="selectall"]';
 const PAIR = '[data-region="pair"]';
+const INSPECT = '[data-action="inspect"]';
 
 /**
  * Make the heading checkbox reflect the rows: ticked when all are, mixed when some are.
@@ -42,7 +47,7 @@ const reflect = (region) => {
 };
 
 /**
- * Bind the selection checkboxes of the page.
+ * Bind the selection checkboxes and the drawer buttons of the page.
  */
 export const init = () => {
     const region = document.querySelector(REGION);
@@ -58,5 +63,14 @@ export const init = () => {
         if (event.target.matches(SELECTALL) || event.target.matches(PAIR)) {
             reflect(region);
         }
+    });
+    region.addEventListener('click', (event) => {
+        const button = event.target.closest(INSPECT);
+        if (!button || !region.contains(button)) {
+            return;
+        }
+        event.preventDefault();
+        openDrawer(button, parseInt(region.dataset.contextid, 10), parseInt(region.dataset.templateid, 10))
+            .catch(Notification.exception);
     });
 };

@@ -14,8 +14,8 @@ and lets a manager export a ZIP of readiness dossiers whose PDF pages carry a ve
 The evidence itself stays core's (`competency_userevidence` and its files): the plugin keeps the
 details beside it in tables of its own and never changes a core rating. It is developed in stages;
 this release holds the data model, the capabilities, the privacy provider, the evidence details
-(entering, verifying and rejecting them), the validity engine with its policies and the hub; the
-dossiers come next.
+(entering, verifying and rejecting them), the validity engine with its policies, the hub and its
+inspection drawer; the dossiers come next.
 
 
 Requirements
@@ -157,6 +157,29 @@ type or issuer,
 to a viewer who is not the worker and lacks `local/evidencehub:viewsensitive` in the worker's user
 context; the status filters, the sort, the tiles and the download treat it as its own status, so
 none of them reveals what the cell hides.
+
+**The inspection drawer.** Each row of the grid has an "Inspect" button that opens a side sheet
+for that worker and competency. Its content is loaded from the server, which checks again that the
+viewer holds `local/evidencehub:view` in the hub's context, may read the worker's evidence
+(`moodle/competency:userevidenceview`) and the competency (core's `competencyview`). It shows the worker, the competency and its status (with
+the days left), core's proficiency to who may read the worker's user competencies, the evidence in
+force (type, dates, issuer, hours against the policy's minimum, verification, its files as download
+links served by core, and the authenticity code to managers and verifiers only), the policy that
+applies and where it is set, every evidence of the worker linked to the competency as a timeline
+(newest first, each with its interval, state, issuer and hours, and the gap in days to the next
+record when they do not touch), the audit trail of those evidence records (notes only to the worker
+and to verifiers), and when the status was computed and its next change. An evidence of a sensitive
+type shows only its type and "Restricted details" to a viewer who is not the worker and lacks
+`local/evidencehub:viewsensitive`, and its audit rows only their date and action; when such an
+evidence decides the pair, the section is headed "Deciding evidence" whether or not it is in force.
+
+From the drawer, each action shows only to who may take it, and the form it opens checks again:
+"Verify or reject" (verifiers, never on their own evidence), "Edit details" (who may manage the
+worker's evidence), "Open in learning plan" (the worker's plan from the hub's template, when the
+template requires the competency and the viewer may read the plan), and
+**Register recycling**: a new evidence for the same competency, with the type and issuer of the
+latest one copied, which on save is linked to the competency through core and recomputes the
+pair. Earlier evidence is never rewritten: a recycling adds a record to the timeline.
 
 **Custom reports.** The report builder datasource "Competency validity" (one row per stored status,
 with the deciding evidence, the worker and the competency) is offered to holders of

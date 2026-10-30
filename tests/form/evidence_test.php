@@ -322,4 +322,158 @@ final class evidence_test extends \advanced_testcase {
         $id = $form->process_dynamic_submission();
         $this->assertSame($this->type_id('aso'), (int) details::get($id)->typeid);
     }
+
+    /**
+     * A competency of a new framework, and an evidence of a user linked to it with details.
+     *
+     * @param int $userid The owner.
+     * @param array $details Details as details_data() takes them.
+     * @param int|null $competencyid The competency; a new one when null.
+     * @return array [competency id, meta row].
+     */
+    private function linked_details(int $userid, array $details = [], ?int $competencyid = null): array {
+        $generator = $this->getDataGenerator()->get_plugin_generator('core_competency');
+        if ($competencyid === null) {
+            $framework = $generator->create_framework();
+            $competencyid = (int) $generator->create_competency(['competencyframeworkid' => $framework->get('id')])->get('id');
+        }
+        $ue = $this->evidence_of($userid);
+        $generator->create_user_evidence_competency(['userevidenceid' => $ue->get('id'), 'competencyid' => $competencyid]);
+        $meta = $this->getDataGenerator()->get_plugin_generator('local_evidencehub')->create_meta($details + [
+            'userid' => $userid,
+            'userevidenceid' => $ue->get('id'),
+            'typeid' => $this->type_id('diploma'),
+            'issuer' => 'Old school',
+        ]);
+        return [$competencyid, $meta];
+    }
+
+    /**
+     * The type and issuer a recycling form starts with, for the current user.
+     *
+     * @param int $competencyid The competency argument.
+     * @param int $recyclefrom The recyclefrom argument.
+     * @return array [typeid or null, issuer, recyclefrom] as the form starts with them.
+     */
+    private function recycle_prefill(int $competencyid, int $recyclefrom): array {
+        $args = [
+            'userid' => (int) $this->worker->id,
+            'id' => 0,
+            'competencyid' => $competencyid,
+            'recyclefrom' => $recyclefrom,
+        ];
+        $form = new evidence(null, null, 'post', '', [], true, $args, true);
+        $form->set_data_for_dynamic_submission();
+        $mform = (new \ReflectionProperty(\moodleform::class, '_form'))->getValue($form);
+        $defaults = $mform->_defaultValues;
+        return [
+            isset($defaults['typeid']) ? (int) $defaults['typeid'] : null,
+            (string) ($defaults['issuer'] ?? ''),
+            (int) ($defaults['recyclefrom'] ?? 0),
+        ];
+    }
+
+    /**
+     * A recycling copies the type and issuer of the worker's earlier evidence of the competency.
+     *
+     * @return void
+     */
+    public function test_recycling_prefills_type_and_issuer(): void {
+        [$competencyid, $meta] = $this->linked_details((int) $this->worker->id);
+        $this->setUser($this->user_with(['moodle/competency:userevidencemanage']));
+        $this->assertSame(
+            [$this->type_id('diploma'), 'Old school', (int) $meta->id],
+            $this->recycle_prefill($competencyid, (int) $meta->id)
+        );
+    }
+
+    /**
+     * Nothing is copied from another worker's evidence, from an evidence of another competency, or
+     * from details the user may not read; with viewsensitive the sensitive ones are copied.
+     *
+     * @return void
+     */
+    public function test_recycling_copies_nothing_it_may_not(): void {
+        [$competencyid] = $this->linked_details((int) $this->worker->id);
+        [, $others] = $this->linked_details((int) $this->user_with()->id, [], $competencyid);
+        [, $elsewhere] = $this->linked_details((int) $this->worker->id);
+        [, $sensitive] = $this->linked_details((int) $this->worker->id, ['typeid' => $this->type_id('aso')], $competencyid);
+        $manager = $this->user_with(['moodle/competency:userevidencemanage']);
+        $this->setUser($manager);
+
+        foreach (['another worker' => $others, 'another competency' => $elsewhere, 'restricted' => $sensitive] as $case => $meta) {
+            $this->assertSame([null, '', 0], $this->recycle_prefill($competencyid, (int) $meta->id), 'Copied from ' . $case);
+        }
+
+        // Control: with viewsensitive the sensitive evidence is copied.
+        $this->grant($manager, ['local/evidencehub:viewsensitive']);
+        $this->assertSame(
+            [$this->type_id('aso'), 'Old school', (int) $sensitive->id],
+            $this->recycle_prefill($competencyid, (int) $sensitive->id)
+        );
+    }
+
+    /**
+     * Saving a recycling links the new evidence to the competency through core, and the pair is
+     * recomputed by the plugin's observer.
+     *
+     * @return void
+     */
+    public function test_saving_a_recycling_links_it_and_recomputes_the_pair(): void {
+        global $DB;
+        [$competencyid, $meta] = $this->linked_details(
+            (int) $this->worker->id,
+            ['issuedate' => 20200101, 'expirydate' => 20210101]
+        );
+        $this->setUser($this->user_with(['moodle/competency:userevidencemanage']));
+        $form = $this->submitted($this->submission((int) $this->worker->id, 0, [
+            'competencyid' => $competencyid,
+            'recyclefrom' => (int) $meta->id,
+            'expirydate' => ['enabled' => 1, 'day' => 15, 'month' => 1, 'year' => 2099],
+        ]));
+        $this->assertTrue($form->is_validated(), json_encode($this->errors($form)));
+        $id = $form->process_dynamic_submission();
+
+        $link = ['userevidenceid' => $id, 'competencyid' => $competencyid];
+        $this->assertTrue($DB->record_exists('competency_userevidencecomp', $link));
+        $row = $DB->get_record('local_evidencehub_status', ['userid' => $this->worker->id, 'competencyid' => $competencyid]);
+        $this->assertNotFalse($row, 'The pair was not recomputed.');
+        $this->assertSame((int) details::get($id)->id, (int) $row->metaid);
+        // The earlier evidence is kept: a recycling adds, never rewrites.
+        $this->assertSame(20210101, (int) details::get((int) $meta->userevidenceid)->expirydate);
+    }
+
+    /**
+     * An edit is never linked to a competency: the argument counts only when creating.
+     *
+     * @return void
+     */
+    public function test_an_edit_ignores_the_competency(): void {
+        global $DB;
+        [$competencyid] = $this->linked_details((int) $this->worker->id);
+        $ue = $this->evidence_of((int) $this->worker->id);
+        $this->setUser($this->worker);
+        $submission = $this->submission((int) $this->worker->id, (int) $ue->get('id'), ['competencyid' => $competencyid]);
+        $form = $this->submitted($submission);
+        $this->assertTrue($form->is_validated(), json_encode($this->errors($form)));
+        $form->process_dynamic_submission();
+        $this->assertFalse($DB->record_exists('competency_userevidencecomp', ['userevidenceid' => $ue->get('id')]));
+    }
+
+    /**
+     * A recycling is refused to who cannot manage the worker's evidence, before any form shows.
+     *
+     * @return void
+     */
+    public function test_recycling_needs_manage_rights(): void {
+        [$competencyid, $meta] = $this->linked_details((int) $this->worker->id);
+        $args = ['userid' => (int) $this->worker->id, 'id' => 0, 'competencyid' => $competencyid, 'recyclefrom' => (int) $meta->id];
+        // Control: a manager reaches it.
+        $this->setUser($this->user_with(['moodle/competency:userevidencemanage']));
+        $this->assertInstanceOf(evidence::class, new evidence(null, null, 'post', '', [], true, $args, true));
+
+        $this->setUser($this->user_with(['moodle/competency:userevidenceview']));
+        $this->expectException(\required_capability_exception::class);
+        new evidence(null, null, 'post', '', [], true, $args, true);
+    }
 }

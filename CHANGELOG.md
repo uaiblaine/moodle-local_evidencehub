@@ -8,6 +8,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- Stage S5: the inspection drawer. Each row of the hub's grid opens a side sheet (a `core/modal`
+  with its own template) for one worker and competency, its body a fragment
+  (`local_evidencehub_output_fragment_pair()`) that checks the context, `local/evidencehub:view`,
+  the right to read the worker's evidence and the competency (core's `read_competency()`), and the
+  template itself; the learning plan link needs a template requiring the competency and a plan the
+  viewer may read. It shows the
+  effective status with the days left, core's proficiency to who may read it, the evidence in force
+  with its files, the resolved policy in one sentence, every linked evidence as a timeline (newest
+  issue first, its state, and the gap to the next record), the audit trail and the next change, each
+  item following the sensitive rule on its own; and offers verify or reject, edit details, open in
+  learning plan and register recycling. The evidence form takes a `competencyid` (and a
+  `recyclefrom` whose type and issuer it copies when that evidence is the worker's, linked to the
+  competency and readable) and links a new evidence to the competency through core on save.
 - Stage S4: the hub page (`/local/evidencehub/index.php`), opened from Site administration >
   Competencies > Evidence hub or from a course category's More menu, locked there to that
   category's learning plan templates. For one template it lists every (worker, competency) pair of

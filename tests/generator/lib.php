@@ -133,6 +133,36 @@ class local_evidencehub_generator extends component_generator_base {
     }
 
     /**
+     * A core evidence of a user linked to a competency, with details and their "created" audit row,
+     * and the pair recomputed as the plugin's observers would.
+     *
+     * @param array $record userid and competencyid (required), name, and columns of
+     *     local_evidencehub_meta (typeid, issuedate, expirydate, issuer, verifystatus, ...).
+     * @return stdClass The meta row.
+     * @throws coding_exception Without a userid or a competencyid.
+     */
+    public function create_evidence(array $record): stdClass {
+        if (empty($record['userid']) || empty($record['competencyid'])) {
+            throw new coding_exception('The userid and competencyid values are required.');
+        }
+        $competencygenerator = $this->datagenerator->get_plugin_generator('core_competency');
+        $evidence = $competencygenerator->create_user_evidence(array_filter([
+            'userid' => $record['userid'],
+            'name' => $record['name'] ?? null,
+        ]));
+        $competencygenerator->create_user_evidence_competency([
+            'userevidenceid' => $evidence->get('id'),
+            'competencyid' => $record['competencyid'],
+        ]);
+        $competencyid = (int) $record['competencyid'];
+        unset($record['name'], $record['competencyid']);
+        $meta = $this->create_meta(['userevidenceid' => $evidence->get('id')] + $record);
+        $this->create_audit($meta, (int) $meta->userid);
+        \local_evidencehub\local\status_repository::recompute((int) $meta->userid, $competencyid);
+        return $meta;
+    }
+
+    /**
      * An audit trail entry about a details row.
      *
      * @param stdClass $meta The details row, from create_meta().
