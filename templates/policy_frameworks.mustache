@@ -1,0 +1,70 @@
+{{!
+    This file is part of Moodle - http://moodle.org/
+
+    Moodle is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    Moodle is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
+}}
+{{!
+    @template local_evidencehub/policy_frameworks
+
+    The competency frameworks whose validity policies the user may manage.
+
+    Classes required for JS:
+    * none
+
+    Data attributes required for JS:
+    * none
+
+    Context variables required for this template:
+    * hasframeworks - Whether there is any.
+    * frameworks - id, name, idnumber, contextname and url of each.
+
+    Example context (json):
+    {
+        "hasframeworks": true,
+        "frameworks": [
+            {
+                "id": 2,
+                "name": "Safety at work",
+                "idnumber": "SAFETY",
+                "contextname": "Operations",
+                "url": "https://example.com/local/evidencehub/policies.php?frameworkid=2"
+            }
+        ]
+    }
+}}
+<div class="local-evidencehub-frameworks">
+    {{#hasframeworks}}
+    <table class="table generaltable">
+        <thead>
+            <tr>
+                <th scope="col">{{#str}} framework, local_evidencehub {{/str}}</th>
+                <th scope="col">{{#str}} idnumber {{/str}}</th>
+                <th scope="col">{{#str}} context {{/str}}</th>
+            </tr>
+        </thead>
+        <tbody>
+            {{#frameworks}}
+            <tr>
+                <td><a href="{{url}}">{{name}}</a></td>
+                <td>{{idnumber}}</td>
+                <td>{{contextname}}</td>
+            </tr>
+            {{/frameworks}}
+        </tbody>
+    </table>
+    {{/hasframeworks}}
+    {{^hasframeworks}}
+    <p class="text-muted">{{#str}} nopolicyframeworks, local_evidencehub {{/str}}</p>
+    {{/hasframeworks}}
+</div>

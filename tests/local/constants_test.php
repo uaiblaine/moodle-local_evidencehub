@@ -39,6 +39,7 @@ use PHPUnit\Framework\Attributes\DataProvider;
 #[CoversClass(status::class)]
 #[CoversClass(meta::class)]
 #[CoversClass(audit::class)]
+#[CoversClass(policy::class)]
 final class constants_test extends \advanced_testcase {
     /**
      * The labelled constant groups.
@@ -50,6 +51,9 @@ final class constants_test extends \advanced_testcase {
             'status' => [status::class, 'STATUS_', 'label'],
             'verification' => [meta::class, 'VERIFY_', 'verify_label'],
             'audit action' => [audit::class, 'ACTION_', 'label'],
+            'policy kind' => [policy::class, 'KIND_', 'kind_label'],
+            'expiry behaviour' => [policy::class, 'ONEXPIRY_', 'onexpiry_label'],
+            'policy source' => [policy::class, 'SOURCE_', 'source_label'],
         ];
     }
 
@@ -106,5 +110,21 @@ final class constants_test extends \advanced_testcase {
         $this->assertSame('2026-02-28', meta::iso_date(20260228));
         $this->assertSame('2028-02-29', meta::iso_date(20280229));
         $this->assertNull(meta::iso_date(null));
+    }
+
+    /**
+     * Every status, and a pair without a row, has a badge that states its text colour.
+     *
+     * @return void
+     */
+    public function test_every_status_badge_states_its_text_colour(): void {
+        $statuses = array_values(array_filter(
+            (new \ReflectionClass(status::class))->getConstants(),
+            fn(string $name): bool => str_starts_with($name, 'STATUS_'),
+            ARRAY_FILTER_USE_KEY
+        ));
+        foreach (array_merge([null], $statuses) as $value) {
+            $this->assertMatchesRegularExpression('/^bg-\w+ text-(white|dark)$/', status::badge_class($value));
+        }
     }
 }

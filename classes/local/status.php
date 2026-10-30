@@ -60,4 +60,22 @@ final class status {
             default => throw new \coding_exception('Unknown evidence hub status: ' . $status),
         };
     }
+
+    /**
+     * The badge classes of a status, each with its text colour stated.
+     *
+     * @param int|null $status A STATUS_* constant, or null for a pair with no status row.
+     * @return string
+     * @throws \coding_exception On an unknown status.
+     */
+    public static function badge_class(?int $status): string {
+        return match ($status) {
+            null, self::STATUS_UNVERIFIED => 'bg-secondary text-dark',
+            self::STATUS_VALID => 'bg-success text-white',
+            self::STATUS_DUE => 'bg-warning text-dark',
+            self::STATUS_CRITICAL => 'bg-danger text-white',
+            self::STATUS_EXPIRED => 'bg-dark text-white',
+            default => throw new \coding_exception('Unknown evidence hub status: ' . $status),
+        };
+    }
 }

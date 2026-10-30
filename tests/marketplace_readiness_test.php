@@ -27,6 +27,9 @@ use PHPUnit\Framework\Attributes\CoversNothing;
  * wherever the PHPUnit suite runs. The class is meant to be copied between
  * plugins: only COMPONENT and the core write map change.
  *
+ * One more thing changes here, as in local_dictionaries: the settings check also accepts a
+ * settings.php that stores no setting at all and only adds an admin page, which is this plugin's.
+ *
  * @package    local_evidencehub
  * @copyright  2026 Anderson Blaine
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
@@ -272,7 +275,12 @@ final class marketplace_readiness_test extends \basic_testcase {
             return;
         }
         $pattern = '/new\s+\\\\?admin_setting_(\w+)\s*\(\s*([\'"])([^\'"]*)\2/';
-        preg_match_all($pattern, file_get_contents($file), $matches, PREG_SET_ORDER);
+        $source = file_get_contents($file);
+        if (!str_contains($source, 'admin_setting_')) {
+            $this->assertStringContainsString('new admin_externalpage(', $source, 'settings.php adds no page and no setting.');
+            return;
+        }
+        preg_match_all($pattern, $source, $matches, PREG_SET_ORDER);
         $this->assertNotEmpty($matches, 'No admin setting was recognised in settings.php.');
         foreach ($matches as [, $type, , $name]) {
             if (in_array($type, ['heading', 'description'], true)) {

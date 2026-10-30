@@ -73,18 +73,28 @@ was resumed on a container that skipped the setup script: attach `moodle-dev` an
 
 ```
 version.php, db/access.php, db/install.php (seeds types), db/install.xml (7 tables)
-db/hooks.php, db/events.php   tool_lp prompt (footer hook); core evidence updated/deleted observers
+db/hooks.php, db/events.php   tool_lp prompt (footer hook); observers (classes/observer.php)
+db/tasks.php      evaluate_validity (hourly), reconcile_validity (weekly)
 evidence.php      the worker's evidence page (renderable output/evidence_page, amd/src/evidence_page)
-classes/local/    status, meta, audit, policy, export: stored constants and their labels
+policies.php      framework list / one framework's policies (output/policy_frameworks,
+                  output/framework_policies, amd/src/policies); settings.php adds its admin entry
+classes/local/    status, meta, audit, export: stored constants and their labels
                   meta also holds the YYYYMMDD date helpers; types: the seeded default types
                   details: THE details API (save, verify, reject, the reset rule); all callers use it
-classes/form/     evidence (core evidence + details in one submit), verify (dynamic forms)
-classes/event/    evidence_details_updated, evidence_verified, evidence_rejected
+                  policy: constants + THE policy API (resolve, save, delete, require_manage)
+                  validity_calculator: the rule, pure (candidate, validity value objects)
+                  status_repository: THE writer of local_evidencehub_status (recompute, scopes)
+classes/form/     evidence (core evidence + details in one submit), verify, policy (dynamic forms)
+classes/event/    evidence_details_updated, evidence_verified, evidence_rejected,
+                  validity_status_changed, validity_policy_updated
+classes/task/     evaluate_validity, reconcile_validity, recompute_scope (ad hoc)
 classes/privacy/  provider: worker rows in the worker's user context; actor columns kept
-tests/            privacy/provider_test, local/{types,constants,meta,details}_test, form/*, output/*,
+tests/            privacy/provider_test, local/{types,constants,meta,details,policy,
+                  validity_calculator,status_repository}_test, form/*, output/*, task/*,
                   observer_test, hook_callbacks_test, marketplace_readiness_test, behat/
-tests/classes/    scenario trait: users holding chosen capabilities, evidence, details
-tests/generator/  writes rows directly until S3 adds the status API
+tests/classes/    scenario trait: users holding chosen capabilities, evidence, details;
+                  held_lock_factory: refuses chosen user_<id> locks (via $CFG->lock_factory)
+tests/generator/  writes rows directly (create_status() stays direct for the task tests)
 ```
 
 ## Versions
@@ -116,6 +126,22 @@ yet; the first one comes with the first schema change after a release.
 - **Privacy:** deleting an actor (verifier, issuer, requester of others' dossiers) leaves their
   columns in other workers' rows, mirroring `core_competency\privacy\provider`. A new table with a
   user column goes into `get_metadata()`; `provider_test` checks every declared column exists.
+
+- **The status is recomputed, never patched.** Every writer of a status row goes through
+  `status_repository::recompute()` (lock `user_<id>`, transaction, upsert or delete); observers only
+  pick pairs. Its own log entry in core's history (`desccomponent` local_evidencehub) is skipped by
+  the `competency_evidence_created` observer, or each recomputation would start another.
+- **A status change and its core log entry commit together** (`add_evidence()` runs inside the
+  row's transaction); `validity_status_changed` fires after the commit, because internal observers
+  run at once even inside a transaction. Observers queue a pair whose user lock times out
+  (`recompute_or_queue()`); the tasks trace and skip a failing pair.
+- **The pill of a competency follows its deciding evidence**: a sensitive deciding evidence shows
+  "Restricted" on every linked item to a viewer without `viewsensitive`.
+- **Templates print plain spellings**: `format_string(..., ['escape' => false])` into double stashes.
+- **"Today" is the site's calendar day** (`core_date::get_server_timezone_object()`), read from
+  `\core\clock`, so tests freeze it with `mock_clock_with_frozen()`.
+- **`settings.php` only adds an admin page**, so `marketplace_readiness_test` carries the
+  local_dictionaries variant of the settings check (an external page and no setting is accepted).
 
 ## Testing notes
 

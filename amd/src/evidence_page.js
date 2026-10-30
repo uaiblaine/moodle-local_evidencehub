@@ -23,6 +23,7 @@
 
 import ModalForm from 'core_form/modalform';
 import {getString} from 'core/str';
+import Pending from 'core/pending';
 
 const REGION = '[data-region="local-evidencehub-evidence"]';
 
@@ -50,7 +51,13 @@ const openForm = (button, userid) => {
         returnFocus: button,
     });
     // The list is rebuilt by the server: a decision or a reset changes badges and buttons alike.
-    modal.addEventListener(modal.events.FORM_SUBMITTED, () => window.location.reload());
+    modal.addEventListener(modal.events.FORM_SUBMITTED, () => {
+        // Left pending on purpose: the reload replaces the page, and until then a test must not
+        // read the old rows.
+        const pending = new Pending('local_evidencehub/evidence_page:reload');
+        window.location.reload();
+        return pending;
+    });
     modal.show();
 };
 

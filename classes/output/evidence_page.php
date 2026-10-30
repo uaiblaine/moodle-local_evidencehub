@@ -23,6 +23,7 @@ use core_competency\api;
 use core_competency\user_evidence;
 use local_evidencehub\local\details;
 use local_evidencehub\local\meta;
+use local_evidencehub\local\status;
 
 /**
  * A worker's core evidence with its validity details, as the viewer may see them.
@@ -69,18 +70,22 @@ class evidence_page implements renderable, templatable {
             }
         }
         $types = $DB->get_records('local_evidencehub_type');
+        $competencies = $this->competencies($evidence, $types);
 
         $items = [];
         foreach ($evidence as $ue) {
             $id = (int) $ue->get('id');
             $item = [
                 'id' => $id,
-                'name' => format_string($ue->get('name'), true, ['context' => $context]),
+                // Plain spellings throughout: the template's double stashes escape them once.
+                'name' => format_string($ue->get('name'), true, ['context' => $context, 'escape' => false]),
                 'viewurl' => (new \moodle_url('/admin/tool/lp/user_evidence.php', ['id' => $id]))->out(false),
                 'canedit' => $canmanage,
                 'hasdetails' => false,
                 'cancomplete' => false,
                 'canverify' => false,
+                'hascompetencies' => !empty($competencies[$id]),
+                'competencies' => $competencies[$id] ?? [],
             ];
             $meta = $metas[$id] ?? null;
             if ($meta === null) {
@@ -93,7 +98,9 @@ class evidence_page implements renderable, templatable {
             $state = (int) $meta->verifystatus;
             $item['hasdetails'] = true;
             $item['metaid'] = (int) $meta->id;
-            $item['typename'] = $type ? format_string($type->name, true, ['context' => \context_system::instance()]) : '';
+            $item['typename'] = $type
+                ? format_string($type->name, true, ['context' => \context_system::instance(), 'escape' => false])
+                : '';
             $item['restricted'] = $restricted;
             // Who may not read the details may neither change nor decide on them.
             $item['canedit'] = $canmanage && !$restricted;
@@ -111,7 +118,12 @@ class evidence_page implements renderable, templatable {
                     'time' => userdate((int) $meta->timeverified, get_string('strftimedatetimeshort', 'core_langconfig')),
                 ]);
             }
-            if (!$restricted) {
+            if ($restricted) {
+                // The validity dates of a restricted evidence are its details too.
+                foreach (array_keys($item['competencies']) as $index) {
+                    unset($item['competencies'][$index]['expiry']);
+                }
+            } else {
                 $item['issuedate'] = meta::iso_date((int) $meta->issuedate);
                 $item['expirydate'] = $meta->expirydate === null ? null : meta::iso_date((int) $meta->expirydate);
                 $item['noexpiry'] = (bool) $meta->noexpiry;
@@ -133,5 +145,61 @@ class evidence_page implements renderable, templatable {
             'hasitems' => !empty($items),
             'items' => $items,
         ];
+    }
+
+    /**
+     * The competencies each evidence is linked to, with the worker's validity status of each: one
+     * query for the whole page.
+     *
+     * The status of a pair is decided by one evidence, which may be another than the item shown: when
+     * that deciding evidence is restricted for the viewer, the pill says only "Restricted", on every
+     * item linked to the competency, so neither its date nor its state leaks through another item.
+     *
+     * @param array $evidence The worker's user_evidence objects.
+     * @param array $types The evidence types, by id.
+     * @return array Core evidence id => list of [name, statuslabel, badgeclass, expiry].
+     */
+    private function competencies(array $evidence, array $types): array {
+        global $DB;
+        if (!$evidence) {
+            return [];
+        }
+        $ids = array_map(fn(user_evidence $ue): int => (int) $ue->get('id'), $evidence);
+        [$insql, $params] = $DB->get_in_or_equal($ids, SQL_PARAMS_NAMED);
+        $sql = "SELECT uec.id, uec.userevidenceid, c.shortname, f.contextid, s.status, s.effectiveexpiry,
+                       s.metaid, dm.typeid AS decidingtypeid
+                  FROM {competency_userevidencecomp} uec
+                  JOIN {competency} c ON c.id = uec.competencyid
+                  JOIN {competency_framework} f ON f.id = c.competencyframeworkid
+             LEFT JOIN {local_evidencehub_status} s ON s.competencyid = uec.competencyid AND s.userid = :userid
+             LEFT JOIN {" . details::TABLE . "} dm ON dm.id = s.metaid
+                 WHERE uec.userevidenceid $insql
+              ORDER BY c.shortname, c.id";
+        $linked = [];
+        foreach ($DB->get_records_sql($sql, $params + ['userid' => $this->userid]) as $record) {
+            // A competency's name belongs to its framework's context (system or a category).
+            $context = \context::instance_by_id((int) $record->contextid);
+            $pill = ['name' => format_string($record->shortname, true, ['context' => $context, 'escape' => false])];
+            $deciding = $record->decidingtypeid === null ? null : (object) [
+                'userid' => $this->userid,
+                'typeid' => (int) $record->decidingtypeid,
+            ];
+            if ($deciding !== null && details::is_restricted($deciding, $types[$deciding->typeid] ?? null)) {
+                $pill += [
+                    'statuslabel' => get_string('validityrestricted', 'local_evidencehub'),
+                    'badgeclass' => status::badge_class(null),
+                    'expiry' => null,
+                ];
+            } else {
+                $state = $record->status === null ? null : (int) $record->status;
+                $pill += [
+                    'statuslabel' => status::label($state),
+                    'badgeclass' => status::badge_class($state),
+                    'expiry' => $record->effectiveexpiry === null ? null : meta::iso_date((int) $record->effectiveexpiry),
+                ];
+            }
+            $linked[(int) $record->userevidenceid][] = $pill;
+        }
+        return $linked;
     }
 }

@@ -1,0 +1,1 @@
+s/\$candidate->hours === null \|\| //;

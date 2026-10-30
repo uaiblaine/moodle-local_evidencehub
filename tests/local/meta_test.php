@@ -150,4 +150,58 @@ final class meta_test extends \advanced_testcase {
         $this->assertSame(meta::to_timestamp(20260115, 'Asia/Tokyo'), meta::to_timestamp(20260115));
         $this->assertNotSame(meta::to_timestamp(20260115, 'America/Sao_Paulo'), meta::to_timestamp(20260115));
     }
+
+    /**
+     * Day arithmetic across month ends, leap days and years.
+     *
+     * @return array Case name => [date, days, expected].
+     */
+    public static function day_additions(): array {
+        return [
+            'into the next month' => [20260630, 1, 20260701],
+            'onto a leap day' => [20280228, 1, 20280229],
+            'over a leap day' => [20280228, 2, 20280301],
+            'back over a year' => [20260101, -1, 20251231],
+            'sixty days back' => [20260814, -60, 20260615],
+            'nothing' => [20260115, 0, 20260115],
+        ];
+    }
+
+    /**
+     * Adding days moves the calendar day, and days_between() measures it back.
+     *
+     * @param int $date The start.
+     * @param int $days Days to add.
+     * @param int $expected The result.
+     * @return void
+     */
+    #[DataProvider('day_additions')]
+    public function test_day_arithmetic(int $date, int $days, int $expected): void {
+        $this->assertSame($expected, meta::add_days($date, $days));
+        $this->assertSame($days, meta::days_between($date, $expected));
+        $this->assertSame(-$days, meta::days_between($expected, $date));
+    }
+
+    /**
+     * Day arithmetic ignores the timezones' daylight saving changes.
+     *
+     * @return void
+     */
+    public function test_day_arithmetic_ignores_daylight_saving(): void {
+        $this->resetAfterTest();
+        $this->setTimezone('Europe/London', 'Europe/London');
+        // Europe moves its clocks on 2026-03-29 and 2026-10-25.
+        $this->assertSame(20260330, meta::add_days(20260328, 2));
+        $this->assertSame(31, meta::days_between(20261001, 20261101));
+    }
+
+    /**
+     * An impossible day is refused.
+     *
+     * @return void
+     */
+    public function test_day_arithmetic_refuses_bad_input(): void {
+        $this->expectException(\coding_exception::class);
+        meta::add_days(20260230, 1);
+    }
 }
