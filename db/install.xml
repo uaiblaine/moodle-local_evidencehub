@@ -1,0 +1,168 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<XMLDB PATH="local/evidencehub/db" VERSION="2026100500" COMMENT="XMLDB file for Moodle local/evidencehub"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:noNamespaceSchemaLocation="../../../lib/xmldb/xmldb.xsd"
+>
+  <TABLES>
+    <TABLE NAME="local_evidencehub_type" COMMENT="Evidence types, managed by the administrator and seeded at install">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
+        <FIELD NAME="shortname" TYPE="char" LENGTH="100" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="name" TYPE="char" LENGTH="255" NOTNULL="true" SEQUENCE="false" COMMENT="Shown through format_string, so a multilang span works"/>
+        <FIELD NAME="defaultvalidity" TYPE="int" LENGTH="4" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="Months from the issue date the form proposes as expiry; 0 proposes none"/>
+        <FIELD NAME="requireexpiry" TYPE="int" LENGTH="1" NOTNULL="true" DEFAULT="1" SEQUENCE="false" COMMENT="1 when an evidence of this type must have an expiry date or say it never expires"/>
+        <FIELD NAME="requireauthcode" TYPE="int" LENGTH="1" NOTNULL="true" DEFAULT="0" SEQUENCE="false"/>
+        <FIELD NAME="issensitive" TYPE="int" LENGTH="1" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="1 for health data and the like: details hidden without viewsensitive, files left out of dossiers"/>
+        <FIELD NAME="sortorder" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false"/>
+        <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="timemodified" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+      </KEYS>
+      <INDEXES>
+        <INDEX NAME="shortname" UNIQUE="true" FIELDS="shortname"/>
+      </INDEXES>
+    </TABLE>
+    <TABLE NAME="local_evidencehub_meta" COMMENT="Validity details of one core user evidence (competency_userevidence)">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
+        <FIELD NAME="userevidenceid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="userid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" COMMENT="Owner of the evidence, copied from competency_userevidence so queries skip a join"/>
+        <FIELD NAME="typeid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="issuedate" TYPE="int" LENGTH="8" NOTNULL="true" SEQUENCE="false" COMMENT="Calendar date YYYYMMDD: a certificate's date has no time of day or timezone"/>
+        <FIELD NAME="expirydate" TYPE="int" LENGTH="8" NOTNULL="false" SEQUENCE="false" COMMENT="Calendar date YYYYMMDD, last valid day; null when noexpiry is 1"/>
+        <FIELD NAME="noexpiry" TYPE="int" LENGTH="1" NOTNULL="true" DEFAULT="0" SEQUENCE="false"/>
+        <FIELD NAME="issuer" TYPE="char" LENGTH="255" NOTNULL="false" SEQUENCE="false"/>
+        <FIELD NAME="authcode" TYPE="char" LENGTH="100" NOTNULL="false" SEQUENCE="false" COMMENT="The issuer's authenticity or registration code"/>
+        <FIELD NAME="hours" TYPE="number" LENGTH="8" NOTNULL="false" SEQUENCE="false" DECIMALS="2"/>
+        <FIELD NAME="verifystatus" TYPE="int" LENGTH="2" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="local\meta VERIFY_* constant"/>
+        <FIELD NAME="verifiedby" TYPE="int" LENGTH="10" NOTNULL="false" SEQUENCE="false"/>
+        <FIELD NAME="timeverified" TYPE="int" LENGTH="10" NOTNULL="false" SEQUENCE="false"/>
+        <FIELD NAME="verifynote" TYPE="text" NOTNULL="false" SEQUENCE="false"/>
+        <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="timemodified" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+        <KEY NAME="userevidenceid" TYPE="foreign-unique" FIELDS="userevidenceid" REFTABLE="competency_userevidence" REFFIELDS="id"/>
+        <KEY NAME="userid" TYPE="foreign" FIELDS="userid" REFTABLE="user" REFFIELDS="id"/>
+        <KEY NAME="typeid" TYPE="foreign" FIELDS="typeid" REFTABLE="local_evidencehub_type" REFFIELDS="id"/>
+      </KEYS>
+      <INDEXES>
+        <INDEX NAME="expirydate" UNIQUE="false" FIELDS="expirydate"/>
+      </INDEXES>
+    </TABLE>
+    <TABLE NAME="local_evidencehub_policy" COMMENT="Validity policy of a competency framework, or of one competency overriding it">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
+        <FIELD NAME="frameworkid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="competencyid" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="0 for the framework's own policy"/>
+        <FIELD NAME="kind" TYPE="int" LENGTH="2" NOTNULL="true" SEQUENCE="false" COMMENT="local\policy KIND_* constant: regulatory, technical, behavioural"/>
+        <FIELD NAME="requireverified" TYPE="int" LENGTH="1" NOTNULL="true" DEFAULT="1" SEQUENCE="false"/>
+        <FIELD NAME="requireproficiency" TYPE="int" LENGTH="1" NOTNULL="true" DEFAULT="0" SEQUENCE="false"/>
+        <FIELD NAME="minhours" TYPE="number" LENGTH="8" NOTNULL="false" SEQUENCE="false" DECIMALS="2"/>
+        <FIELD NAME="alert1" TYPE="int" LENGTH="4" NOTNULL="true" DEFAULT="60" SEQUENCE="false" COMMENT="Days before expiry when the status becomes due"/>
+        <FIELD NAME="alert2" TYPE="int" LENGTH="4" NOTNULL="true" DEFAULT="30" SEQUENCE="false" COMMENT="Days before expiry when the status becomes critical"/>
+        <FIELD NAME="gracedays" TYPE="int" LENGTH="4" NOTNULL="true" DEFAULT="0" SEQUENCE="false"/>
+        <FIELD NAME="cyclemonths" TYPE="int" LENGTH="4" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="Behavioural kind: months a proficient rating stays valid"/>
+        <FIELD NAME="onexpiry" TYPE="int" LENGTH="2" NOTNULL="true" DEFAULT="1" SEQUENCE="false" COMMENT="local\policy ONEXPIRY_* constant"/>
+        <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="timemodified" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+      </KEYS>
+      <INDEXES>
+        <INDEX NAME="frameworkid-competencyid" UNIQUE="true" FIELDS="frameworkid, competencyid"/>
+        <INDEX NAME="competencyid" UNIQUE="false" FIELDS="competencyid"/>
+      </INDEXES>
+    </TABLE>
+    <TABLE NAME="local_evidencehub_status" COMMENT="Materialised validity of one competency for one user; no row means no evidence">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
+        <FIELD NAME="userid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="competencyid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="status" TYPE="int" LENGTH="2" NOTNULL="true" SEQUENCE="false" COMMENT="local\status STATUS_* constant"/>
+        <FIELD NAME="metaid" TYPE="int" LENGTH="10" NOTNULL="false" SEQUENCE="false" COMMENT="The evidence that decides the status, when one does"/>
+        <FIELD NAME="effectiveexpiry" TYPE="int" LENGTH="8" NOTNULL="false" SEQUENCE="false" COMMENT="Calendar date YYYYMMDD; null when the deciding evidence never expires"/>
+        <FIELD NAME="evidencecount" TYPE="int" LENGTH="4" NOTNULL="true" DEFAULT="0" SEQUENCE="false"/>
+        <FIELD NAME="nexttransition" TYPE="int" LENGTH="10" NOTNULL="false" SEQUENCE="false" COMMENT="Timestamp when the status changes by itself; null when it never does"/>
+        <FIELD NAME="timechanged" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" COMMENT="When the status value last changed"/>
+        <FIELD NAME="timemodified" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+      </KEYS>
+      <INDEXES>
+        <INDEX NAME="userid-competencyid" UNIQUE="true" FIELDS="userid, competencyid"/>
+        <INDEX NAME="competencyid-status" UNIQUE="false" FIELDS="competencyid, status"/>
+        <INDEX NAME="nexttransition" UNIQUE="false" FIELDS="nexttransition"/>
+      </INDEXES>
+    </TABLE>
+    <TABLE NAME="local_evidencehub_audit" COMMENT="Append-only trail of what happened to an evidence's details; outlives the log store's lifetime">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
+        <FIELD NAME="metaid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="userevidenceid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="relateduserid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" COMMENT="Owner of the evidence"/>
+        <FIELD NAME="userid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" COMMENT="Who acted"/>
+        <FIELD NAME="action" TYPE="char" LENGTH="20" NOTNULL="true" SEQUENCE="false" COMMENT="local\audit ACTION_* constant"/>
+        <FIELD NAME="note" TYPE="text" NOTNULL="false" SEQUENCE="false"/>
+        <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+      </KEYS>
+      <INDEXES>
+        <INDEX NAME="metaid" UNIQUE="false" FIELDS="metaid"/>
+        <INDEX NAME="relateduserid" UNIQUE="false" FIELDS="relateduserid"/>
+        <INDEX NAME="userid" UNIQUE="false" FIELDS="userid"/>
+      </INDEXES>
+    </TABLE>
+    <TABLE NAME="local_evidencehub_dossier" COMMENT="One issued readiness dossier of one worker, with the snapshot its verification code shows">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
+        <FIELD NAME="code" TYPE="char" LENGTH="32" NOTNULL="true" SEQUENCE="false" COMMENT="128 random bits in hex, printed as the QR code's verification link"/>
+        <FIELD NAME="userid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" COMMENT="The worker the dossier describes"/>
+        <FIELD NAME="templateid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="exportid" TYPE="int" LENGTH="10" NOTNULL="false" SEQUENCE="false"/>
+        <FIELD NAME="createdby" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="snapshot" TYPE="text" NOTNULL="true" SEQUENCE="false" COMMENT="JSON of what the PDF states, frozen at issue"/>
+        <FIELD NAME="pdfhash" TYPE="char" LENGTH="64" NOTNULL="false" SEQUENCE="false" COMMENT="SHA-256 of the issued PDF"/>
+        <FIELD NAME="revoked" TYPE="int" LENGTH="1" NOTNULL="true" DEFAULT="0" SEQUENCE="false"/>
+        <FIELD NAME="timerevoked" TYPE="int" LENGTH="10" NOTNULL="false" SEQUENCE="false"/>
+        <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+        <KEY NAME="exportid" TYPE="foreign" FIELDS="exportid" REFTABLE="local_evidencehub_export" REFFIELDS="id"/>
+      </KEYS>
+      <INDEXES>
+        <INDEX NAME="code" UNIQUE="true" FIELDS="code"/>
+        <INDEX NAME="userid" UNIQUE="false" FIELDS="userid"/>
+        <INDEX NAME="templateid" UNIQUE="false" FIELDS="templateid"/>
+        <INDEX NAME="createdby" UNIQUE="false" FIELDS="createdby"/>
+      </INDEXES>
+    </TABLE>
+    <TABLE NAME="local_evidencehub_export" COMMENT="One dossier export request; the workers it covers are its dossier rows">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
+        <FIELD NAME="requestedby" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="templateid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="subjectcount" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false"/>
+        <FIELD NAME="status" TYPE="int" LENGTH="2" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="local\export STATUS_* constant"/>
+        <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="timecompleted" TYPE="int" LENGTH="10" NOTNULL="false" SEQUENCE="false"/>
+        <FIELD NAME="timeexpires" TYPE="int" LENGTH="10" NOTNULL="false" SEQUENCE="false" COMMENT="When the cleanup task deletes the ZIP"/>
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+      </KEYS>
+      <INDEXES>
+        <INDEX NAME="requestedby" UNIQUE="false" FIELDS="requestedby"/>
+        <INDEX NAME="timeexpires" UNIQUE="false" FIELDS="timeexpires"/>
+      </INDEXES>
+    </TABLE>
+  </TABLES>
+</XMLDB>

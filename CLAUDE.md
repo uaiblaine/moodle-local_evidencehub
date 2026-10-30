@@ -1,0 +1,124 @@
+# Claude instructions for `local_evidencehub`
+
+This file is auto-loaded as context whenever Claude works in this plugin's
+directory tree. **Fleet-wide standards live in `~/dev/CLAUDE.md`** (coding
+style, CI gates, lang-string rules, the `mdl` environment, git rules) — do not
+repeat them here. This file keeps only what is true for this plugin, as rules
+with a one-line reason each; keep it under ~250 lines, because every session
+and every subagent pays for it on every cache write. Measurements, incidents
+and the long version of a gotcha go to `docs/` (export-ignored) with a pointer
+from the rule.
+
+Plugin context: a Moodle **local** plugin ("Evidence hub") that adds validity details (type, issue
+and expiry dates, issuer, authenticity code, hours, verification) to core competencies' user
+evidence, materialises the validity of each (worker, competency) pair, and exports verifiable
+readiness dossiers. It owns seven tables (`db/install.xml`) and leaves core's evidence and files
+to core. Companion of `local_dimensions` with **no dependency** on it (the bridge is a Hooks API
+hook that `local_dimensions` declares, stage S9). Supports Moodle **5.3 only**
+(`$plugin->requires = 2026100500`, `$plugin->supported = [503, 503]`). CI is the
+moodle-an-hochschulen reusable workflow, one job in `.github/workflows/ci.yml` — **update it when
+`supported` changes**. Development happens on m503; this repo is mounted into m503 and m503b at
+`local/evidencehub` (see `~/dev/moodle-dev/plugins.conf`).
+
+Design, decisions D1–D12 (approved by the owner 2026-10-29) and the stage plan S0–S9:
+`~/dev/moodle-local_dimensions/docs/proposals/2026-10-29-evidence-hub/README.md`, with the S0
+measurements in its `spike/`. Do not reopen an approved decision without the owner.
+
+## Agent orchestration budget (fleet rule, repeated here on purpose)
+
+Section 6 of `~/dev/CLAUDE.md` (`moodle-dev/CLAUDE.fleet.md`) is the authority and says why.
+This short copy reaches sessions that do not load that file: cloud sessions and checkouts
+outside `~/dev`. Every subagent gets the model and effort of its role from its agent
+definition, and none runs on the session model.
+
+| Role | model | effort | agent |
+|---|---|---|---|
+| Mechanical sweeps, greps, renames, counts, log reading | `haiku` | `medium` | `fleet-sweeper` |
+| Checklists against evidence (handoff counts, spec lines against a sweep log, lang lockstep) | `haiku` | `high` | `fleet-checker` |
+| Readers, measurers, graders | `sonnet` | `medium` | `fleet-reader` |
+| Refuters and verifiers of a blocking finding | `sonnet` | `high` | `fleet-verifier` |
+| Well-scoped implementation (established cause, settled design, written recipe) | `sonnet` | `medium` | `fleet-fixer` |
+| Non-trivial implementation (open design, several files, long tasks) | `opus` | `high` | `fleet-implementer` |
+| Consolidators, critics, estimators, ADR and documentation drafters | `opus` | `high` | `fleet-synthesist` |
+
+- Launch the `Agent` tool with `subagent_type: "fleet-*"`; it has no `effort` parameter, so
+  the role's effort comes from that definition (`mdl claude-setup` installs them). Where they
+  are not installed, pass `model`. Aliases only; never `fable`; `xhigh` only for a long-horizon
+  implementer whose prompt says why; never `xhigh`/`max` on Sonnet or Haiku.
+- No long command inside a subagent: `mdl ci --matrix`, `mdl mutate` and Behat run from the
+  main session in a background Bash command; a subagent runs the fast gate its prompt names and
+  reports the command with its counts.
+- Workflows only on the user's opt-in, every `agent()` with `agentType: 'fleet-*'`, under 10
+  agents. Advisor off by default.
+
+## Commands
+
+```sh
+mdl ci moodle-local_evidencehub --matrix    # every leg: the merge gate (add --behat once features exist)
+mdl ci moodle-local_evidencehub --only phpcs,phpdoc,validate,phpunit   # fast iteration, one leg
+mdl phpunit m503 local_evidencehub          # targeted tests on the stack
+mdl purge m503                              # after PHP changes that affect output
+```
+
+In a Claude Code cloud session none of `mdl`, the stacks or `~/dev/CLAUDE.md` exist. The cloud
+environment's setup script (`moodle-dev/cloud/setup.sh`) installs `moodle-plugin-ci` and the `mpci`
+runner instead: `mpci` runs every gate on the highest branch in `ci.yml`, `mpci --branch <branch>`
+another one, `mpci --reuse --only phpunit --filter <test>` iterates. It cannot run Behat, PHP 8.4 or
+MariaDB, so the owner runs `mdl ci moodle-local_evidencehub --matrix --behat` before merging: push a
+branch, open the pull request, leave the merge to them. If `which mpci` prints nothing, the session
+was resumed on a container that skipped the setup script: attach `moodle-dev` and run
+`bash cloud/setup.sh` from it. See `moodle-dev/cloud/README.md`.
+
+## Code layout
+
+```
+version.php, db/access.php, db/install.php (seeds types), db/install.xml (7 tables)
+classes/local/    status, meta, audit, policy, export: stored constants and their labels
+                  types: the seeded default evidence types
+classes/privacy/  provider: worker rows in the worker's user context; actor columns kept
+tests/            privacy/provider_test, local/{types,constants}_test, marketplace_readiness_test
+tests/generator/  writes rows directly until S2/S3 add the APIs
+```
+
+## Versions
+
+5.3 only, one branch (`main`), numbered in the 5.3 namespace `20261005XX`. No upgrade step exists
+yet; the first one comes with the first schema change after a release.
+
+## Architecture gotchas
+
+- **Dates are calendar days stored as `YYYYMMDD` integers** (`issuedate`, `expirydate`,
+  `effectiveexpiry`): a certificate's date has no time of day, and a timestamp would move it
+  across midnight with the timezone. Format with `local\meta::iso_date()`; compare as integers.
+- **"Missing" is never stored**: a pair the plan template requires and no status row covers is
+  computed at query time (`local\status::label(null)`), so the status table never holds a row per
+  required pair.
+- **No table or column is named after a reserved word** of any supported database
+  (`tests/schema_test.php` reads core's list): `validate` and a PostgreSQL install accept
+  `sensitive`, which only MySQL reserves, and the install then fails on MariaDB alone.
+- **The evidence is core's.** Create and update it through `core_competency\api`
+  (`create_user_evidence()`, `update_user_evidence()`), never by writing
+  `competency_userevidence`; core's privacy provider owns it and its files, this plugin's only the
+  details beside it.
+- **Row access always also needs core's `moodle/competency:userevidenceview` in the worker's user
+  context**, filtered in SQL (`api::filter_users_with_capability_on_user_context_sql`).
+- **The hub grid is two queries, not a report builder system report** (S0: one statement took
+  0.5–0.8 s on MariaDB over 300k pairs; the two-step deferred join stays under 300 ms).
+- **`archive_writer::get_file_writer()` takes a file NAME**: a path makes ZipStream write the ZIP
+  to stdout without a word.
+- **Privacy:** deleting an actor (verifier, issuer, requester of others' dossiers) leaves their
+  columns in other workers' rows, mirroring `core_competency\privacy\provider`. A new table with a
+  user column goes into `get_metadata()`; `provider_test` checks every declared column exists.
+
+## Testing notes
+
+- `tests/generator/lib.php` writes rows directly (`create_meta()` creates the core evidence too);
+  move each method onto the real API when its stage lands.
+- PHP 8.3 constructs are fine here (5.3 only): `#[\Override]`, typed class constants, attributes
+  for test metadata.
+
+## When in doubt
+
+Follow the patterns in existing files. The codebase is internally
+consistent — if a new file feels like it matches no existing shape,
+re-examine the approach.
