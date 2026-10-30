@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8" ?>
-<XMLDB PATH="local/evidencehub/db" VERSION="2026100500" COMMENT="XMLDB file for Moodle local/evidencehub"
+<XMLDB PATH="local/evidencehub/db" VERSION="2026100504" COMMENT="XMLDB file for Moodle local/evidencehub"
     xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
     xsi:noNamespaceSchemaLocation="../../../lib/xmldb/xmldb.xsd"
 >
@@ -87,6 +87,7 @@
         <FIELD NAME="metaid" TYPE="int" LENGTH="10" NOTNULL="false" SEQUENCE="false" COMMENT="The evidence that decides the status, when one does"/>
         <FIELD NAME="effectiveexpiry" TYPE="int" LENGTH="8" NOTNULL="false" SEQUENCE="false" COMMENT="Calendar date YYYYMMDD; null when the deciding evidence never expires"/>
         <FIELD NAME="evidencecount" TYPE="int" LENGTH="4" NOTNULL="true" DEFAULT="0" SEQUENCE="false"/>
+        <FIELD NAME="issensitive" TYPE="int" LENGTH="1" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="1 when the deciding evidence's type is sensitive; the hub reads it instead of joining meta and type"/>
         <FIELD NAME="nexttransition" TYPE="int" LENGTH="10" NOTNULL="false" SEQUENCE="false" COMMENT="Timestamp when the status changes by itself; null when it never does"/>
         <FIELD NAME="timechanged" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" COMMENT="When the status value last changed"/>
         <FIELD NAME="timemodified" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>

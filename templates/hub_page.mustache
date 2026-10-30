@@ -1,0 +1,250 @@
+{{!
+    This file is part of Moodle - http://moodle.org/
+
+    Moodle is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    Moodle is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
+}}
+{{!
+    @template local_evidencehub/hub_page
+
+    The evidence hub: the filters, the KPI bar, the status chips and one page of the grid.
+
+    Classes required for JS:
+    * none
+
+    Data attributes required for JS:
+    * data-region="local-evidencehub-hub" on the root
+    * data-action="selectall" on the checkbox that selects every row of the page
+    * data-region="pair" on each row's checkbox
+
+    Context variables required for this template:
+    * contextid, actionurl - Where both forms go.
+    * locked, contextname - Entered from a category: the page says it offers that category's templates only.
+    * hastemplates, templates - id, name, contextname, selected of each template on offer.
+    * hascohorts, cohorts - id, name, selected of each cohort on offer.
+    * search, suspended, perpages (value, selected) - The other filters.
+    * hasfilter - Whether a template is chosen; everything below needs one.
+    * hidden - name, value of the filter fields the filter form carries hidden.
+    * downloadfields - name, value of every filter field the download form carries.
+    * tiles - code, label, count, share, badgeclass, url, active of each KPI tile.
+    * readiness, hiddenworkers, noworkers - The workers' readiness and who is hidden.
+    * chips - label, url, active of each status chip.
+    * total, columns (label, sortable, url, sorted, asc), hasrows, rows - The grid.
+    * pagingbar - The pager, rendered by core.
+    * formats (name, label), sesskey - The download.
+
+    Example context (json):
+    {
+        "contextid": 1,
+        "actionurl": "https://example.com/local/evidencehub/index.php",
+        "locked": true,
+        "contextname": "Operations",
+        "hastemplates": true,
+        "templates": [{"id": 5, "name": "Electricians", "contextname": "Operations", "selected": true}],
+        "hascohorts": true,
+        "cohorts": [{"id": 3, "name": "Night shift", "selected": false}],
+        "search": "",
+        "suspended": false,
+        "perpages": [{"value": 25, "selected": false}, {"value": 50, "selected": true}],
+        "hasfilter": true,
+        "hidden": [{"name": "statusfilter", "value": 1}, {"name": "statuses[]", "value": 5}],
+        "downloadfields": [{"name": "templateid", "value": 5}],
+        "tiles": [
+            {"code": 5, "label": "Expired", "count": 3, "share": "10%", "badgeclass": "bg-dark text-white",
+             "url": "https://example.com/local/evidencehub/index.php?contextid=1", "active": true}
+        ],
+        "readiness": "Ready: 7 of 10 workers (70%)",
+        "hiddenworkers": "2 workers are not shown: you cannot view their evidence.",
+        "noworkers": false,
+        "chips": [{"label": "Expired", "url": "https://example.com/local/evidencehub/index.php?contextid=1", "active": true}],
+        "total": 3,
+        "columns": [
+            {"label": "Worker", "sortable": true, "url": "https://example.com/", "sorted": true, "asc": true},
+            {"label": "Email address", "sortable": false, "url": "", "sorted": false, "asc": false},
+            {"label": "Competency", "sortable": true, "url": "https://example.com/", "sorted": false, "asc": false},
+            {"label": "Status", "sortable": true, "url": "https://example.com/", "sorted": false, "asc": false},
+            {"label": "Valid until", "sortable": true, "url": "https://example.com/", "sorted": false, "asc": false},
+            {"label": "Evidence", "sortable": false, "url": "", "sorted": false, "asc": false},
+            {"label": "Type of evidence", "sortable": false, "url": "", "sorted": false, "asc": false},
+            {"label": "Issuer", "sortable": false, "url": "", "sorted": false, "asc": false}
+        ],
+        "hasrows": true,
+        "rows": [
+            {"pair": "12:7", "workername": "Ana Souza", "workerurl": "https://example.com/local/evidencehub/evidence.php?userid=12",
+             "identity": [{"value": "ana@example.com"}], "competency": "Work at height", "statuslabel": "Expired",
+             "badgeclass": "bg-dark text-white", "expiry": "2026-05-01", "evidencecount": 1, "type": "Certificate",
+             "issuer": "Training centre"}
+        ],
+        "pagingbar": "",
+        "formats": [{"name": "csv", "label": "Comma separated values (.csv)"}],
+        "sesskey": "abc123"
+    }
+}}
+<div class="local-evidencehub-hub" data-region="local-evidencehub-hub">
+    {{#locked}}
+    <div class="alert alert-info local-evidencehub-hub-locked">{{#str}} hublocked, local_evidencehub, {{contextname}} {{/str}}</div>
+    {{/locked}}
+
+    <form method="get" action="{{actionurl}}" class="local-evidencehub-hub-filters row g-2 align-items-end mb-3">
+        <input type="hidden" name="contextid" value="{{contextid}}">
+        {{#hidden}}
+        <input type="hidden" name="{{name}}" value="{{value}}">
+        {{/hidden}}
+        <div class="col-md-4">
+            <label for="local-evidencehub-templateid-{{uniqid}}" class="form-label">{{#str}} template, local_evidencehub {{/str}}</label>
+            <select id="local-evidencehub-templateid-{{uniqid}}" name="templateid" class="form-select">
+                <option value="0">{{#str}} hubchoosetemplate, local_evidencehub {{/str}}</option>
+                {{#templates}}
+                <option value="{{id}}"{{#selected}} selected{{/selected}}>{{name}} ({{contextname}})</option>
+                {{/templates}}
+            </select>
+        </div>
+        {{#hascohorts}}
+        <div class="col-md-3">
+            <label for="local-evidencehub-cohortid-{{uniqid}}" class="form-label">{{#str}} cohort, core_cohort {{/str}}</label>
+            <select id="local-evidencehub-cohortid-{{uniqid}}" name="cohortid" class="form-select">
+                <option value="0">{{#str}} hubanycohort, local_evidencehub {{/str}}</option>
+                {{#cohorts}}
+                <option value="{{id}}"{{#selected}} selected{{/selected}}>{{name}}</option>
+                {{/cohorts}}
+            </select>
+        </div>
+        {{/hascohorts}}
+        <div class="col-md-3">
+            <label for="local-evidencehub-search-{{uniqid}}" class="form-label">{{#str}} hubsearch, local_evidencehub {{/str}}</label>
+            <input type="search" id="local-evidencehub-search-{{uniqid}}" name="search" value="{{search}}" class="form-control"
+                maxlength="100">
+        </div>
+        <div class="col-md-2">
+            <label for="local-evidencehub-perpage-{{uniqid}}" class="form-label">{{#str}} hubperpage, local_evidencehub {{/str}}</label>
+            <select id="local-evidencehub-perpage-{{uniqid}}" name="perpage" class="form-select">
+                {{#perpages}}
+                <option value="{{value}}"{{#selected}} selected{{/selected}}>{{value}}</option>
+                {{/perpages}}
+            </select>
+        </div>
+        <div class="col-md-auto">
+            <div class="form-check">
+                <input type="checkbox" id="local-evidencehub-suspended-{{uniqid}}" name="suspended" value="1" class="form-check-input"
+                    {{#suspended}}checked{{/suspended}}>
+                <label for="local-evidencehub-suspended-{{uniqid}}" class="form-check-label">{{#str}} hubsuspended, local_evidencehub {{/str}}</label>
+            </div>
+        </div>
+        <div class="col-md-auto">
+            <button type="submit" class="btn btn-primary">{{#str}} hubapply, local_evidencehub {{/str}}</button>
+        </div>
+    </form>
+
+    {{^hasfilter}}
+    {{#hastemplates}}
+    <p class="text-muted">{{#str}} hubchoosetemplatefirst, local_evidencehub {{/str}}</p>
+    {{/hastemplates}}
+    {{^hastemplates}}
+    <p class="text-muted">{{#str}} hubnotemplates, local_evidencehub {{/str}}</p>
+    {{/hastemplates}}
+    {{/hasfilter}}
+
+    {{#hasfilter}}
+    <div class="local-evidencehub-kpis d-flex flex-wrap gap-2 mb-2">
+        {{#tiles}}
+        <a href="{{url}}" class="local-evidencehub-tile card p-2 text-decoration-none{{#active}} local-evidencehub-tile-active{{/active}}"
+            data-status="{{code}}"{{#active}} aria-current="true"{{/active}}>
+            <span class="badge {{badgeclass}}">{{label}}</span>
+            <span class="local-evidencehub-tile-count">{{count}}</span>
+            <span class="local-evidencehub-tile-share text-muted">{{share}}</span>
+        </a>
+        {{/tiles}}
+        <div class="local-evidencehub-tile card p-2">
+            <span class="local-evidencehub-tile-readiness">{{readiness}}</span>
+        </div>
+    </div>
+    {{#hiddenworkers}}
+    <p class="local-evidencehub-hiddenworkers text-muted">{{hiddenworkers}}</p>
+    {{/hiddenworkers}}
+    {{#noworkers}}
+    <div class="alert alert-warning">{{#str}} hubnoworkers, local_evidencehub {{/str}}</div>
+    {{/noworkers}}
+
+    <div class="local-evidencehub-chips d-flex flex-wrap gap-1 mb-3" role="group" aria-label="{{#str}} status, local_evidencehub {{/str}}">
+        {{#chips}}
+        <a href="{{url}}" class="btn btn-sm {{#active}}btn-primary{{/active}}{{^active}}btn-outline-secondary{{/active}}"{{#active}} aria-current="true"{{/active}}>{{label}}</a>
+        {{/chips}}
+    </div>
+
+    <form method="post" action="{{actionurl}}" class="local-evidencehub-download">
+        <input type="hidden" name="contextid" value="{{contextid}}">
+        <input type="hidden" name="sesskey" value="{{sesskey}}">
+        {{#downloadfields}}
+        <input type="hidden" name="{{name}}" value="{{value}}">
+        {{/downloadfields}}
+        <p class="local-evidencehub-total">{{#str}} hubtotal, local_evidencehub, {{total}} {{/str}}</p>
+        {{#hasrows}}
+        <div class="table-responsive">
+            <table class="table generaltable local-evidencehub-grid">
+                <thead>
+                    <tr>
+                        <th scope="col">
+                            <input type="checkbox" class="form-check-input" data-action="selectall"
+                                aria-label="{{#str}} hubselectall, local_evidencehub {{/str}}">
+                        </th>
+                        {{#columns}}
+                        <th scope="col"{{#sorted}} aria-sort="{{#asc}}ascending{{/asc}}{{^asc}}descending{{/asc}}"{{/sorted}}>
+                            {{#sortable}}<a href="{{url}}">{{label}}</a>{{/sortable}}
+                            {{^sortable}}{{label}}{{/sortable}}
+                            {{#sorted}}{{#asc}}{{#pix}} t/sort_asc, core {{/pix}}{{/asc}}{{^asc}}{{#pix}} t/sort_desc, core {{/pix}}{{/asc}}{{/sorted}}
+                        </th>
+                        {{/columns}}
+                    </tr>
+                </thead>
+                <tbody>
+                    {{#rows}}
+                    <tr>
+                        <td>
+                            <input type="checkbox" class="form-check-input" name="pairs[]" value="{{pair}}" data-region="pair"
+                                aria-label="{{#str}} hubselectrow, local_evidencehub, {{workername}} {{/str}}">
+                        </td>
+                        <td><a href="{{workerurl}}">{{workername}}</a></td>
+                        {{#identity}}
+                        <td>{{value}}</td>
+                        {{/identity}}
+                        <td>{{competency}}</td>
+                        <td><span class="badge {{badgeclass}}">{{statuslabel}}</span></td>
+                        <td class="local-evidencehub-grid-date">{{expiry}}</td>
+                        <td>{{evidencecount}}</td>
+                        <td>{{type}}</td>
+                        <td>{{issuer}}</td>
+                    </tr>
+                    {{/rows}}
+                </tbody>
+            </table>
+        </div>
+        {{{pagingbar}}}
+        <div class="d-flex flex-wrap gap-2 align-items-end">
+            <div>
+                <label for="local-evidencehub-format-{{uniqid}}" class="form-label">{{#str}} hubdownloadformat, local_evidencehub {{/str}}</label>
+                <select id="local-evidencehub-format-{{uniqid}}" name="download" class="form-select">
+                    {{#formats}}
+                    <option value="{{name}}">{{label}}</option>
+                    {{/formats}}
+                </select>
+            </div>
+            <button type="submit" class="btn btn-secondary">{{#str}} hubdownload, local_evidencehub {{/str}}</button>
+        </div>
+        <p class="form-text">{{#str}} hubdownloadhelp, local_evidencehub {{/str}}</p>
+        {{/hasrows}}
+        {{^hasrows}}
+        <p class="text-muted">{{#str}} hubnorows, local_evidencehub {{/str}}</p>
+        {{/hasrows}}
+    </form>
+    {{/hasfilter}}
+</div>

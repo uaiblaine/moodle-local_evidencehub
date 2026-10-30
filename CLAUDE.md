@@ -78,12 +78,18 @@ db/tasks.php      evaluate_validity (hourly), reconcile_validity (weekly)
 evidence.php      the worker's evidence page (renderable output/evidence_page, amd/src/evidence_page)
 policies.php      framework list / one framework's policies (output/policy_frameworks,
                   output/framework_policies, amd/src/policies); settings.php adds its admin entry
+index.php         the hub (output/hub_page, amd/src/hub_page); entries: settings.php (system) and
+                  lib.php's category More menu; db/caches.php hubkpis + hubgeneration
 classes/local/    status, meta, audit, export: stored constants and their labels
                   meta also holds the YYYYMMDD date helpers; types: the seeded default types
                   details: THE details API (save, verify, reject, the reset rule); all callers use it
                   policy: constants + THE policy API (resolve, save, delete, require_manage)
                   validity_calculator: the rule, pure (candidate, validity value objects)
                   status_repository: THE writer of local_evidencehub_status (recompute, scopes)
+                  hub_access (context, templates, cohorts), hub_scope (the two capability
+                  fragments), hub_filter, hub_query (base_sql, page_keys, page_details, rows),
+                  hub_kpis (one statement per method, cached by generation), hub_download
+classes/reportbuilder/ datasource validity, entities validity + evidence_details
 classes/form/     evidence (core evidence + details in one submit), verify, policy (dynamic forms)
 classes/event/    evidence_details_updated, evidence_verified, evidence_rejected,
                   validity_status_changed, validity_policy_updated
@@ -99,8 +105,9 @@ tests/generator/  writes rows directly (create_status() stays direct for the tas
 
 ## Versions
 
-5.3 only, one branch (`main`), numbered in the 5.3 namespace `20261005XX`. No upgrade step exists
-yet; the first one comes with the first schema change after a release.
+5.3 only, one branch (`main`), numbered in the 5.3 namespace `20261005XX`. `db/upgrade.php` starts at
+2026100504 (the status row's `issensitive`); every later step ends in a savepoint no higher than
+`version.php`.
 
 ## Architecture gotchas
 
@@ -121,6 +128,19 @@ yet; the first one comes with the first schema change after a release.
   context**, filtered in SQL (`api::filter_users_with_capability_on_user_context_sql`).
 - **The hub grid is two queries, not a report builder system report** (S0: one statement took
   0.5–0.8 s on MariaDB over 300k pairs; the two-step deferred join stays under 300 ms).
+- **The status row carries its deciding evidence's type flag** (`local_evidencehub_status.issensitive`,
+  written by `status_repository` on every write): the hub's base set reads it instead of joining meta
+  and type for every pair. Any future change to a type's `issensitive` must recompute that type's
+  pairs (no type management UI exists yet).
+- **The hub reads the effective status, never the stored one** (`hub_query::base_sql()`): restricted
+  (-1) and missing (0) are computed per viewer; grid, filters, sort, KPIs and download all read it.
+  The restriction is worked out once in the innermost table, because each capability fragment's
+  placeholders may appear once per statement.
+- **The KPI cache has no TTL**: every status write or delete and the plan, cohort and user events
+  in `db/events.php` replace the generation; core fires no event for a template's competencies, so
+  the key reads `hub_kpis::template_signature()` (the one statement a cached call sends).
+- **The hub's cohort check includes the page context itself**, unlike `cohort_get_cohort()`, whose
+  callers are courses (`hub_access::cohorts()` says why).
 - **`archive_writer::get_file_writer()` takes a file NAME**: a path makes ZipStream write the ZIP
   to stdout without a word.
 - **Privacy:** deleting an actor (verifier, issuer, requester of others' dossiers) leaves their

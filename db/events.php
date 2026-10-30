@@ -17,6 +17,9 @@
 /**
  * Observers of core competencies' events and of the plugin's own details events.
  *
+ * The plan, cohort and user events retire the hub's cached KPIs. Core fires no event when a plan
+ * template gains or loses a competency, so the KPI key reads the template's competencies instead.
+ *
  * @package    local_evidencehub
  * @copyright  2026 Anderson Blaine
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
@@ -72,5 +75,53 @@ $observers = [
     [
         'eventname' => '\core\event\user_deleted',
         'callback' => [\local_evidencehub\observer::class, 'user_deleted'],
+    ],
+    [
+        'eventname' => '\core\event\competency_plan_created',
+        'callback' => [\local_evidencehub\observer::class, 'base_set_changed'],
+    ],
+    [
+        'eventname' => '\core\event\competency_plan_updated',
+        'callback' => [\local_evidencehub\observer::class, 'base_set_changed'],
+    ],
+    [
+        'eventname' => '\core\event\competency_plan_approved',
+        'callback' => [\local_evidencehub\observer::class, 'base_set_changed'],
+    ],
+    [
+        'eventname' => '\core\event\competency_plan_unapproved',
+        'callback' => [\local_evidencehub\observer::class, 'base_set_changed'],
+    ],
+    [
+        'eventname' => '\core\event\competency_plan_completed',
+        'callback' => [\local_evidencehub\observer::class, 'base_set_changed'],
+    ],
+    [
+        'eventname' => '\core\event\competency_plan_reopened',
+        'callback' => [\local_evidencehub\observer::class, 'base_set_changed'],
+    ],
+    [
+        'eventname' => '\core\event\competency_plan_deleted',
+        'callback' => [\local_evidencehub\observer::class, 'base_set_changed'],
+    ],
+    [
+        'eventname' => '\core\event\competency_plan_unlinked',
+        'callback' => [\local_evidencehub\observer::class, 'base_set_changed'],
+    ],
+    [
+        'eventname' => '\core\event\cohort_member_added',
+        'callback' => [\local_evidencehub\observer::class, 'base_set_changed'],
+    ],
+    [
+        'eventname' => '\core\event\cohort_member_removed',
+        'callback' => [\local_evidencehub\observer::class, 'base_set_changed'],
+    ],
+    [
+        'eventname' => '\core\event\cohort_deleted',
+        'callback' => [\local_evidencehub\observer::class, 'base_set_changed'],
+    ],
+    [
+        'eventname' => '\core\event\user_updated',
+        'callback' => [\local_evidencehub\observer::class, 'base_set_changed'],
     ],
 ];

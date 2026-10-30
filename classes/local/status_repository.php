@@ -47,8 +47,9 @@ final class status_repository {
      * the competency ("missing" is never stored). On a status change it writes a log evidence into
      * core's history of the user competency in the same transaction as the row, so a failing log
      * rolls the row back and the next recomputation retries both; it never changes a rating. After
-     * the commit it fires validity_status_changed: internal observers run at once, even inside a
-     * transaction, so they must never see a change that may still roll back.
+     * the commit it retires the hub's cached KPIs ({@see hub_kpis::bump_generation()}) and fires
+     * validity_status_changed: internal observers run at once, even inside a transaction, so they
+     * must never see a change that may still roll back.
      *
      * @param int $userid The worker.
      * @param int $competencyid The competency.
@@ -62,6 +63,10 @@ final class status_repository {
         }
         try {
             [$result, $row, $from] = self::write($userid, $competencyid);
+            if ($row !== null || $from !== null) {
+                // A row was written or deleted: the hub's cached counts may be wrong now.
+                hub_kpis::bump_generation();
+            }
             if ($row !== null && $from !== (int) $row->status) {
                 validity_status_changed::create_from_status($row, $from)->trigger();
             }
@@ -333,6 +338,7 @@ final class status_repository {
             'metaid' => $result->metaid,
             'effectiveexpiry' => $result->effectiveexpiry,
             'evidencecount' => $result->evidencecount,
+            'issensitive' => self::deciding_is_sensitive($result->metaid),
             'nexttransition' => $result->nexttransition === null ? null : self::site_midnight($result->nexttransition),
             'timemodified' => $now,
         ];
@@ -352,6 +358,27 @@ final class status_repository {
             self::log($row, $policy, $result);
         }
         return [$result, $row, $from];
+    }
+
+    /**
+     * Whether the deciding evidence's type is sensitive, as the status row stores it for the hub.
+     *
+     * Stored, not joined: the hub reads it for every pair of a template. A change to a type's
+     * issensitive must therefore recompute that type's pairs.
+     *
+     * @param int|null $metaid The deciding evidence's details, or null when none decides.
+     * @return int 1 or 0.
+     */
+    private static function deciding_is_sensitive(?int $metaid): int {
+        global $DB;
+        if ($metaid === null) {
+            return 0;
+        }
+        $sql = "SELECT t.issensitive
+                  FROM {" . details::TABLE . "} m
+                  JOIN {local_evidencehub_type} t ON t.id = m.typeid
+                 WHERE m.id = :metaid";
+        return (int) !empty($DB->get_field_sql($sql, ['metaid' => $metaid]));
     }
 
     /**

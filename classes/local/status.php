@@ -42,6 +42,12 @@ final class status {
     /** @var int Counted evidence exists and none covers today. */
     public const int STATUS_EXPIRED = 5;
 
+    /** @var int Effective status of a pair decided by an evidence the viewer may not see; per viewer, never stored. */
+    public const int EFFECTIVE_RESTRICTED = -1;
+
+    /** @var int Effective status of a required pair with no status row; computed, never stored. */
+    public const int EFFECTIVE_MISSING = 0;
+
     /**
      * The human-readable name of a status.
      *
@@ -58,6 +64,52 @@ final class status {
             self::STATUS_CRITICAL => get_string('status_critical', 'local_evidencehub'),
             self::STATUS_EXPIRED => get_string('status_expired', 'local_evidencehub'),
             default => throw new \coding_exception('Unknown evidence hub status: ' . $status),
+        };
+    }
+
+    /**
+     * Every effective status the hub filters, sorts and counts by, in display order.
+     *
+     * @return array List of codes: EFFECTIVE_RESTRICTED, EFFECTIVE_MISSING and the STATUS_* constants.
+     */
+    public static function effective_codes(): array {
+        return [
+            self::EFFECTIVE_MISSING,
+            self::STATUS_UNVERIFIED,
+            self::STATUS_EXPIRED,
+            self::STATUS_CRITICAL,
+            self::STATUS_DUE,
+            self::STATUS_VALID,
+            self::EFFECTIVE_RESTRICTED,
+        ];
+    }
+
+    /**
+     * The human-readable name of an effective status.
+     *
+     * @param int $code An effective status code.
+     * @return string
+     * @throws \coding_exception On an unknown code.
+     */
+    public static function effective_label(int $code): string {
+        return match ($code) {
+            self::EFFECTIVE_RESTRICTED => get_string('validityrestricted', 'local_evidencehub'),
+            self::EFFECTIVE_MISSING => self::label(null),
+            default => self::label($code),
+        };
+    }
+
+    /**
+     * The badge classes of an effective status, each with its text colour stated.
+     *
+     * @param int $code An effective status code.
+     * @return string
+     * @throws \coding_exception On an unknown code.
+     */
+    public static function effective_badge_class(int $code): string {
+        return match ($code) {
+            self::EFFECTIVE_RESTRICTED, self::EFFECTIVE_MISSING => self::badge_class(null),
+            default => self::badge_class($code),
         };
     }
 

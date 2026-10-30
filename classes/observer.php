@@ -18,12 +18,14 @@ namespace local_evidencehub;
 
 use core_competency\evidence;
 use local_evidencehub\local\details;
+use local_evidencehub\local\hub_kpis;
 use local_evidencehub\local\policy;
 use local_evidencehub\local\status_repository;
 
 /**
- * Keeps the details in step with core's evidence when it changes outside this plugin, and decides
- * which (user, competency) pairs to recompute when something they depend on changes.
+ * Keeps the details in step with core's evidence when it changes outside this plugin, decides
+ * which (user, competency) pairs to recompute when something they depend on changes, and retires
+ * the hub's cached KPIs when the set of pairs a template requires may have changed.
  *
  * Every recomputation goes through {@see status_repository}; an observer only picks the pairs. A pair
  * whose user is locked by another recomputation is queued, not lost; any other failure is left to
@@ -131,6 +133,7 @@ final class observer {
         global $DB;
         $DB->delete_records(status_repository::TABLE, ['competencyid' => (int) $event->objectid]);
         $DB->delete_records(policy::TABLE, ['competencyid' => (int) $event->objectid]);
+        hub_kpis::bump_generation();
     }
 
     /**
@@ -153,5 +156,17 @@ final class observer {
     public static function user_deleted(\core\event\user_deleted $event): void {
         global $DB;
         $DB->delete_records(status_repository::TABLE, ['userid' => (int) $event->objectid]);
+        hub_kpis::bump_generation();
+    }
+
+    /**
+     * Something the hub's base set depends on changed: a plan's status or template, a cohort's
+     * members, a user's name or suspension. The cached KPIs are retired; nothing is recomputed.
+     *
+     * @param \core\event\base $event A plan, cohort or user event (db/events.php lists them).
+     * @return void
+     */
+    public static function base_set_changed(\core\event\base $event): void {
+        hub_kpis::bump_generation();
     }
 }

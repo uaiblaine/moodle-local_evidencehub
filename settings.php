@@ -17,8 +17,8 @@
 /**
  * Admin tree entries.
  *
- * The policies page does its own checks in each framework's context, so the entry names
- * local/evidencehub:managepolicies rather than moodle/site:config.
+ * Both pages do their own checks, the policies page in each framework's context, so the entries
+ * name the plugin's capabilities rather than moodle/site:config.
  *
  * @package    local_evidencehub
  * @copyright  2026 Anderson Blaine
@@ -32,4 +32,11 @@ $ADMIN->add('competencies', new admin_externalpage(
     new lang_string('policiespage', 'local_evidencehub'),
     new moodle_url('/local/evidencehub/policies.php'),
     'local/evidencehub:managepolicies'
+));
+
+$ADMIN->add('competencies', new admin_externalpage(
+    'local_evidencehub_hub',
+    new lang_string('hubpage', 'local_evidencehub'),
+    new moodle_url('/local/evidencehub/index.php'),
+    'local/evidencehub:view'
 ));
