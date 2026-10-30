@@ -28,7 +28,7 @@ use local_evidencehub\local\hub_scope;
 use local_evidencehub\local\status;
 
 /**
- * The evidence hub of a context: the filters, the KPI bar and one page of the grid.
+ * The evidence hub of a context: the filters, the KPI bar, the tabs and one page of the list or the matrix.
  *
  * @package    local_evidencehub
  * @copyright  2026 Anderson Blaine
@@ -94,20 +94,10 @@ class hub_page implements renderable, templatable {
 
         $filter = $this->filter;
         $kpis = hub_kpis::get($filter, $this->scope, $this->context);
-        $query = new hub_query($this->context, $this->scope);
-        $rows = $query->page($filter);
-        $total = hub_kpis::pager_count($kpis, $filter);
-        $identity = $query->identity_fields();
         $data += [
             'templateid' => $filter->templateid,
             'hidden' => $this->hidden_fields($filter),
-            'downloadfields' => array_merge($this->hidden_fields($filter), [
-                ['name' => 'templateid', 'value' => $filter->templateid],
-                ['name' => 'cohortid', 'value' => $filter->cohortid],
-                ['name' => 'search', 'value' => $filter->search],
-                ['name' => 'suspended', 'value' => (int) $filter->suspended],
-                ['name' => 'perpage', 'value' => $filter->perpage],
-            ]),
+            'tabs' => $this->tabs($filter),
             'chips' => $this->chips($filter),
             'tiles' => $this->tiles($filter, $kpis),
             'readiness' => get_string('hubreadiness', 'local_evidencehub', (object) [
@@ -117,6 +107,25 @@ class hub_page implements renderable, templatable {
             ]),
             'hiddenworkers' => $kpis['hidden'] ? get_string('hubhiddenworkers', 'local_evidencehub', $kpis['hidden']) : '',
             'noworkers' => $kpis['workers'] === 0,
+        ];
+        if ($filter->view === hub_filter::VIEW_MATRIX) {
+            $data['matrix'] = (new hub_matrix_page($this->context, $filter, $this->scope, $kpis))->export_for_template($output);
+            return $data;
+        }
+
+        $query = new hub_query($this->context, $this->scope);
+        $rows = $query->page($filter);
+        $total = hub_kpis::pager_count($kpis, $filter);
+        $identity = $query->identity_fields();
+        $data += [
+            'islist' => true,
+            'downloadfields' => array_merge($this->hidden_fields($filter), [
+                ['name' => 'templateid', 'value' => $filter->templateid],
+                ['name' => 'cohortid', 'value' => $filter->cohortid],
+                ['name' => 'search', 'value' => $filter->search],
+                ['name' => 'suspended', 'value' => (int) $filter->suspended],
+                ['name' => 'perpage', 'value' => $filter->perpage],
+            ]),
             'total' => $total,
             'columns' => $this->columns($filter, $identity),
             'rows' => $this->rows($rows, new hub_download($this->context, $query), $identity),
@@ -169,7 +178,7 @@ class hub_page implements renderable, templatable {
     }
 
     /**
-     * The filter's values the forms carry as hidden fields: the statuses, the sort and its direction.
+     * The filter's values the forms carry as hidden fields: the statuses, the sort, its direction and the view.
      *
      * @param hub_filter $filter The filter.
      * @return array List of [name, value].
@@ -181,7 +190,29 @@ class hub_page implements renderable, templatable {
         }
         $fields[] = ['name' => 'sort', 'value' => $filter->sort];
         $fields[] = ['name' => 'dir', 'value' => $filter->dir];
+        $fields[] = ['name' => 'view', 'value' => $filter->view];
         return $fields;
+    }
+
+    /**
+     * The tabs between the list and the matrix: the same filter, on its first page.
+     *
+     * @param hub_filter $filter The filter.
+     * @return array List of [label, url, active].
+     */
+    private function tabs(hub_filter $filter): array {
+        $tabs = [];
+        foreach (hub_filter::VIEW_NAMES as $view) {
+            $tabs[] = [
+                'label' => match ($view) {
+                    hub_filter::VIEW_LIST => get_string('hublist', 'local_evidencehub'),
+                    hub_filter::VIEW_MATRIX => get_string('hubmatrix', 'local_evidencehub'),
+                },
+                'url' => $this->url($filter->with(['view' => $view, 'page' => 0]))->out(false),
+                'active' => $filter->view === $view,
+            ];
+        }
+        return $tabs;
     }
 
     /**

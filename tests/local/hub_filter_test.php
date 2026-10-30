@@ -63,6 +63,7 @@ final class hub_filter_test extends \advanced_testcase {
             'dir' => 'sideways',
             'page' => -3,
             'perpage' => 7,
+            'view' => 'password',
         ], \context_system::instance());
         $this->assertSame($this->templateid, $filter->templateid);
         // Known codes only, in display order, once each.
@@ -72,11 +73,12 @@ final class hub_filter_test extends \advanced_testcase {
         );
         $this->assertStringStartsWith('Ana x', $filter->search);
         $this->assertSame(hub_filter::SEARCH_MAXLENGTH, \core_text::strlen($filter->search));
-        $this->assertSame([hub_filter::SORT_EXPIRY, 'asc', 0, hub_filter::DEFAULT_PERPAGE], [
+        $this->assertSame([hub_filter::SORT_EXPIRY, 'asc', 0, hub_filter::DEFAULT_PERPAGE, hub_filter::VIEW_LIST], [
             $filter->sort,
             $filter->dir,
             $filter->page,
             $filter->perpage,
+            $filter->view,
         ]);
 
         $filter = hub_filter::from_values([
@@ -85,8 +87,12 @@ final class hub_filter_test extends \advanced_testcase {
             'dir' => 'desc',
             'page' => 2,
             'perpage' => 100,
+            'view' => 'matrix',
         ], \context_system::instance());
-        $this->assertSame(['worker', 'desc', 2, 100], [$filter->sort, $filter->dir, $filter->page, $filter->perpage]);
+        $this->assertSame(
+            ['worker', 'desc', 2, 100, hub_filter::VIEW_MATRIX],
+            [$filter->sort, $filter->dir, $filter->page, $filter->perpage, $filter->view]
+        );
         $this->assertSame(hub_filter::needs_attention(), $filter->statuses);
         $this->assertNotContains(status::STATUS_VALID, $filter->statuses);
     }
@@ -152,6 +158,7 @@ final class hub_filter_test extends \advanced_testcase {
             'dir' => 'desc',
             'page' => 3,
             'perpage' => 25,
+            'view' => 'matrix',
         ], $system);
         $this->assertNull(hub_filter::from_preference($system));
         $filter->save_preference();
@@ -159,6 +166,7 @@ final class hub_filter_test extends \advanced_testcase {
         $stored = json_decode(get_user_preferences(hub_filter::PREFERENCE), true);
         $this->assertSame($filter->to_values(), $stored);
         $this->assertArrayNotHasKey('page', $stored);
+        $this->assertSame(hub_filter::VIEW_MATRIX, $stored['view']);
         $this->assertEquals($filter->with(['page' => 0]), hub_filter::from_preference($system));
 
         $category = $this->getDataGenerator()->create_category();
@@ -174,7 +182,10 @@ final class hub_filter_test extends \advanced_testcase {
      */
     public function test_the_params_name_the_filter_back(): void {
         $system = \context_system::instance();
-        $filter = hub_filter::from_values(['templateid' => $this->templateid, 'statuses' => [], 'page' => 2], $system);
+        $filter = hub_filter::from_values(
+            ['templateid' => $this->templateid, 'statuses' => [], 'page' => 2, 'view' => 'matrix'],
+            $system
+        );
         $_GET = array_map(fn($value) => is_array($value) ? $value : (string) $value, $filter->to_params());
         $this->assertEquals($filter, hub_filter::from_request($system));
     }
@@ -198,19 +209,23 @@ final class hub_filter_test extends \advanced_testcase {
             'dir' => 'up',
             'page' => -1,
             'perpage' => 7,
+            'view' => 'grid',
         ]);
-        $this->assertSame([[status::STATUS_DUE], hub_filter::SORT_EXPIRY, 'asc', 0, hub_filter::DEFAULT_PERPAGE], [
+        $defaults = [[status::STATUS_DUE], hub_filter::SORT_EXPIRY, 'asc', 0, hub_filter::DEFAULT_PERPAGE, hub_filter::VIEW_LIST];
+        $this->assertSame($defaults, [
             $copy->statuses,
             $copy->sort,
             $copy->dir,
             $copy->page,
             $copy->perpage,
+            $copy->view,
         ]);
         // The control: allowed values pass, and what was not named stays.
-        $copy = $filter->with(['sort' => 'worker', 'page' => 2]);
-        $this->assertSame(['worker', 2, $filter->statuses, $filter->templateid], [
+        $copy = $filter->with(['sort' => 'worker', 'page' => 2, 'view' => hub_filter::VIEW_MATRIX]);
+        $this->assertSame(['worker', 2, hub_filter::VIEW_MATRIX, $filter->statuses, $filter->templateid], [
             $copy->sort,
             $copy->page,
+            $copy->view,
             $copy->statuses,
             $copy->templateid,
         ]);

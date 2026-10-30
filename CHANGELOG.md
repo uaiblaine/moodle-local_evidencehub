@@ -8,6 +8,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- Stage S6: the readiness matrix. The hub has a list and a matrix tab (`view=list|matrix`, part of the
+  validated filter and its stored preference). The matrix shows one row per worker and one column per
+  competency of the template, in the template's order, each heading with its policy kind's tag (REG,
+  TEC, BEH), a legend of the statuses, and a cell per pair: the effective status's colour, the days left
+  or since, a dash when missing and a lock when restricted, opening the pair's inspection drawer. It
+  reads the list's base set in two statements (`local\hub_matrix`: a page of workers grouped, filtered
+  by status with a `HAVING`, sorted by name or urgency; then every pair of those workers with their
+  names), so the matrix and the list never disagree on a pair. The pager counts the KPIs' workers when
+  no status chip narrows the rows, and runs one count statement otherwise. The table has a fixed layout
+  and a sticky worker column, and is rendered in full by the server; a Behat step measures the page's
+  layout shift on 200 workers by 25 competencies, seeded by a bulk generator entity (`matrix seeds`).
+  Each row's checkbox posts the worker's id as `workers[]` (one dossier per worker); the server-side
+  handling of `workers[]`, and the matrix form's action, come with S7.
 - Stage S5: the inspection drawer. Each row of the hub's grid opens a side sheet (a `core/modal`
   with its own template) for one worker and competency, its body a fragment
   (`local_evidencehub_output_fragment_pair()`) that checks the context, `local/evidencehub:view`,

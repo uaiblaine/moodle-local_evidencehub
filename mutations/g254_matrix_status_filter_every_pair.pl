@@ -1,0 +1,1 @@
+s/THEN 1 ELSE 0 END\) > 0"/THEN 0 ELSE 1 END) = 0"/;
