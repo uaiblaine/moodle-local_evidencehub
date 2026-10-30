@@ -100,3 +100,94 @@
     font-variant-numeric: tabular-nums;
     white-space: nowrap;
 }
+
+/* The readiness matrix: a fixed layout of explicit widths, rendered in full, so nothing reflows after load. */
+.local-evidencehub-hub .local-evidencehub-matrix-view {
+    --local-evidencehub-surface: var(--dimensions-surface, var(--bs-body-bg, var(--body-bg, #fff)));
+    --local-evidencehub-matrix-worker: 16rem;
+    --local-evidencehub-matrix-cell: 5.5rem;
+}
+
+.local-evidencehub-hub .local-evidencehub-legend {
+    font-size: 0.8125rem;
+    color: var(--local-evidencehub-muted);
+}
+
+.local-evidencehub-hub .local-evidencehub-swatch {
+    display: inline-block;
+    width: 0.875rem;
+    height: 0.875rem;
+    margin-inline-end: 0.375rem;
+    border-radius: 0.1875rem;
+    vertical-align: middle;
+}
+
+/* The table scrolls inside its wrapper; the page never does. */
+.local-evidencehub-hub .local-evidencehub-matrix-scroll {
+    max-width: 100%;
+    overflow-x: auto;
+}
+
+.local-evidencehub-hub .local-evidencehub-matrix {
+    --local-evidencehub-matrix-cells: calc(var(--local-evidencehub-matrix-columns, 1) * var(--local-evidencehub-matrix-cell));
+    table-layout: fixed;
+    width: calc(var(--local-evidencehub-matrix-worker) + var(--local-evidencehub-matrix-cells));
+    margin-bottom: 0;
+}
+
+/* The worker column stays in place, opaque, over the cells scrolling under it. */
+.local-evidencehub-hub .local-evidencehub-matrix .local-evidencehub-matrix-worker {
+    position: sticky;
+    inset-inline-start: 0;
+    z-index: 1;
+    width: var(--local-evidencehub-matrix-worker);
+    background-color: var(--local-evidencehub-surface);
+    overflow-wrap: anywhere;
+}
+
+.local-evidencehub-hub .local-evidencehub-matrix .local-evidencehub-matrix-competency {
+    width: var(--local-evidencehub-matrix-cell);
+    font-size: 0.8125rem;
+    text-align: center;
+    vertical-align: bottom;
+    overflow-wrap: anywhere;
+}
+
+.local-evidencehub-hub .local-evidencehub-matrix .local-evidencehub-matrix-identity {
+    color: var(--local-evidencehub-muted);
+}
+
+.local-evidencehub-hub .local-evidencehub-matrix .local-evidencehub-kind {
+    display: inline-block;
+    padding: 0 0.3rem;
+    border: 1px solid var(--local-evidencehub-border);
+    border-radius: 0.25rem;
+    color: var(--local-evidencehub-muted);
+    font-size: 0.6875rem;
+    font-weight: 600;
+    text-decoration: none;
+}
+
+.local-evidencehub-hub .local-evidencehub-matrix .local-evidencehub-matrix-cell {
+    padding: 0.25rem;
+}
+
+.local-evidencehub-hub .local-evidencehub-matrix .local-evidencehub-cell {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: 2.25rem;
+    padding: 0;
+    border: 0;
+    border-radius: 0.375rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+
+.local-evidencehub-hub .local-evidencehub-matrix .local-evidencehub-cell:focus-visible {
+    outline: 2px solid var(--local-evidencehub-accent);
+    outline-offset: 2px;
+}

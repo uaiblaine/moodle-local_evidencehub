@@ -1,0 +1,1 @@
+s/hub_query::base_sql\(\$filter, \$scope, \$context\);(\n\s*\[\$having, \$statusparams\] = self::status_having\(\$filter\);\n\s*\$sql = "SELECT w\.userid)/hub_query::base_sql(\$filter, new hub_scope(\$scope->viewerid, \$scope->viewsql, \$scope->viewparams, '> 0', []), \$context);$1/;

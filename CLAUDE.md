@@ -82,6 +82,7 @@ index.php         the hub (output/hub_page, amd/src/hub_page); entries: settings
                   lib.php's category More menu; db/caches.php hubkpis + hubgeneration
                   drawer: amd/src/drawer (core/modal subclass, templates/drawer), body from lib.php's
                   output_fragment_pair (output/pair_drawer, templates/pair_drawer)
+                  view=matrix: output/hub_matrix_page, templates/hub_matrix (a partial of hub_page)
 classes/local/    status, meta, audit, export: stored constants and their labels
                   meta also holds the YYYYMMDD date helpers; types: the seeded default types
                   details: THE details API (save, verify, reject, the reset rule); all callers use it
@@ -90,7 +91,8 @@ classes/local/    status, meta, audit, export: stored constants and their labels
                   status_repository: THE writer of local_evidencehub_status (recompute, scopes)
                   hub_access (context, templates, cohorts), hub_scope (the two capability
                   fragments), hub_filter, hub_query (base_sql, page_keys, page_details, rows),
-                  hub_kpis (one statement per method, cached by generation), hub_download
+                  hub_kpis (one statement per method, cached by generation), hub_download,
+                  hub_matrix (workers_sql, cells_sql, count_sql: the matrix over base_sql)
 classes/reportbuilder/ datasource validity, entities validity + evidence_details
 classes/form/     evidence (core evidence + details in one submit), verify, policy (dynamic forms)
 classes/event/    evidence_details_updated, evidence_verified, evidence_rejected,
@@ -138,6 +140,14 @@ tests/generator/  writes rows directly (create_status() stays direct for the tas
   (-1) and missing (0) are computed per viewer; grid, filters, sort, KPIs and download all read it.
   The restriction is worked out once in the innermost table, because each capability fragment's
   placeholders may appear once per statement.
+- **The matrix and the list read the same base set** (`hub_matrix` wraps `hub_query::base_sql()`), so
+  they never disagree on a pair; the matrix's status filter is a `HAVING` (a worker stays with one
+  pair in the chosen statuses and shows them all), and its pager reuses the KPIs' worker count when
+  no chip narrows the rows. The view (`list`/`matrix`) is part of the validated filter.
+- **The matrix renders without layout shift**: the server renders every cell, the table has a fixed
+  layout with explicit widths (the column count is an inline custom property), and cells use text
+  or core's pix icons only. `tests/behat/matrix.feature` measures it on a bulk seed (generator entity
+  `matrix seeds`, 200 x 25).
 - **The KPI cache has no TTL**: every status write or delete and the plan, cohort and user events
   in `db/events.php` replace the generation; core fires no event for a template's competencies, so
   the key reads `hub_kpis::template_signature()` (the one statement a cached call sends).

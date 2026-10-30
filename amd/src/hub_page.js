@@ -14,8 +14,10 @@
 // along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
 
 /**
- * The evidence hub's grid: the checkbox in the heading selects or clears every row of the page, and
- * each row's button opens the pair's inspection drawer.
+ * The evidence hub's grid and matrix: the checkbox in the heading selects or clears every row of the
+ * page, and each row's button (each cell's, in the matrix) opens the pair's inspection drawer.
+ *
+ * The list's checkboxes post pairs[], the matrix's post workers[]; the heading checkbox ticks either.
  *
  * @module     local_evidencehub/hub_page
  * @copyright  2026 Anderson Blaine
@@ -27,7 +29,7 @@ import Notification from 'core/notification';
 
 const REGION = '[data-region="local-evidencehub-hub"]';
 const SELECTALL = '[data-action="selectall"]';
-const PAIR = '[data-region="pair"]';
+const ROW = '[data-region="pair"], [data-region="worker"]';
 const INSPECT = '[data-action="inspect"]';
 
 /**
@@ -40,10 +42,10 @@ const reflect = (region) => {
     if (!all) {
         return;
     }
-    const pairs = [...region.querySelectorAll(PAIR)];
-    const ticked = pairs.filter((pair) => pair.checked).length;
-    all.checked = pairs.length > 0 && ticked === pairs.length;
-    all.indeterminate = ticked > 0 && ticked < pairs.length;
+    const rows = [...region.querySelectorAll(ROW)];
+    const ticked = rows.filter((row) => row.checked).length;
+    all.checked = rows.length > 0 && ticked === rows.length;
+    all.indeterminate = ticked > 0 && ticked < rows.length;
 };
 
 /**
@@ -54,13 +56,15 @@ export const init = () => {
     if (!region) {
         return;
     }
+    // A page restored from the history keeps its ticks.
+    reflect(region);
     region.addEventListener('change', (event) => {
         if (event.target.matches(SELECTALL)) {
-            region.querySelectorAll(PAIR).forEach((pair) => {
-                pair.checked = event.target.checked;
+            region.querySelectorAll(ROW).forEach((row) => {
+                row.checked = event.target.checked;
             });
         }
-        if (event.target.matches(SELECTALL) || event.target.matches(PAIR)) {
+        if (event.target.matches(SELECTALL) || event.target.matches(ROW)) {
             reflect(region);
         }
     });

@@ -14,8 +14,8 @@ and lets a manager export a ZIP of readiness dossiers whose PDF pages carry a ve
 The evidence itself stays core's (`competency_userevidence` and its files): the plugin keeps the
 details beside it in tables of its own and never changes a core rating. It is developed in stages;
 this release holds the data model, the capabilities, the privacy provider, the evidence details
-(entering, verifying and rejecting them), the validity engine with its policies, the hub and its
-inspection drawer; the dossiers come next.
+(entering, verifying and rejecting them), the validity engine with its policies, the hub with its
+readiness matrix and its inspection drawer; the dossiers come next.
 
 
 Requirements
@@ -158,7 +158,22 @@ to a viewer who is not the worker and lacks `local/evidencehub:viewsensitive` in
 context; the status filters, the sort, the tiles and the download treat it as its own status, so
 none of them reveals what the cell hides.
 
-**The inspection drawer.** Each row of the grid has an "Inspect" button that opens a side sheet
+**The readiness matrix.** A tab beside the list ("List", "Matrix") shows the same filter as one row per
+worker and one column per competency of the template, in the template's own order, each column
+headed by the competency's short name and the kind of its validity policy (REG regulatory, TEC
+technical, BEH behavioural). A legend above the table names each status's colour. A cell is the
+pair's status as a coloured square, with the days left while it is due, the days since it expired, a
+dash when no evidence exists and a lock when it is restricted (no number then); each cell opens the
+pair's inspection drawer. The status chips keep the workers with at least one pair in the chosen
+statuses, whose rows still show every competency; the rows sort by name or, by default, most urgent
+first (the earliest last valid day among the worker's pairs not compliant), 25, 50 or 100 workers a
+page. The first column, with the worker's name, the identity fields the page shows and a checkbox
+selecting the worker (for the dossiers, which come next), stays in place while the table scrolls
+sideways. The matrix
+reads the same pairs, access rules and restriction as the list, and its view is kept with the rest
+of the filter.
+
+**The inspection drawer.** Each row of the grid, and each cell of the matrix, has an "Inspect" button that opens a side sheet
 for that worker and competency. Its content is loaded from the server, which checks again that the
 viewer holds `local/evidencehub:view` in the hub's context, may read the worker's evidence
 (`moodle/competency:userevidenceview`) and the competency (core's `competencyview`). It shows the worker, the competency and its status (with

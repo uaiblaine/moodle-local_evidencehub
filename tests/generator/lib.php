@@ -133,6 +133,78 @@ class local_evidencehub_generator extends component_generator_base {
     }
 
     /**
+     * A site-level plan template of many competencies with many workers and a status row for most pairs,
+     * in bulk: the matrix's size test seeds 200 workers by 25 competencies in one Behat step.
+     *
+     * Workers are users "Seed 001", "Seed 002", ...; competencies "M01", "M02", ... (ID numbers
+     * "<template>-M01", ...) in a framework of their own. The pairs cycle through compliant, due, critical,
+     * expired, awaiting verification and missing (no row), with expiry dates around today.
+     *
+     * @param array $record template (its short name), workers and competencies (counts).
+     * @return \core_competency\template
+     * @throws coding_exception Without a template name or with no workers or competencies.
+     */
+    public function create_matrix_seed(array $record): \core_competency\template {
+        global $DB;
+        $workers = (int) ($record['workers'] ?? 0);
+        $count = (int) ($record['competencies'] ?? 0);
+        if (empty($record['template']) || $workers < 1 || $count < 1) {
+            throw new coding_exception('The template, workers and competencies values are required.');
+        }
+        $generator = $this->datagenerator->get_plugin_generator('core_competency');
+        $framework = $generator->create_framework([
+            'shortname' => $record['template'],
+            'idnumber' => $record['template'] . '-framework',
+        ]);
+        $competencyids = [];
+        for ($i = 1; $i <= $count; $i++) {
+            $code = sprintf('M%02d', $i);
+            $competencyids[] = (int) $generator->create_competency([
+                'competencyframeworkid' => $framework->get('id'),
+                'shortname' => $code,
+                'idnumber' => $record['template'] . '-' . $code,
+            ])->get('id');
+        }
+        $template = $this->create_plan_template(['shortname' => $record['template'], 'competencyids' => $competencyids]);
+
+        $today = \local_evidencehub\local\status_repository::site_day(time());
+        $shapes = [
+            [status::STATUS_VALID, 400],
+            [status::STATUS_DUE, 45],
+            [status::STATUS_CRITICAL, 10],
+            [status::STATUS_EXPIRED, -20],
+            [status::STATUS_UNVERIFIED, null],
+        ];
+        $now = time();
+        $rows = [];
+        for ($w = 1; $w <= $workers; $w++) {
+            $user = $this->datagenerator->create_user(['firstname' => 'Seed', 'lastname' => sprintf('%03d', $w)]);
+            $this->create_template_plan(['userid' => $user->id, 'templateid' => $template->get('id')]);
+            foreach ($competencyids as $index => $competencyid) {
+                $shape = ($w + $index) % (count($shapes) + 1);
+                if ($shape === count($shapes)) {
+                    // Missing: no row.
+                    continue;
+                }
+                [$code, $days] = $shapes[$shape];
+                $rows[] = [
+                    'userid' => $user->id,
+                    'competencyid' => $competencyid,
+                    'status' => $code,
+                    'effectiveexpiry' => $days === null ? null : meta::add_days($today, $days),
+                    'evidencecount' => 1,
+                    'issensitive' => 0,
+                    'timechanged' => $now,
+                    'timemodified' => $now,
+                ];
+            }
+        }
+        $DB->insert_records('local_evidencehub_status', $rows);
+        hub_kpis::bump_generation();
+        return $template;
+    }
+
+    /**
      * A core evidence of a user linked to a competency, with details and their "created" audit row,
      * and the pair recomputed as the plugin's observers would.
      *

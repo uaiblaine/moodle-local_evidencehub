@@ -329,6 +329,22 @@ final class policy {
     }
 
     /**
+     * The short tag of a kind, for a matrix column's heading.
+     *
+     * @param int $kind A KIND_* constant.
+     * @return string
+     * @throws \coding_exception On an unknown kind.
+     */
+    public static function kind_tag(int $kind): string {
+        return match ($kind) {
+            self::KIND_REGULATORY => get_string('kindtag_regulatory', 'local_evidencehub'),
+            self::KIND_TECHNICAL => get_string('kindtag_technical', 'local_evidencehub'),
+            self::KIND_BEHAVIOURAL => get_string('kindtag_behavioural', 'local_evidencehub'),
+            default => throw new \coding_exception('Unknown policy kind: ' . $kind),
+        };
+    }
+
+    /**
      * The human-readable name of an expiry behaviour.
      *
      * @param int $onexpiry An ONEXPIRY_* constant.

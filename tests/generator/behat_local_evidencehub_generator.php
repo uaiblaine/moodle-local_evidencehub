@@ -25,7 +25,8 @@
 
 /**
  * The plugin's entities for "the following ... exist" steps: plan templates, plans from them, status rows,
- * and evidence linked to a competency with its details.
+ * evidence linked to a competency with its details, and a matrix seed (a template with its workers and
+ * their status rows in one row, for the matrix's size test).
  *
  * @package    local_evidencehub
  * @category   test
@@ -63,6 +64,11 @@ class behat_local_evidencehub_generator extends behat_generator_base {
                 'datagenerator' => 'evidence',
                 'required' => ['user', 'competency', 'name', 'issuedate'],
                 'switchids' => ['user' => 'userid', 'competency' => 'competencyid'],
+            ],
+            'matrix seeds' => [
+                'singular' => 'matrix seed',
+                'datagenerator' => 'matrix_seed',
+                'required' => ['template', 'workers', 'competencies'],
             ],
         ];
     }

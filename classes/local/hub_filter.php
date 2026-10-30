@@ -17,7 +17,7 @@
 namespace local_evidencehub\local;
 
 /**
- * The hub's filter: a validated plan template, cohort, effective statuses, search, sort and page.
+ * The hub's filter: a validated plan template, cohort, effective statuses, search, sort, page and view.
  *
  * Built from request parameters or from the stored preference, both through {@see self::from_values()},
  * which validates every field: the template and the cohort against what the page context offers
@@ -53,15 +53,24 @@ final class hub_filter {
     /** @var int The longest search the hub keeps. */
     public const int SEARCH_MAXLENGTH = 100;
 
+    /** @var string The grid of pairs, one row each. */
+    public const string VIEW_LIST = 'list';
+
+    /** @var string The readiness matrix, one row per worker and one column per competency. */
+    public const string VIEW_MATRIX = 'matrix';
+
+    /** @var array The views the hub accepts, the default first. */
+    public const array VIEW_NAMES = [self::VIEW_LIST, self::VIEW_MATRIX];
+
     /** @var string The user preference holding the last filter used. */
     public const string PREFERENCE = 'local_evidencehub_hubfilter';
 
     /** @var array The view values a copy may change: {@see self::with()}. */
-    private const array VIEW = ['statuses', 'sort', 'dir', 'page', 'perpage'];
+    private const array VIEW = ['statuses', 'sort', 'dir', 'page', 'perpage', 'view'];
 
     /** @var array The request parameters of a filter; any of them present means the request names one. */
     private const array PARAMS = [
-        'templateid', 'cohortid', 'statusfilter', 'search', 'suspended', 'sort', 'dir', 'page', 'perpage',
+        'templateid', 'cohortid', 'statusfilter', 'search', 'suspended', 'sort', 'dir', 'page', 'perpage', 'view',
     ];
 
     /**
@@ -76,6 +85,7 @@ final class hub_filter {
      * @param string $dir 'asc' or 'desc'.
      * @param int $page The page, from 0.
      * @param int $perpage Rows per page, one of PERPAGES.
+     * @param string $view One of VIEW_NAMES.
      */
     private function __construct(
         /** @var int The plan template. */
@@ -96,6 +106,8 @@ final class hub_filter {
         public readonly int $page,
         /** @var int Rows per page. */
         public readonly int $perpage,
+        /** @var string The view: the list or the matrix. */
+        public readonly string $view,
     ) {
     }
 
@@ -112,7 +124,7 @@ final class hub_filter {
      * A validated filter from raw values.
      *
      * @param array $values templateid (required), and optionally cohortid, statuses (absent: needs
-     *     attention; empty: every status), search, suspended, sort, dir, page, perpage.
+     *     attention; empty: every status), search, suspended, sort, dir, page, perpage, view.
      * @param \context $context The page context, which decides the templates and cohorts on offer.
      * @return self
      * @throws \moodle_exception When the template or the cohort is not offered in the context.
@@ -138,7 +150,7 @@ final class hub_filter {
     }
 
     /**
-     * The view values of raw input, each against its allowlist: statuses, sort, dir, page, perpage.
+     * The view values of raw input, each against its allowlist: statuses, sort, dir, page, perpage, view.
      *
      * @param array $values Raw values; a missing one takes its default (statuses: every status).
      * @return array Property name => clean value.
@@ -147,6 +159,7 @@ final class hub_filter {
         $raw = array_map(fn($code): int => (int) clean_param($code, PARAM_INT), (array) ($values['statuses'] ?? []));
         $sort = (string) ($values['sort'] ?? '');
         $perpage = (int) clean_param($values['perpage'] ?? 0, PARAM_INT);
+        $view = (string) ($values['view'] ?? '');
         return [
             // The allowlist, in display order and without repeats.
             'statuses' => array_values(array_intersect(status::effective_codes(), $raw)),
@@ -154,6 +167,7 @@ final class hub_filter {
             'dir' => ($values['dir'] ?? '') === 'desc' ? 'desc' : 'asc',
             'page' => max(0, (int) clean_param($values['page'] ?? 0, PARAM_INT)),
             'perpage' => in_array($perpage, self::PERPAGES, true) ? $perpage : self::DEFAULT_PERPAGE,
+            'view' => in_array($view, self::VIEW_NAMES, true) ? $view : self::VIEW_LIST,
         ];
     }
 
@@ -195,6 +209,7 @@ final class hub_filter {
             'dir' => optional_param('dir', '', PARAM_ALPHA),
             'page' => optional_param('page', 0, PARAM_INT),
             'perpage' => optional_param('perpage', 0, PARAM_INT),
+            'view' => optional_param('view', '', PARAM_ALPHA),
         ];
         $statuses = optional_param_array('statuses', [], PARAM_INT);
         if ($statuses || optional_param('statusfilter', 0, PARAM_BOOL)) {
@@ -251,6 +266,7 @@ final class hub_filter {
             'sort' => $this->sort,
             'dir' => $this->dir,
             'perpage' => $this->perpage,
+            'view' => $this->view,
         ];
     }
 
@@ -269,12 +285,13 @@ final class hub_filter {
     }
 
     /**
-     * A copy showing another view of the same set: other statuses, sort, direction, page or page size.
+     * A copy showing another view of the same set: other statuses, sort, direction, page, page size or
+     * view (the list or the matrix).
      *
      * The template, cohort, search and suspended flag stay this filter's, which were validated; the
      * view values are validated again against their allowlists.
      *
-     * @param array $changes Some of statuses, sort, dir, page, perpage => raw value.
+     * @param array $changes Some of statuses, sort, dir, page, perpage, view => raw value.
      * @return self
      * @throws \coding_exception On any other key.
      */

@@ -17,7 +17,7 @@
 {{!
     @template local_evidencehub/hub_page
 
-    The evidence hub: the filters, the KPI bar, the status chips and one page of the grid.
+    The evidence hub: the filters, the KPI bar, the status chips, the tabs and one page of the list or the matrix.
 
     Classes required for JS:
     * none
@@ -28,6 +28,7 @@
     * data-region="pair" on each row's checkbox
     * data-action="inspect" on each row's drawer button, with data-userid, data-competencyid and data-title;
       data-contextid and data-templateid on the root
+    * The matrix's own attributes: see local_evidencehub/hub_matrix
 
     Context variables required for this template:
     * contextid, actionurl - Where both forms go.
@@ -42,6 +43,9 @@
     * tiles - code, label, count, share, badgeclass, url, active of each KPI tile.
     * readiness, hiddenworkers, noworkers - The workers' readiness and who is hidden.
     * chips - label, url, active of each status chip.
+    * tabs - label, url, active of the list's and the matrix's tab.
+    * islist - The list is shown; everything below belongs to it.
+    * matrix - The matrix instead, the context of local_evidencehub/hub_matrix.
     * total, columns (label, sortable, url, sorted, asc), hasrows, rows - The grid; each row also has
       userid, competencyid, inspectlabel and drawertitle for its drawer button.
     * pagingbar - The pager, rendered by core.
@@ -72,6 +76,11 @@
         "hiddenworkers": "2 workers are not shown: you cannot view their evidence.",
         "noworkers": false,
         "chips": [{"label": "Expired", "url": "https://example.com/local/evidencehub/index.php?contextid=1", "active": true}],
+        "tabs": [
+            {"label": "List", "url": "https://example.com/local/evidencehub/index.php?contextid=1&view=list", "active": true},
+            {"label": "Matrix", "url": "https://example.com/local/evidencehub/index.php?contextid=1&view=matrix", "active": false}
+        ],
+        "islist": true,
         "total": 3,
         "columns": [
             {"label": "Worker", "sortable": true, "url": "https://example.com/", "sorted": true, "asc": true},
@@ -161,6 +170,16 @@
     {{/hasfilter}}
 
     {{#hasfilter}}
+    <nav aria-label="{{#str}} hubviews, local_evidencehub {{/str}}">
+        <ul class="nav nav-tabs local-evidencehub-tabs mb-3">
+            {{#tabs}}
+            <li class="nav-item">
+                <a href="{{url}}" class="nav-link{{#active}} active{{/active}}"{{#active}} aria-current="page"{{/active}}>{{label}}</a>
+            </li>
+            {{/tabs}}
+        </ul>
+    </nav>
+
     <div class="local-evidencehub-kpis d-flex flex-wrap gap-2 mb-2">
         {{#tiles}}
         <a href="{{url}}" class="local-evidencehub-tile card p-2 text-decoration-none{{#active}} local-evidencehub-tile-active{{/active}}"
@@ -187,6 +206,7 @@
         {{/chips}}
     </div>
 
+    {{#islist}}
     <form method="post" action="{{actionurl}}" class="local-evidencehub-download">
         <input type="hidden" name="contextid" value="{{contextid}}">
         <input type="hidden" name="sesskey" value="{{sesskey}}">
@@ -258,5 +278,9 @@
         <p class="text-muted">{{#str}} hubnorows, local_evidencehub {{/str}}</p>
         {{/hasrows}}
     </form>
+    {{/islist}}
+    {{#matrix}}
+    {{> local_evidencehub/hub_matrix}}
+    {{/matrix}}
     {{/hasfilter}}
 </div>

@@ -1,0 +1,1 @@
+s/CASE WHEN b\.estatus <> " \. status::STATUS_VALID \. " THEN b\.eexpiry END/CASE WHEN b.estatus <> " . status::STATUS_VALID . " AND b.estatus <> " . status::EFFECTIVE_RESTRICTED . " THEN b.eexpiry END/;
