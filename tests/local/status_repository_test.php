@@ -526,4 +526,36 @@ final class status_repository_test extends \advanced_testcase {
         sort($expected);
         $this->assertSame($expected, array_map('intval', $stored));
     }
+
+    /**
+     * The row stores whether its deciding evidence's type is sensitive, on insert and on update: a type
+     * changed through the details API, which recomputes, rewrites it both ways.
+     *
+     * @return void
+     */
+    public function test_the_row_stores_the_deciding_types_sensitive_flag(): void {
+        $meta = $this->linked(['typeid' => $this->type_id('nrcertificate')]);
+        $this->recompute();
+        $this->assertSame([(int) $meta->id, 0], [(int) $this->row()->metaid, (int) $this->row()->issensitive]);
+
+        $ue = new \core_competency\user_evidence((int) $meta->userevidenceid);
+        details::save($ue, $this->details_data(['typeid' => $this->type_id('aso'), 'issuedate' => 20260101]));
+        $this->assertSame([(int) $meta->id, 1], [(int) $this->row()->metaid, (int) $this->row()->issensitive]);
+
+        // The control: back to a plain type, back to 0.
+        details::save($ue, $this->details_data(['typeid' => $this->type_id('nrcertificate'), 'issuedate' => 20260101]));
+        $this->assertSame(0, (int) $this->row()->issensitive);
+    }
+
+    /**
+     * A first row decided by a sensitive evidence is inserted with the flag set.
+     *
+     * @return void
+     */
+    public function test_a_first_row_decided_by_a_sensitive_type_stores_it(): void {
+        $this->linked(['typeid' => $this->type_id('aso')]);
+        $this->assertFalse($this->row());
+        $this->recompute();
+        $this->assertSame(1, (int) $this->row()->issensitive);
+    }
 }

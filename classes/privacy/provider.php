@@ -24,6 +24,7 @@ use core_privacy\local\request\transform;
 use core_privacy\local\request\userlist;
 use core_privacy\local\request\writer;
 use local_evidencehub\local\audit;
+use local_evidencehub\local\hub_filter;
 use local_evidencehub\local\meta;
 use local_evidencehub\local\status;
 
@@ -34,6 +35,8 @@ use local_evidencehub\local\status;
  * user evidence does: the details of the worker's evidence, the materialised validity, the audit
  * trail of the details and the dossiers issued about the worker. A dossier export request lives
  * in the requester's user context.
+ *
+ * The user's last filter of the hub is a user preference, exported with the others.
  *
  * Other users appear as actors (who verified, who acted in the trail, who issued a dossier). They
  * find those rows in their own export, but deleting an actor's data leaves the worker's rows
@@ -47,7 +50,8 @@ use local_evidencehub\local\status;
 class provider implements
     \core_privacy\local\metadata\provider,
     \core_privacy\local\request\core_userlist_provider,
-    \core_privacy\local\request\plugin\provider {
+    \core_privacy\local\request\plugin\provider,
+    \core_privacy\local\request\user_preference_provider {
     /**
      * Describe the stored personal data.
      *
@@ -110,6 +114,8 @@ class provider implements
             'subjectcount' => 'privacy:metadata:local_evidencehub_export:subjectcount',
             'timecreated' => 'privacy:metadata:timecreated',
         ], 'privacy:metadata:local_evidencehub_export');
+
+        $collection->add_user_preference(hub_filter::PREFERENCE, 'privacy:metadata:preference:hubfilter');
 
         return $collection;
     }
@@ -218,6 +224,25 @@ class provider implements
                 static::export_statuses($context, $userid);
                 static::export_requests($context, $userid);
             }
+        }
+    }
+
+    /**
+     * Export the user's last hub filter, as stored: JSON of the validated filter.
+     *
+     * @param int $userid The user.
+     * @return void
+     */
+    #[\Override]
+    public static function export_user_preferences(int $userid): void {
+        $filter = get_user_preferences(hub_filter::PREFERENCE, null, $userid);
+        if ($filter !== null) {
+            writer::export_user_preference(
+                'local_evidencehub',
+                hub_filter::PREFERENCE,
+                $filter,
+                get_string('privacy:metadata:preference:hubfilter', 'local_evidencehub')
+            );
         }
     }
 

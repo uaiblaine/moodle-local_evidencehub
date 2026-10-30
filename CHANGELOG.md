@@ -8,6 +8,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- Stage S4: the hub page (`/local/evidencehub/index.php`), opened from Site administration >
+  Competencies > Evidence hub or from a course category's More menu, locked there to that
+  category's learning plan templates. For one template it lists every (worker, competency) pair of
+  the workers with an active plan from it: KPI tiles per status with the readiness rate and how many
+  workers the viewer's permissions hide, status chips (default "needs attention"), cohort, search,
+  suspended and page size filters in a GET form, and a two-step grid (the page's keys, then their
+  details) with its own pager, checkboxes and a download of every row or the ticked ones through
+  core's dataformats (`hub_downloaded` event). Rows need core's `moodle/competency:userevidenceview`
+  in the worker's user context, cut in SQL; a pair decided by a sensitive evidence the viewer may not
+  see reads "Restricted" in the grid, the filters, the sort, the counts and the download. The KPIs
+  are cached in an application cache retired by a generation that status writes and plan, cohort
+  and user events replace. The last filter is kept as a user preference (exported by the privacy
+  provider). A report builder datasource "Competency validity" serves site-level compliance staff.
+  The status row stores whether its deciding evidence's type is sensitive (`issensitive`, filled by
+  the first upgrade step, 2026100504), so the hub reads it without joining meta and type per pair.
 - Stage S3: validity engine. A pure validity calculator works out each (worker, competency) status
   (compliant, due, critical, expired, pending) from the linked evidence, the latest proficient
   rating and the competency's policy, with calendar days in the site's timezone; the status

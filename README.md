@@ -14,7 +14,7 @@ and lets a manager export a ZIP of readiness dossiers whose PDF pages carry a ve
 The evidence itself stays core's (`competency_userevidence` and its files): the plugin keeps the
 details beside it in tables of its own and never changes a core rating. It is developed in stages;
 this release holds the data model, the capabilities, the privacy provider, the evidence details
-(entering, verifying and rejecting them) and the validity engine with its policies; the hub and the
+(entering, verifying and rejecting them), the validity engine with its policies and the hub; the
 dossiers come next.
 
 
@@ -125,6 +125,49 @@ category manager never sees the "Validity policies" entry: they open
 On the evidence page, a competency whose validity is decided by an evidence of a sensitive type
 shows only "Restricted", on every evidence linked to it, to a viewer who may not see that evidence.
 
+**The evidence hub** (`/local/evidencehub/index.php`) shows, for one learning plan template, every
+(worker, competency) pair of the workers with an active plan from it: the status, the last valid
+day, how many evidence records were considered, and the type and issuer of the deciding evidence.
+It has two entries:
+
+- Site administration > Competencies > Evidence hub, which offers every template;
+- a course category's More menu ("Evidence hub"), which offers only the templates of that category
+  and its subcategories. A category manager uses this one: core loads the site administration
+  entries only for users who can see the site administration.
+
+Opening the hub needs `local/evidencehub:view` in its context, and a template is offered only when
+the viewer can read it (`moodle/competency:templateview`). Each row also needs core's
+`moodle/competency:userevidenceview` in the worker's user context: a category manager needs it for
+the workers of their team, typically through `tool_cohortroles` (a role holding it, assigned over
+the team's cohort). The hub says how many of the template's workers are hidden by permissions:
+every worker with an active plan from the template whom the viewer may not see, whatever the cohort,
+suspended or search filter, so changing a filter tells nothing about those workers.
+
+Above the grid, one tile per status counts the pairs and their share, with the readiness rate (the
+workers whose every pair is compliant or due); a tile or a status chip toggles that status. The
+default view, "needs attention", shows every status except compliant, the most urgent first:
+pending and restricted pairs, then by the last valid day. A cohort, a search on the worker's name
+(and on the ID number when the viewer is shown it as an identity field), "Include suspended" and the
+page size narrow the grid; every view is a URL, and the last filter shown is kept as a user preference
+and restored when the hub is opened without one (a download stores none). The rows
+of the filter, or only the ticked ones, download in any of the site's data formats.
+
+A pair decided by an evidence of a sensitive type reads "Restricted", with no date, evidence count,
+type or issuer,
+to a viewer who is not the worker and lacks `local/evidencehub:viewsensitive` in the worker's user
+context; the status filters, the sort, the tiles and the download treat it as its own status, so
+none of them reveals what the cell hides.
+
+**Custom reports.** The report builder datasource "Competency validity" (one row per stored status,
+with the deciding evidence, the worker and the competency) is offered to holders of
+`local/evidencehub:view` in the system context. Its rows follow the hub's rules for the user the
+report is built for (the viewer, or for a schedule the creator, a chosen user or each recipient):
+only workers whose user context grants that user `moodle/competency:userevidenceview`, and a pair
+whose deciding evidence is of a sensitive type reads "Restricted" in its status, dates, evidence
+count, type, issuer and verification, unless the user is the worker or holds
+`local/evidencehub:viewsensitive` in the worker's user context. Filters and sorting read the same
+restricted values.
+
 **Core competency history.** Each status change writes one log entry ("Evidence hub: ...") into the
 history of the worker's user competency (`competency_evidence`, through core's `add_evidence()`,
 with the plugin's component): core's own privacy provider exports and deletes those entries with the
@@ -144,7 +187,8 @@ rest of the competency history.
 Capabilities
 ------------
 
-- `local/evidencehub:view` (course category; manager): open the evidence hub. Each row also needs
+- `local/evidencehub:view` (course category; manager): open the evidence hub, in that category or,
+  held in the system context, on the site and in the custom report datasource. Each row also needs
   core's `moodle/competency:userevidenceview` in the worker's user context.
 - `local/evidencehub:verify` (user; manager): verify or reject the details of a worker's evidence.
 - `local/evidencehub:viewsensitive` (user; no archetype): see the details and files of evidence of a
@@ -172,7 +216,7 @@ Data stored
   verified evidence counts, minimum hours, alert windows, grace days, cycle). Configuration, no
   personal data.
 - `local_evidencehub_status`: the validity worked out for each (worker, competency): status,
-  deciding evidence, effective expiry, when it next changes. Recomputed from the details; removed
+  deciding evidence and whether its type is sensitive, effective expiry, when it next changes. Recomputed from the details; removed
   with the competency, the user, or when nothing proves the competency any more.
 - `local_evidencehub_audit`: an append-only trail of what happened to each evidence's details, who
   acted and their note. Kept beyond the log store's lifetime, because compliance audits ask for it.
@@ -180,6 +224,11 @@ Data stored
   the plan template, who issued it, a snapshot of what it states, and whether it was revoked.
 - `local_evidencehub_export`: each dossier export request: who asked, for which template, how many
   workers.
+
+The user preference `local_evidencehub_hubfilter` keeps the last filter a user applied on the hub
+(template, cohort, statuses, search, sort, page size); a data request exports it. The hub's counts
+are cached in the application caches `hubkpis` and `hubgeneration`, which hold counts only, no
+names; a filter with a search is counted every time and never cached.
 
 A data request exports, in the worker's user context, the details of the worker's evidence, the
 trail, the dossiers about the worker and the validity of each competency; an actor (a verifier, a

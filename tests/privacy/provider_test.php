@@ -30,6 +30,7 @@ use core_privacy\local\request\approved_userlist;
 use core_privacy\local\request\userlist;
 use core_privacy\local\request\writer;
 use local_evidencehub\local\audit;
+use local_evidencehub\local\hub_filter;
 use local_evidencehub\local\meta;
 use PHPUnit\Framework\Attributes\CoversClass;
 
@@ -455,5 +456,30 @@ final class provider_test extends \core_privacy\tests\provider_testcase {
         $both = new approved_userlist($this->ctx('a'), 'local_evidencehub', [$this->w['verifier']->id, $this->w['a']->id]);
         provider::delete_data_for_users($both);
         $this->assertSame(['meta' => 0, 'status' => 0, 'audit' => 0, 'dossier' => 0], $this->rows_about('a'));
+    }
+
+    /**
+     * The last hub filter is declared and exported as the user's preference; another user's is not.
+     *
+     * @return void
+     */
+    public function test_the_hub_filter_preference_is_exported(): void {
+        $declared = array_map(
+            fn($item): string => $item->get_name(),
+            provider::get_metadata(new \core_privacy\local\metadata\collection('local_evidencehub'))->get_collection()
+        );
+        $this->assertContains(hub_filter::PREFERENCE, $declared);
+
+        $value = json_encode(['templateid' => 5, 'statuses' => [5]]);
+        set_user_preference(hub_filter::PREFERENCE, $value, $this->w['a']->id);
+        set_user_preference(hub_filter::PREFERENCE, json_encode(['templateid' => 6]), $this->w['b']->id);
+        provider::export_user_preferences((int) $this->w['a']->id);
+        $exported = writer::with_context(\context_system::instance())->get_user_preferences('local_evidencehub');
+        $this->assertSame($value, $exported->{hub_filter::PREFERENCE}->value);
+
+        // The control: a user who stored none exports none.
+        writer::reset();
+        provider::export_user_preferences((int) $this->w['verifier']->id);
+        $this->assertFalse(writer::with_context(\context_system::instance())->has_any_data());
     }
 }

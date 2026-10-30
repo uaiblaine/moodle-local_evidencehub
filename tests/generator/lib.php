@@ -25,6 +25,7 @@
 
 use local_evidencehub\local\audit;
 use local_evidencehub\local\export;
+use local_evidencehub\local\hub_kpis;
 use local_evidencehub\local\meta;
 use local_evidencehub\local\status;
 
@@ -79,6 +80,14 @@ class local_evidencehub_generator extends component_generator_base {
     public function create_status(array $record): stdClass {
         global $DB;
         $now = time();
+        if (!array_key_exists('issensitive', $record)) {
+            // As the repository stores it: the deciding evidence's type, when one decides.
+            $record['issensitive'] = empty($record['metaid']) ? 0 : (int) $DB->get_field_sql(
+                "SELECT t.issensitive FROM {local_evidencehub_meta} m JOIN {local_evidencehub_type} t ON t.id = m.typeid
+                  WHERE m.id = :metaid",
+                ['metaid' => $record['metaid']]
+            );
+        }
         $record += [
             'status' => status::STATUS_VALID,
             'evidencecount' => 1,
@@ -86,7 +95,41 @@ class local_evidencehub_generator extends component_generator_base {
             'timemodified' => $now,
         ];
         $record['id'] = $DB->insert_record('local_evidencehub_status', (object) $record);
+        // Written beside the repository, so it retires the hub's cached KPIs the way the repository does.
+        hub_kpis::bump_generation();
         return (object) $record;
+    }
+
+    /**
+     * A plan template in the system or a category, requiring some competencies.
+     *
+     * @param array $record shortname, and optionally categoryid and competencyids.
+     * @return \core_competency\template
+     */
+    public function create_plan_template(array $record): \core_competency\template {
+        $generator = $this->datagenerator->get_plugin_generator('core_competency');
+        $context = empty($record['categoryid']) ? context_system::instance() : context_coursecat::instance($record['categoryid']);
+        $template = $generator->create_template(['shortname' => $record['shortname'] ?? null, 'contextid' => $context->id]);
+        foreach ($record['competencyids'] ?? [] as $competencyid) {
+            $generator->create_template_competency(['templateid' => $template->get('id'), 'competencyid' => $competencyid]);
+        }
+        return $template;
+    }
+
+    /**
+     * A plan of a user from a template, active unless told otherwise.
+     *
+     * @param array $record Columns of competency_plan; userid and templateid are required.
+     * @return \core_competency\plan
+     * @throws coding_exception Without a userid or a templateid.
+     */
+    public function create_template_plan(array $record): \core_competency\plan {
+        if (empty($record['userid']) || empty($record['templateid'])) {
+            throw new coding_exception('The userid and templateid values are required.');
+        }
+        return $this->datagenerator->get_plugin_generator('core_competency')->create_plan($record + [
+            'status' => \core_competency\plan::STATUS_ACTIVE,
+        ]);
     }
 
     /**
