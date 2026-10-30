@@ -38,3 +38,65 @@
     font-variant-numeric: tabular-nums;
     white-space: nowrap;
 }
+
+/* The inspection drawer: core's modal dialog as a sheet on the right edge, full height, its body scrolling. */
+.local-evidencehub-drawer {
+    --local-evidencehub-border: var(--dimensions-border, var(--bs-border-color, var(--gray-300, #dee2e6)));
+    --local-evidencehub-muted: var(--dimensions-muted, var(--bs-secondary-color, var(--secondary, #6a737b)));
+    position: fixed;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: 32rem;
+    max-width: 100%;
+    height: 100%;
+    margin: 0;
+    /* Core's .modal goes from display: none to block in one step, which a transition cannot animate. */
+    animation: local-evidencehub-drawer-in 200ms ease-out;
+}
+
+.local-evidencehub-drawer.modal-dialog-scrollable {
+    height: 100%;
+    max-height: 100%;
+}
+
+.local-evidencehub-drawer .modal-content {
+    height: 100%;
+    border-radius: 0;
+    border-width: 0 0 0 1px;
+}
+
+@keyframes local-evidencehub-drawer-in {
+    from {
+        transform: translateX(100%);
+    }
+
+    to {
+        transform: none;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .local-evidencehub-drawer {
+        animation: none;
+    }
+}
+
+.local-evidencehub-drawer .local-evidencehub-pair-section {
+    border-top: 1px solid var(--local-evidencehub-border);
+    padding-top: 0.75rem;
+}
+
+.local-evidencehub-drawer .local-evidencehub-timeline-item {
+    border-left: 2px solid var(--local-evidencehub-border);
+    padding-left: 0.75rem;
+}
+
+.local-evidencehub-drawer .local-evidencehub-gap {
+    color: var(--local-evidencehub-muted);
+}
+
+.local-evidencehub-drawer .local-evidencehub-date {
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}

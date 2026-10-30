@@ -26,6 +26,8 @@
     * data-region="local-evidencehub-hub" on the root
     * data-action="selectall" on the checkbox that selects every row of the page
     * data-region="pair" on each row's checkbox
+    * data-action="inspect" on each row's drawer button, with data-userid, data-competencyid and data-title;
+      data-contextid and data-templateid on the root
 
     Context variables required for this template:
     * contextid, actionurl - Where both forms go.
@@ -34,12 +36,14 @@
     * hascohorts, cohorts - id, name, selected of each cohort on offer.
     * search, suspended, perpages (value, selected) - The other filters.
     * hasfilter - Whether a template is chosen; everything below needs one.
+    * templateid - The chosen template, which the drawer receives.
     * hidden - name, value of the filter fields the filter form carries hidden.
     * downloadfields - name, value of every filter field the download form carries.
     * tiles - code, label, count, share, badgeclass, url, active of each KPI tile.
     * readiness, hiddenworkers, noworkers - The workers' readiness and who is hidden.
     * chips - label, url, active of each status chip.
-    * total, columns (label, sortable, url, sorted, asc), hasrows, rows - The grid.
+    * total, columns (label, sortable, url, sorted, asc), hasrows, rows - The grid; each row also has
+      userid, competencyid, inspectlabel and drawertitle for its drawer button.
     * pagingbar - The pager, rendered by core.
     * formats (name, label), sesskey - The download.
 
@@ -57,6 +61,7 @@
         "suspended": false,
         "perpages": [{"value": 25, "selected": false}, {"value": 50, "selected": true}],
         "hasfilter": true,
+        "templateid": 5,
         "hidden": [{"name": "statusfilter", "value": 1}, {"name": "statuses[]", "value": 5}],
         "downloadfields": [{"name": "templateid", "value": 5}],
         "tiles": [
@@ -80,7 +85,8 @@
         ],
         "hasrows": true,
         "rows": [
-            {"pair": "12:7", "workername": "Ana Souza", "workerurl": "https://example.com/local/evidencehub/evidence.php?userid=12",
+            {"pair": "12:7", "userid": 12, "competencyid": 7, "inspectlabel": "Inspect Ana Souza: Work at height",
+             "drawertitle": "Ana Souza: Work at height", "workername": "Ana Souza", "workerurl": "https://example.com/local/evidencehub/evidence.php?userid=12",
              "identity": [{"value": "ana@example.com"}], "competency": "Work at height", "statuslabel": "Expired",
              "badgeclass": "bg-dark text-white", "expiry": "2026-05-01", "evidencecount": 1, "type": "Certificate",
              "issuer": "Training centre"}
@@ -90,7 +96,7 @@
         "sesskey": "abc123"
     }
 }}
-<div class="local-evidencehub-hub" data-region="local-evidencehub-hub">
+<div class="local-evidencehub-hub" data-region="local-evidencehub-hub" data-contextid="{{contextid}}" data-templateid="{{templateid}}">
     {{#locked}}
     <div class="alert alert-info local-evidencehub-hub-locked">{{#str}} hublocked, local_evidencehub, {{contextname}} {{/str}}</div>
     {{/locked}}
@@ -204,6 +210,7 @@
                             {{#sorted}}{{#asc}}{{#pix}} t/sort_asc, core {{/pix}}{{/asc}}{{^asc}}{{#pix}} t/sort_desc, core {{/pix}}{{/asc}}{{/sorted}}
                         </th>
                         {{/columns}}
+                        <th scope="col"><span class="visually-hidden">{{#str}} actioninspect, local_evidencehub {{/str}}</span></th>
                     </tr>
                 </thead>
                 <tbody>
@@ -223,6 +230,11 @@
                         <td>{{evidencecount}}</td>
                         <td>{{type}}</td>
                         <td>{{issuer}}</td>
+                        <td>
+                            <button type="button" class="btn btn-secondary btn-sm" data-action="inspect" data-userid="{{userid}}"
+                                data-competencyid="{{competencyid}}" data-title="{{drawertitle}}"
+                                aria-label="{{inspectlabel}}">{{#str}} actioninspect, local_evidencehub {{/str}}</button>
+                        </td>
                     </tr>
                     {{/rows}}
                 </tbody>

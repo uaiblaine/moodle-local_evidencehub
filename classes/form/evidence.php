@@ -28,6 +28,10 @@ use local_evidencehub\local\meta;
  * through core_competency\api, never written directly. Without an id it creates; with the id of
  * an evidence that has no details yet it is the "complete details" form.
  *
+ * Registering a recycling is the same form creating a new evidence with a competencyid: on save the
+ * new evidence is linked to that competency through core's API, and a recyclefrom (a meta id) copies
+ * the type and issuer of an earlier evidence of the same worker and competency the user may read.
+ *
  * @package    local_evidencehub
  * @copyright  2026 Anderson Blaine
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
@@ -55,6 +59,15 @@ class evidence extends \core_form\dynamic_form {
     }
 
     /**
+     * The competency a new evidence is linked to on save, 0 for none; ignored when editing.
+     *
+     * @return int
+     */
+    private function get_competencyid(): int {
+        return $this->get_evidenceid() ? 0 : (int) $this->optional_param('competencyid', 0, PARAM_INT);
+    }
+
+    /**
      * The form fields.
      *
      * @return void
@@ -68,6 +81,11 @@ class evidence extends \core_form\dynamic_form {
         $mform->setType('userid', PARAM_INT);
         $mform->addElement('hidden', 'id');
         $mform->setType('id', PARAM_INT);
+        // The modal posts the form's own fields only: a recycling's arguments travel as hidden fields.
+        $mform->addElement('hidden', 'competencyid');
+        $mform->setType('competencyid', PARAM_INT);
+        $mform->addElement('hidden', 'recyclefrom');
+        $mform->setType('recyclefrom', PARAM_INT);
 
         $mform->addElement('text', 'name', get_string('userevidencename', 'tool_lp'), 'maxlength="100"');
         $mform->setType('name', PARAM_TEXT);
@@ -160,7 +178,8 @@ class evidence extends \core_form\dynamic_form {
      *
      * @return void
      * @throws \required_capability_exception Without the right to manage the worker's evidence.
-     * @throws \moodle_exception When the evidence belongs to another user, or its details are restricted for the user.
+     * @throws \moodle_exception When the evidence belongs to another user, its details are restricted for the user,
+     *     or the competency a new evidence is linked to does not exist or cannot be read.
      */
     #[\Override]
     protected function check_access_for_dynamic_submission(): void {
@@ -180,6 +199,10 @@ class evidence extends \core_form\dynamic_form {
             }
         } else {
             $allowed = user_evidence::can_manage_user($userid);
+            if ($allowed && $this->get_competencyid()) {
+                // Core's own check of the competency the save links to: it exists and the user may read it.
+                api::read_competency($this->get_competencyid());
+            }
         }
         if (!$allowed) {
             throw new \required_capability_exception(
@@ -216,6 +239,10 @@ class evidence extends \core_form\dynamic_form {
                 $ue = api::create_user_evidence($record, $data->files);
             }
             details::save($ue, self::details_from($data));
+            if ($this->get_competencyid()) {
+                // Core checks its own rights and logs the link; the plugin's observer recomputes the pair.
+                api::create_user_evidence_competency($ue, $this->get_competencyid());
+            }
             $transaction->allow_commit();
         } catch (\Throwable $e) {
             $transaction->rollback($e);
@@ -235,6 +262,8 @@ class evidence extends \core_form\dynamic_form {
         $data = (object) [
             'userid' => $this->get_userid(),
             'id' => $id,
+            'competencyid' => $this->get_competencyid(),
+            'recyclefrom' => 0,
             'issuedate' => time(),
         ];
         $draftitemid = 0;
@@ -262,8 +291,38 @@ class evidence extends \core_form\dynamic_form {
                 $data->authcode = $meta->authcode;
                 $data->hours = $meta->hours;
             }
+        } else if ($this->get_competencyid()) {
+            $source = $this->recycle_source();
+            if ($source !== null) {
+                $data->recyclefrom = (int) $source->id;
+                $data->typeid = (int) $source->typeid;
+                $data->issuer = $source->issuer;
+            }
         }
         $this->set_data($data);
+    }
+
+    /**
+     * The details a recycling copies its type and issuer from: those named by recyclefrom, when they
+     * belong to the worker, describe an evidence linked to the competency, and the user may read them.
+     *
+     * @return \stdClass|null The meta row, or null when nothing may be copied.
+     */
+    private function recycle_source(): ?\stdClass {
+        global $DB;
+        $metaid = (int) $this->optional_param('recyclefrom', 0, PARAM_INT);
+        $meta = $metaid ? $DB->get_record(details::TABLE, ['id' => $metaid]) : false;
+        if (!$meta || (int) $meta->userid !== $this->get_userid()) {
+            return null;
+        }
+        $linked = $DB->record_exists('competency_userevidencecomp', [
+            'userevidenceid' => (int) $meta->userevidenceid,
+            'competencyid' => $this->get_competencyid(),
+        ]);
+        if (!$linked || details::is_restricted($meta)) {
+            return null;
+        }
+        return $meta;
     }
 
     /**

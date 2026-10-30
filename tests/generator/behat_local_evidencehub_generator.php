@@ -24,7 +24,8 @@
  */
 
 /**
- * The plugin's entities for "the following ... exist" steps: plan templates, plans from them and status rows.
+ * The plugin's entities for "the following ... exist" steps: plan templates, plans from them, status rows,
+ * and evidence linked to a competency with its details.
  *
  * @package    local_evidencehub
  * @category   test
@@ -57,6 +58,12 @@ class behat_local_evidencehub_generator extends behat_generator_base {
                 'required' => ['user', 'competency', 'status'],
                 'switchids' => ['user' => 'userid', 'competency' => 'competencyid'],
             ],
+            'evidence records' => [
+                'singular' => 'evidence record',
+                'datagenerator' => 'evidence',
+                'required' => ['user', 'competency', 'name', 'issuedate'],
+                'switchids' => ['user' => 'userid', 'competency' => 'competencyid'],
+            ],
         ];
     }
 
@@ -71,6 +78,26 @@ class behat_local_evidencehub_generator extends behat_generator_base {
             $idnumbers = array_filter(array_map('trim', explode(',', $data['competencies'])));
             $data['competencyids'] = array_map([$this, 'get_competency_id'], $idnumbers);
             unset($data['competencies']);
+        }
+        return $data;
+    }
+
+    /**
+     * Read the type column of an evidence record: a type's shortname.
+     *
+     * @param array $data The row.
+     * @return array The row with typeid.
+     * @throws Exception When no type has that shortname.
+     */
+    protected function preprocess_evidence(array $data): array {
+        global $DB;
+        if (isset($data['type'])) {
+            $typeid = $DB->get_field('local_evidencehub_type', 'id', ['shortname' => $data['type']]);
+            if (!$typeid) {
+                throw new Exception('The specified evidence type "' . $data['type'] . '" could not be found.');
+            }
+            $data['typeid'] = (int) $typeid;
+            unset($data['type']);
         }
         return $data;
     }
