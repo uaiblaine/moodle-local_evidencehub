@@ -73,11 +73,18 @@ was resumed on a container that skipped the setup script: attach `moodle-dev` an
 
 ```
 version.php, db/access.php, db/install.php (seeds types), db/install.xml (7 tables)
+db/hooks.php, db/events.php   tool_lp prompt (footer hook); core evidence updated/deleted observers
+evidence.php      the worker's evidence page (renderable output/evidence_page, amd/src/evidence_page)
 classes/local/    status, meta, audit, policy, export: stored constants and their labels
-                  types: the seeded default evidence types
+                  meta also holds the YYYYMMDD date helpers; types: the seeded default types
+                  details: THE details API (save, verify, reject, the reset rule); all callers use it
+classes/form/     evidence (core evidence + details in one submit), verify (dynamic forms)
+classes/event/    evidence_details_updated, evidence_verified, evidence_rejected
 classes/privacy/  provider: worker rows in the worker's user context; actor columns kept
-tests/            privacy/provider_test, local/{types,constants}_test, marketplace_readiness_test
-tests/generator/  writes rows directly until S2/S3 add the APIs
+tests/            privacy/provider_test, local/{types,constants,meta,details}_test, form/*, output/*,
+                  observer_test, hook_callbacks_test, marketplace_readiness_test, behat/
+tests/classes/    scenario trait: users holding chosen capabilities, evidence, details
+tests/generator/  writes rows directly until S3 adds the status API
 ```
 
 ## Versions
@@ -113,7 +120,10 @@ yet; the first one comes with the first schema change after a release.
 ## Testing notes
 
 - `tests/generator/lib.php` writes rows directly (`create_meta()` creates the core evidence too);
-  move each method onto the real API when its stage lands.
+  move each method onto the real API when its stage lands. `create_meta()` stays direct on
+  purpose: the privacy scenario seeds verified rows, which `details::save()` cannot write.
+- The core evidence observer runs inside the form's transaction (internal observer): the form's
+  own core update resets a decided row first, so `details::save()` finds it pending.
 - PHP 8.3 constructs are fine here (5.3 only): `#[\Override]`, typed class constants, attributes
   for test metadata.
 
