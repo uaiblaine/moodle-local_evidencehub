@@ -1,0 +1,150 @@
+{{!
+    This file is part of Moodle - http://moodle.org/
+
+    Moodle is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    Moodle is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
+}}
+{{!
+    @template local_evidencehub/framework_policies
+
+    One framework's own validity policy and the policy in force for each of its competencies.
+
+    Classes required for JS:
+    * none
+
+    Data attributes required for JS:
+    * data-region="local-evidencehub-policies", data-frameworkid
+    * data-action="policy" with data-competencyid (0 for the framework) on the edit buttons
+
+    Context variables required for this template:
+    * frameworkid, name - The framework.
+    * policy - The framework's own policy: kind, requireverified, minhours, alerts, gracedays,
+      cyclemonths, onexpiry, source.
+    * actionurl, sesskey - Where the remove-override forms post.
+    * hascompetencies - Whether the framework has any competency.
+    * competencies - id, name, idnumber, isoverride and policy of each.
+
+    Example context (json):
+    {
+        "frameworkid": 2,
+        "name": "Safety at work",
+        "policy": {
+            "kind": "Regulatory",
+            "requireverified": "Yes",
+            "minhours": "",
+            "alerts": "60 and 30 days before",
+            "gracedays": "",
+            "cyclemonths": "",
+            "onexpiry": "Log it",
+            "source": "This framework"
+        },
+        "actionurl": "https://example.com/local/evidencehub/policies.php",
+        "sesskey": "abc123",
+        "hascompetencies": true,
+        "competencies": [
+            {
+                "id": 7,
+                "name": "Work at height",
+                "idnumber": "NR35",
+                "isoverride": true,
+                "policy": {
+                    "kind": "Regulatory",
+                    "requireverified": "Yes",
+                    "minhours": "8",
+                    "alerts": "90 and 30 days before",
+                    "gracedays": "",
+                    "cyclemonths": "",
+                    "onexpiry": "Log it and request a review",
+                    "source": "This competency"
+                }
+            }
+        ]
+    }
+}}
+<div class="local-evidencehub-policies" data-region="local-evidencehub-policies" data-frameworkid="{{frameworkid}}">
+    <h3 class="h4">{{#str}} frameworkpolicy, local_evidencehub {{/str}}</h3>
+    {{#policy}}
+    <dl class="row local-evidencehub-policy">
+        <dt class="col-sm-3">{{#str}} kind, local_evidencehub {{/str}}</dt>
+        <dd class="col-sm-9">{{kind}}</dd>
+        <dt class="col-sm-3">{{#str}} requireverified, local_evidencehub {{/str}}</dt>
+        <dd class="col-sm-9">{{requireverified}}</dd>
+        <dt class="col-sm-3">{{#str}} alerts, local_evidencehub {{/str}}</dt>
+        <dd class="col-sm-9">{{alerts}}</dd>
+        <dt class="col-sm-3">{{#str}} onexpiry, local_evidencehub {{/str}}</dt>
+        <dd class="col-sm-9">{{onexpiry}}</dd>
+        <dt class="col-sm-3">{{#str}} source, local_evidencehub {{/str}}</dt>
+        <dd class="col-sm-9">{{source}}</dd>
+    </dl>
+    {{/policy}}
+    <div class="mb-4">
+        <button type="button" class="btn btn-secondary" data-action="policy" data-competencyid="0">{{#str}} actioneditpolicy, local_evidencehub {{/str}}</button>
+    </div>
+
+    <h3 class="h4">{{#str}} competencypolicies, local_evidencehub {{/str}}</h3>
+    {{#hascompetencies}}
+    <table class="table generaltable local-evidencehub-competencies">
+        <thead>
+            <tr>
+                <th scope="col">{{#str}} competency, local_evidencehub {{/str}}</th>
+                <th scope="col">{{#str}} kind, local_evidencehub {{/str}}</th>
+                <th scope="col">{{#str}} requireverified, local_evidencehub {{/str}}</th>
+                <th scope="col">{{#str}} minhours, local_evidencehub {{/str}}</th>
+                <th scope="col">{{#str}} alerts, local_evidencehub {{/str}}</th>
+                <th scope="col">{{#str}} gracedays, local_evidencehub {{/str}}</th>
+                <th scope="col">{{#str}} cyclemonths, local_evidencehub {{/str}}</th>
+                <th scope="col">{{#str}} onexpiry, local_evidencehub {{/str}}</th>
+                <th scope="col">{{#str}} source, local_evidencehub {{/str}}</th>
+                <th scope="col">{{#str}} actions {{/str}}</th>
+            </tr>
+        </thead>
+        <tbody>
+            {{#competencies}}
+            <tr data-region="competency-policy" data-competencyid="{{id}}">
+                <td>{{name}} {{#idnumber}}<span class="text-muted small">{{idnumber}}</span>{{/idnumber}}</td>
+                {{#policy}}
+                <td>{{kind}}</td>
+                <td>{{requireverified}}</td>
+                <td>{{minhours}}</td>
+                <td>{{alerts}}</td>
+                <td>{{gracedays}}</td>
+                <td>{{cyclemonths}}</td>
+                <td>{{onexpiry}}</td>
+                <td>{{source}}</td>
+                {{/policy}}
+                <td>
+                    <div class="d-flex flex-wrap">
+                    {{#isoverride}}
+                        <button type="button" class="btn btn-secondary btn-sm me-2 mb-1" data-action="policy" data-competencyid="{{id}}">{{#str}} actioneditoverride, local_evidencehub {{/str}}</button>
+                        <form method="post" action="{{actionurl}}" class="mb-1">
+                            <input type="hidden" name="frameworkid" value="{{frameworkid}}">
+                            <input type="hidden" name="competencyid" value="{{id}}">
+                            <input type="hidden" name="action" value="removeoverride">
+                            <input type="hidden" name="sesskey" value="{{sesskey}}">
+                            <button type="submit" class="btn btn-link btn-sm">{{#str}} actionremoveoverride, local_evidencehub {{/str}}</button>
+                        </form>
+                    {{/isoverride}}
+                    {{^isoverride}}
+                        <button type="button" class="btn btn-secondary btn-sm me-2 mb-1" data-action="policy" data-competencyid="{{id}}">{{#str}} actionoverride, local_evidencehub {{/str}}</button>
+                    {{/isoverride}}
+                    </div>
+                </td>
+            </tr>
+            {{/competencies}}
+        </tbody>
+    </table>
+    {{/hascompetencies}}
+    {{^hascompetencies}}
+    <p class="text-muted">{{#str}} nocompetencies, local_evidencehub {{/str}}</p>
+    {{/hascompetencies}}
+</div>

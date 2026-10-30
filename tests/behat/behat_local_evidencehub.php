@@ -35,17 +35,21 @@ require_once(__DIR__ . '/../../../../lib/behat/behat_base.php');
  */
 class behat_local_evidencehub extends behat_base {
     /**
-     * The URL of a page about one user: "Evidence" takes a username.
+     * The URL of a page about one thing: "Evidence" takes a username, "Policies" a framework's idnumber.
      *
      * @param string $type The page type.
-     * @param string $identifier The username.
+     * @param string $identifier The username or the framework's idnumber.
      * @return moodle_url
      * @throws Exception On an unknown page type.
      */
     protected function resolve_page_instance_url(string $type, string $identifier): moodle_url {
+        global $DB;
         return match (strtolower($type)) {
             'evidence' => new moodle_url('/local/evidencehub/evidence.php', [
                 'userid' => $this->get_user_id_by_identifier($identifier),
+            ]),
+            'policies' => new moodle_url('/local/evidencehub/policies.php', [
+                'frameworkid' => $DB->get_field('competency_framework', 'id', ['idnumber' => $identifier], MUST_EXIST),
             ]),
             default => throw new Exception('Unrecognised local_evidencehub page type "' . $type . '."'),
         };

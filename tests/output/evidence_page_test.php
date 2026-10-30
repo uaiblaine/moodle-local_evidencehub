@@ -25,7 +25,9 @@
 
 namespace local_evidencehub\output;
 
+use core_competency\api;
 use local_evidencehub\local\details;
+use local_evidencehub\local\status;
 use local_evidencehub\tests\scenario;
 use PHPUnit\Framework\Attributes\CoversClass;
 
@@ -189,5 +191,121 @@ final class evidence_page_test extends \advanced_testcase {
         $this->assertFalse($health['restricted']);
         $this->assertTrue($health['canedit']);
         $this->assertTrue($health['canverify']);
+    }
+
+    /**
+     * Each linked competency shows the worker's validity of it; a restricted
+     * evidence shows the status without the date, and viewsensitive shows the date.
+     *
+     * @return void
+     */
+    public function test_each_linked_competency_shows_its_validity(): void {
+        $generator = $this->getDataGenerator()->get_plugin_generator('core_competency');
+        $framework = $generator->create_framework();
+        $competency = $generator->create_competency([
+            'competencyframeworkid' => $framework->get('id'),
+            'shortname' => 'Heights',
+        ]);
+        $plainue = $this->evidence_of((int) $this->worker->id);
+        $this->setUser($this->worker);
+        details::save($plainue, $this->details_data(['expirydate' => 20990115]));
+        $this->setAdminUser();
+        api::create_user_evidence_competency($plainue, (int) $competency->get('id'));
+        api::create_user_evidence_competency($this->healthid, (int) $competency->get('id'));
+
+        $reader = $this->user_with(['moodle/competency:userevidenceview']);
+        $this->setUser($reader);
+        $items = $this->export()['items'];
+        $plain = $items[(int) $plainue->get('id')]['competencies'];
+        $this->assertSame([[
+            'name' => 'Heights',
+            'statuslabel' => status::label(status::STATUS_VALID),
+            'badgeclass' => 'bg-success text-white',
+            'expiry' => '2099-01-15',
+        ]], $plain);
+        $health = $items[$this->healthid];
+        $this->assertTrue($health['hascompetencies']);
+        $this->assertSame(status::label(status::STATUS_VALID), $health['competencies'][0]['statuslabel']);
+        $this->assertArrayNotHasKey('expiry', $health['competencies'][0], 'A restricted evidence showed a validity date.');
+        $this->assertFalse($items[$this->bareid]['hascompetencies']);
+
+        $this->grant($reader, ['local/evidencehub:viewsensitive']);
+        $health = $this->export()['items'][$this->healthid];
+        $this->assertSame('2099-01-15', $health['competencies'][0]['expiry']);
+    }
+
+    /**
+     * A sensitive evidence that decides the pair restricts the pill of every evidence linked to the
+     * competency for a viewer without viewsensitive; with it, and for the owner, the pill is whole.
+     *
+     * @return void
+     */
+    public function test_a_restricted_deciding_evidence_restricts_every_pill(): void {
+        $generator = $this->getDataGenerator()->get_plugin_generator('core_competency');
+        $framework = $generator->create_framework();
+        $competency = $generator->create_competency(['competencyframeworkid' => $framework->get('id')]);
+        $plainue = $this->evidence_of((int) $this->worker->id);
+        $healthue = $this->evidence_of((int) $this->worker->id);
+        $this->setUser($this->worker);
+        details::save($plainue, $this->details_data(['expirydate' => 20980115]));
+        // The later expiry decides the pair.
+        details::save($healthue, $this->details_data(['typeid' => $this->type_id('aso'), 'expirydate' => 20991231]));
+        $this->setAdminUser();
+        api::create_user_evidence_competency($plainue, (int) $competency->get('id'));
+        api::create_user_evidence_competency($healthue, (int) $competency->get('id'));
+        $restricted = [
+            'statuslabel' => get_string('validityrestricted', 'local_evidencehub'),
+            'badgeclass' => status::badge_class(null),
+            'expiry' => null,
+        ];
+        $whole = [
+            'statuslabel' => status::label(status::STATUS_VALID),
+            'badgeclass' => status::badge_class(status::STATUS_VALID),
+            'expiry' => '2099-12-31',
+        ];
+        $pill = fn(array $items, \core_competency\user_evidence $ue): array => array_intersect_key(
+            $items[(int) $ue->get('id')]['competencies'][0],
+            $restricted
+        );
+
+        $reader = $this->user_with(['moodle/competency:userevidenceview']);
+        $this->setUser($reader);
+        $items = $this->export()['items'];
+        $this->assertSame($restricted, $pill($items, $plainue), 'A pill leaked the validity of a sensitive evidence.');
+        $own = $items[(int) $healthue->get('id')]['competencies'][0];
+        $this->assertSame($restricted['statuslabel'], $own['statuslabel']);
+        $this->assertArrayNotHasKey('expiry', $own);
+
+        $this->grant($reader, ['local/evidencehub:viewsensitive']);
+        $this->assertSame($whole, $pill($this->export()['items'], $plainue));
+
+        $this->setUser($this->worker);
+        $this->assertSame($whole, $pill($this->export()['items'], $plainue));
+    }
+
+    /**
+     * Names leave the export in their plain spelling and the template escapes them once.
+     *
+     * @return void
+     */
+    public function test_names_are_escaped_once(): void {
+        global $OUTPUT;
+        $name = 'Safety & Health < 2';
+        $generator = $this->getDataGenerator()->get_plugin_generator('core_competency');
+        $framework = $generator->create_framework();
+        $competency = $generator->create_competency([
+            'competencyframeworkid' => $framework->get('id'),
+            'shortname' => $name,
+        ]);
+        $ue = $generator->create_user_evidence(['userid' => $this->worker->id, 'name' => $name]);
+        $this->setAdminUser();
+        api::create_user_evidence_competency($ue, (int) $competency->get('id'));
+        $item = $this->export()['items'][(int) $ue->get('id')];
+        $this->assertSame($name, $item['name']);
+        $this->assertSame($name, $item['competencies'][0]['name']);
+        $page = new evidence_page((int) $this->worker->id);
+        $html = $OUTPUT->render_from_template('local_evidencehub/evidence_page', $page->export_for_template($OUTPUT));
+        $this->assertStringContainsString('Safety &amp; Health &lt; 2', $html);
+        $this->assertStringNotContainsString('&amp;amp;', $html);
     }
 }

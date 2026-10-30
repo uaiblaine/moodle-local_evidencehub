@@ -15,7 +15,7 @@
 // along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
 
 /**
- * Observers of core competencies' evidence events.
+ * Observers of core competencies' events and of the plugin's own details events.
  *
  * @package    local_evidencehub
  * @copyright  2026 Anderson Blaine
@@ -32,5 +32,45 @@ $observers = [
     [
         'eventname' => '\core\event\competency_user_evidence_deleted',
         'callback' => [\local_evidencehub\observer::class, 'user_evidence_deleted'],
+    ],
+    [
+        'eventname' => '\core\event\competency_evidence_created',
+        'callback' => [\local_evidencehub\observer::class, 'evidence_created'],
+    ],
+    [
+        'eventname' => '\core\event\competency_user_competency_rated',
+        'callback' => [\local_evidencehub\observer::class, 'user_competency_rated'],
+    ],
+    [
+        'eventname' => '\core\event\competency_user_competency_rated_in_plan',
+        'callback' => [\local_evidencehub\observer::class, 'user_competency_rated'],
+    ],
+    [
+        'eventname' => '\core\event\competency_user_competency_rated_in_course',
+        'callback' => [\local_evidencehub\observer::class, 'user_competency_rated'],
+    ],
+    [
+        'eventname' => '\local_evidencehub\event\evidence_details_updated',
+        'callback' => [\local_evidencehub\observer::class, 'details_changed'],
+    ],
+    [
+        'eventname' => '\local_evidencehub\event\evidence_verified',
+        'callback' => [\local_evidencehub\observer::class, 'details_changed'],
+    ],
+    [
+        'eventname' => '\local_evidencehub\event\evidence_rejected',
+        'callback' => [\local_evidencehub\observer::class, 'details_changed'],
+    ],
+    [
+        'eventname' => '\core\event\competency_deleted',
+        'callback' => [\local_evidencehub\observer::class, 'competency_deleted'],
+    ],
+    [
+        'eventname' => '\core\event\competency_framework_deleted',
+        'callback' => [\local_evidencehub\observer::class, 'competency_framework_deleted'],
+    ],
+    [
+        'eventname' => '\core\event\user_deleted',
+        'callback' => [\local_evidencehub\observer::class, 'user_deleted'],
     ],
 ];

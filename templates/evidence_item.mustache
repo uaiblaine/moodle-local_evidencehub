@@ -31,6 +31,8 @@
     * hasdetails - Whether validity details exist; then metaid, typename, restricted, statelabel,
       badgeclass, decidedby, and unless restricted issuedate, expirydate, noexpiry, issuer, hours,
       authcode and note.
+    * hascompetencies, competencies - The linked competencies: name, statuslabel, badgeclass and,
+      unless restricted, expiry (the worker's effective expiry of that competency).
 
     Example context (json):
     {
@@ -53,7 +55,16 @@
         "issuer": "Clinic",
         "hours": "",
         "authcode": "",
-        "note": "The file is unreadable."
+        "note": "The file is unreadable.",
+        "hascompetencies": true,
+        "competencies": [
+            {
+                "name": "Fit for work",
+                "statuslabel": "Pending, awaiting verification",
+                "badgeclass": "bg-secondary text-dark",
+                "expiry": ""
+            }
+        ]
     }
 }}
 <div class="card mb-3 local-evidencehub-item" data-region="evidence-item" data-id="{{id}}">
@@ -96,6 +107,13 @@
         {{^hasdetails}}
         <p class="mb-2"><span class="badge bg-secondary text-dark">{{#str}} detailsmissing, local_evidencehub {{/str}}</span></p>
         {{/hasdetails}}
+        {{#hascompetencies}}
+        <ul class="list-unstyled mb-2 local-evidencehub-validity">
+            {{#competencies}}
+            <li><span>{{name}}</span> <span class="badge {{badgeclass}}">{{statuslabel}}</span>{{#expiry}} <span class="text-muted small">{{#str}} validuntil, local_evidencehub, {{expiry}} {{/str}}</span>{{/expiry}}</li>
+            {{/competencies}}
+        </ul>
+        {{/hascompetencies}}
         <div class="d-flex flex-wrap local-evidencehub-actions">
             {{#canedit}}
             <button type="button" class="btn btn-secondary btn-sm me-2 mb-1" data-action="edit" data-id="{{id}}">{{#str}} actionedit, local_evidencehub {{/str}}</button>

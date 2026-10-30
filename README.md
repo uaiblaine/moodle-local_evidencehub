@@ -13,8 +13,9 @@ and lets a manager export a ZIP of readiness dossiers whose PDF pages carry a ve
 
 The evidence itself stays core's (`competency_userevidence` and its files): the plugin keeps the
 details beside it in tables of its own and never changes a core rating. It is developed in stages;
-this release holds the data model, the capabilities, the privacy provider and the evidence details
-(entering, verifying and rejecting them); the validity engine, the hub and the dossiers come next.
+this release holds the data model, the capabilities, the privacy provider, the evidence details
+(entering, verifying and rejecting them) and the validity engine with its policies; the hub and the
+dossiers come next.
 
 
 Requirements
@@ -81,6 +82,65 @@ or rejected evidence change (in this plugin's form or in tool_lp), the evidence 
 not the owner. Every entry, change, decision and reset is written to the audit trail.
 
 
+**Validity.** For each (worker, competency) pair the plugin works out a status from the evidence
+linked to the competency in tool_lp and from the competency's validity policy, and keeps it in
+`local_evidencehub_status`:
+
+- *Compliant*: a counted evidence covers today with more days left than the policy's first alert.
+- *Due soon* / *Due, critical*: covered, within the first / second alert window (days before the
+  last valid day).
+- *Expired*: counted evidence exists and none covers today.
+- *Pending, awaiting verification*: evidence exists but none counts yet (no details, not verified
+  where the policy requires it, too few hours, refused by a verifier, or issued in the future).
+- A pair with nothing at all has no row: it shows as *Pending, no evidence*.
+
+Dates are calendar days in the site's timezone; the expiry day itself is still valid. Among several
+covering evidence the one with the latest last valid day decides. The status is recomputed when an
+evidence is linked or unlinked, its details change, it is verified or rejected, or the competency is
+rated; the evidence page shows it next to each linked competency.
+
+**Validity policies** (Site administration > Competencies > Validity policies,
+`/local/evidencehub/policies.php`) are set per competency framework, and a competency can override
+its framework. A holder of `local/evidencehub:managepolicies` in a framework's context (the system
+or a course category) manages that framework's policies; a category manager sees only the
+frameworks of their categories. Without a policy, a competency is technical with alerts at 60 and
+30 days. A policy says:
+
+- its kind: *regulatory* (only evidence counts, a new policy counts verified evidence only, expiry is
+  strict and an expired competency blocks the worker), *technical* (evidence or the latest
+  proficient rating counts, with optional grace days after expiry and optionally only while the
+  competency is rated proficient) or *behavioural* (only the latest proficient rating counts, for
+  the number of months the policy sets; 0 means it never expires);
+- whether only verified evidence counts, the minimum hours an evidence must state, the two alert
+  windows, and what happens on expiry: the expiry is always written into the competency's history,
+  and the *review* choice also asks core competencies for a review. The plugin never changes a
+  rating or a proficiency.
+
+A policy change recomputes its framework's or competency's pairs in an ad hoc task.
+
+Core loads the plugin's admin entries only for users who can see the site administration, so a
+category manager never sees the "Validity policies" entry: they open
+`/local/evidencehub/policies.php` directly, which lists the frameworks of their categories.
+
+On the evidence page, a competency whose validity is decided by an evidence of a sensitive type
+shows only "Restricted", on every evidence linked to it, to a viewer who may not see that evidence.
+
+**Core competency history.** Each status change writes one log entry ("Evidence hub: ...") into the
+history of the worker's user competency (`competency_evidence`, through core's `add_evidence()`,
+with the plugin's component): core's own privacy provider exports and deletes those entries with the
+rest of the competency history.
+
+**Tasks.**
+
+- *Evaluate validity transitions* (`\local_evidencehub\task\evaluate_validity`, hourly): recomputes
+  the statuses whose next transition (an alert window, the expiry, a renewal starting) has come,
+  500 per run, oldest first.
+- *Reconcile validity statuses* (`\local_evidencehub\task\reconcile_validity`, weekly on Sunday
+  night): recomputes every pair that has a linked evidence, a status or a proficient rating that
+  counts, healing whatever a missed event left behind.
+- *Recompute validity after a policy change* (`\local_evidencehub\task\recompute_scope`, ad hoc).
+
+
 Capabilities
 ------------
 
@@ -90,7 +150,7 @@ Capabilities
 - `local/evidencehub:viewsensitive` (user; no archetype): see the details and files of evidence of a
   sensitive type.
 - `local/evidencehub:managepolicies` (course category; manager): set the validity policy of a
-  competency framework or of one competency.
+  competency framework or of one competency, in the framework's context.
 - `local/evidencehub:managetypes` (system; manager): manage the evidence types.
 - `local/evidencehub:exportdossier` (course category; manager): export readiness dossiers.
 - `local/evidencehub:receivealerts` (user; no archetype): be told when a worker's evidence is due,
@@ -112,7 +172,8 @@ Data stored
   verified evidence counts, minimum hours, alert windows, grace days, cycle). Configuration, no
   personal data.
 - `local_evidencehub_status`: the validity worked out for each (worker, competency): status,
-  deciding evidence, effective expiry, when it next changes. Recomputed from the details.
+  deciding evidence, effective expiry, when it next changes. Recomputed from the details; removed
+  with the competency, the user, or when nothing proves the competency any more.
 - `local_evidencehub_audit`: an append-only trail of what happened to each evidence's details, who
   acted and their note. Kept beyond the log store's lifetime, because compliance audits ask for it.
 - `local_evidencehub_dossier`: each readiness dossier issued about a worker: its verification code,

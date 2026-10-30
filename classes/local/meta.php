@@ -99,6 +99,47 @@ final class meta {
     }
 
     /**
+     * A calendar day some days later, or earlier for a negative count.
+     *
+     * Pure calendar arithmetic, done in UTC so no daylight saving change shifts the day.
+     *
+     * @param int $date A valid YYYYMMDD day.
+     * @param int $days How many days to add.
+     * @return int The YYYYMMDD day.
+     * @throws \coding_exception On an invalid date.
+     */
+    public static function add_days(int $date, int $days): int {
+        $moment = self::utc_day($date)->modify(sprintf('%+d days', $days));
+        return (int) $moment->format('Ymd');
+    }
+
+    /**
+     * How many calendar days lie from one day to another: negative when the second comes first.
+     *
+     * @param int $from A valid YYYYMMDD day.
+     * @param int $to A valid YYYYMMDD day.
+     * @return int The difference in days.
+     * @throws \coding_exception On an invalid date.
+     */
+    public static function days_between(int $from, int $to): int {
+        return (int) self::utc_day($from)->diff(self::utc_day($to))->format('%r%a');
+    }
+
+    /**
+     * Midnight UTC of a calendar day, for arithmetic only.
+     *
+     * @param int $date A valid YYYYMMDD day.
+     * @return \DateTimeImmutable
+     * @throws \coding_exception On an invalid date.
+     */
+    private static function utc_day(int $date): \DateTimeImmutable {
+        if (!self::is_valid_date($date)) {
+            throw new \coding_exception('Not a calendar date: ' . $date);
+        }
+        return new \DateTimeImmutable(self::iso_date($date) . ' 00:00:00', new \DateTimeZone('UTC'));
+    }
+
+    /**
      * The calendar day an instant falls on in a timezone.
      *
      * A date selector posts midnight of the chosen day in the user's timezone; reading that

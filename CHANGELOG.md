@@ -8,6 +8,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- Stage S3: validity engine. A pure validity calculator works out each (worker, competency) status
+  (compliant, due, critical, expired, pending) from the linked evidence, the latest proficient
+  rating and the competency's policy, with calendar days in the site's timezone; the status
+  repository stores it under a per-user lock and, on a change, fires `validity_status_changed` and
+  writes a log entry into core's competency history (a review request on expiry when the policy
+  says so; never a rating change). Observers recompute on links, unlinks, ratings and details
+  changes and clean up on competency, framework and user deletion. Tasks: hourly
+  `evaluate_validity` over the next transitions, weekly `reconcile_validity`, ad hoc
+  `recompute_scope` after a policy change. Policies page (`/local/evidencehub/policies.php`, under
+  Site administration > Competencies) to set a framework's policy and override it per competency,
+  in the framework's context; `validity_policy_updated` event. The evidence page shows the status
+  of each linked competency, or only "Restricted" when a sensitive evidence the viewer may not see
+  decides it. A status change and its log entry commit together; a pair whose user is locked is
+  queued, and a failing pair never stops a task run.
 - Stage S2: evidence details. A worker's evidence page (`/local/evidencehub/evidence.php`) lists
   core's evidence of prior learning with its validity details and verification state, and opens
   one modal form that creates or edits the core evidence and its details in one save, plus a modal
