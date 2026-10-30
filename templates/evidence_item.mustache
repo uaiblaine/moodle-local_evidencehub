@@ -1,0 +1,112 @@
+{{!
+    This file is part of Moodle - http://moodle.org/
+
+    Moodle is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    Moodle is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
+}}
+{{!
+    @template local_evidencehub/evidence_item
+
+    One evidence of prior learning and its validity details.
+
+    Classes required for JS:
+    * none
+
+    Data attributes required for JS:
+    * data-action="edit|complete|verify", data-id (core evidence id, or meta id for verify)
+
+    Context variables required for this template:
+    * id, name, viewurl - The core evidence.
+    * canedit, cancomplete, canverify - The actions offered.
+    * hasdetails - Whether validity details exist; then metaid, typename, restricted, statelabel,
+      badgeclass, decidedby, and unless restricted issuedate, expirydate, noexpiry, issuer, hours,
+      authcode and note.
+
+    Example context (json):
+    {
+        "id": 7,
+        "name": "Occupational health certificate",
+        "viewurl": "https://example.com/admin/tool/lp/user_evidence.php?id=7",
+        "canedit": true,
+        "hasdetails": true,
+        "cancomplete": false,
+        "canverify": true,
+        "metaid": 4,
+        "typename": "Occupational health certificate (ASO)",
+        "restricted": false,
+        "statelabel": "Rejected",
+        "badgeclass": "bg-danger text-white",
+        "decidedby": "By Ana Souza on 30/10/26, 10:00",
+        "issuedate": "2026-01-15",
+        "expirydate": "2027-01-15",
+        "noexpiry": false,
+        "issuer": "Clinic",
+        "hours": "",
+        "authcode": "",
+        "note": "The file is unreadable."
+    }
+}}
+<div class="card mb-3 local-evidencehub-item" data-region="evidence-item" data-id="{{id}}">
+    <div class="card-body">
+        <h3 class="h5 card-title"><a href="{{viewurl}}">{{name}}</a></h3>
+        {{#hasdetails}}
+        <p class="mb-2">
+            <span>{{typename}}</span>
+            <span class="badge {{badgeclass}}">{{statelabel}}</span>
+            {{#decidedby}}<span class="text-muted small">{{decidedby}}</span>{{/decidedby}}
+        </p>
+        {{#restricted}}
+        <p class="text-muted mb-2">{{#str}} detailsrestricted, local_evidencehub {{/str}}</p>
+        {{/restricted}}
+        {{^restricted}}
+        <dl class="row mb-2 local-evidencehub-details">
+            <dt class="col-sm-3">{{#str}} issuedate, local_evidencehub {{/str}}</dt>
+            <dd class="col-sm-9">{{issuedate}}</dd>
+            <dt class="col-sm-3">{{#str}} expirydate, local_evidencehub {{/str}}</dt>
+            <dd class="col-sm-9">{{#noexpiry}}{{#str}} noexpiry, local_evidencehub {{/str}}{{/noexpiry}}{{^noexpiry}}{{expirydate}}{{/noexpiry}}</dd>
+            {{#issuer}}
+            <dt class="col-sm-3">{{#str}} issuer, local_evidencehub {{/str}}</dt>
+            <dd class="col-sm-9">{{issuer}}</dd>
+            {{/issuer}}
+            {{#hours}}
+            <dt class="col-sm-3">{{#str}} hours, local_evidencehub {{/str}}</dt>
+            <dd class="col-sm-9">{{hours}}</dd>
+            {{/hours}}
+            {{#authcode}}
+            <dt class="col-sm-3">{{#str}} authcode, local_evidencehub {{/str}}</dt>
+            <dd class="col-sm-9">{{authcode}}</dd>
+            {{/authcode}}
+            {{#note}}
+            <dt class="col-sm-3">{{#str}} note, local_evidencehub {{/str}}</dt>
+            <dd class="col-sm-9">{{note}}</dd>
+            {{/note}}
+        </dl>
+        {{/restricted}}
+        {{/hasdetails}}
+        {{^hasdetails}}
+        <p class="mb-2"><span class="badge bg-secondary text-dark">{{#str}} detailsmissing, local_evidencehub {{/str}}</span></p>
+        {{/hasdetails}}
+        <div class="d-flex flex-wrap local-evidencehub-actions">
+            {{#canedit}}
+            <button type="button" class="btn btn-secondary btn-sm me-2 mb-1" data-action="edit" data-id="{{id}}">{{#str}} actionedit, local_evidencehub {{/str}}</button>
+            {{/canedit}}
+            {{#cancomplete}}
+            <button type="button" class="btn btn-primary btn-sm me-2 mb-1" data-action="complete" data-id="{{id}}">{{#str}} actioncomplete, local_evidencehub {{/str}}</button>
+            {{/cancomplete}}
+            {{#canverify}}
+            <button type="button" class="btn btn-secondary btn-sm me-2 mb-1" data-action="verify" data-id="{{metaid}}">{{#str}} actionverify, local_evidencehub {{/str}}</button>
+            {{/canverify}}
+            <a class="btn btn-link btn-sm mb-1" href="{{viewurl}}">{{#str}} actionlink, local_evidencehub {{/str}}</a>
+        </div>
+    </div>
+</div>

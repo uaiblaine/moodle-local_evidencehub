@@ -1,0 +1,1 @@
+s/if \(\$ownerid === \(int\) \$USER->id\) \{\n(\s*)throw new \\moodle_exception\(.cannotverifyown., .local_evidencehub.\);/if (false) {\n$1throw new \\moodle_exception('cannotverifyown', 'local_evidencehub');/;

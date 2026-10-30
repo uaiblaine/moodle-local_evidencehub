@@ -13,8 +13,8 @@ and lets a manager export a ZIP of readiness dossiers whose PDF pages carry a ve
 
 The evidence itself stays core's (`competency_userevidence` and its files): the plugin keeps the
 details beside it in tables of its own and never changes a core rating. It is developed in stages;
-this release holds the data model, the capabilities and the privacy provider only, with no page
-yet.
+this release holds the data model, the capabilities, the privacy provider and the evidence details
+(entering, verifying and rejecting them); the validity engine, the hub and the dossiers come next.
 
 
 Requirements
@@ -44,8 +44,41 @@ be changed.
 Usage
 -----
 
-Nothing to configure or use yet: the pages arrive in the next stages (evidence details form,
-validity engine, hub page, dossier export).
+**The evidence page** (`/local/evidencehub/evidence.php?userid=<id>`, the current user by
+default) lists a worker's evidence of prior learning with its validity details: type, issue and
+expiry dates, issuer, hours, the authenticity code (to who may manage or verify the evidence) and
+the verification state with who decided and when. Reading it follows core: a user who can view the
+worker's evidence in tool_lp (`moodle/competency:userevidenceview` in the worker's user context, or
+the right to manage it) can open the page. From it:
+
+- "Add evidence" and "Edit" open one form that saves core's evidence (name, description, URL,
+  files, through core's API) and its validity details together, or neither.
+- "Complete details" adds the details to an evidence entered in tool_lp.
+- "Verify or reject" records a verifier's decision; a rejection needs a note, which the worker
+  sees.
+- "Link competencies" opens the evidence in tool_lp, where competencies are linked.
+
+Each type sets rules: an expiry date is required (or "Never expires" is refused), an authenticity
+code is required, and a default validity in months fills a missing expiry date from the issue date
+(the last day of a shorter month when the day does not exist). A type with no default validity
+needs an expiry date or "Never expires".
+
+Evidence of a **sensitive** type (the occupational health certificate) shows only its type and
+"Restricted details" to a viewer other than the worker who lacks `local/evidencehub:viewsensitive`.
+Such a viewer can neither edit nor verify or reject those details, whatever else they hold; a
+manager without it can still enter a new evidence of a sensitive type.
+
+**On tool_lp's evidence pages** (the list of a user's evidence and the view of one) whoever may
+manage the evidence sees a prompt linking to the evidence page while some evidence has no validity
+details.
+
+**Nobody verifies their own evidence.** The owner of an evidence can never verify or reject it,
+whatever their capabilities.
+
+**An edit sends a decision back to pending.** When the details or the core evidence of a verified
+or rejected evidence change (in this plugin's form or in tool_lp), the evidence returns to
+"Awaiting verification", unless the change came from a holder of `local/evidencehub:verify` who is
+not the owner. Every entry, change, decision and reset is written to the audit trail.
 
 
 Capabilities
