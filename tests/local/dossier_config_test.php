@@ -77,4 +77,24 @@ final class dossier_config_test extends \advanced_testcase {
         set_config('verifylive', '1', 'local_evidencehub');
         $this->assertTrue(dossier_config::verify_live());
     }
+
+    /**
+     * The readiness basis is the real one unless the setting is exactly 'shown'.
+     *
+     * @return void
+     */
+    public function test_the_readiness_basis_needs_an_exact_shown(): void {
+        $this->resetAfterTest();
+
+        unset_config('readinessbasis', 'local_evidencehub');
+        $this->assertSame(dossier_config::READINESS_REAL, dossier_config::readiness_basis());
+        foreach (['', 'bogus', 'SHOWN', 'real'] as $value) {
+            set_config('readinessbasis', $value, 'local_evidencehub');
+            $this->assertSame(dossier_config::READINESS_REAL, dossier_config::readiness_basis(), $value);
+        }
+
+        // Control: the exact value switches it.
+        set_config('readinessbasis', 'shown', 'local_evidencehub');
+        $this->assertSame(dossier_config::READINESS_SHOWN, dossier_config::readiness_basis());
+    }
 }

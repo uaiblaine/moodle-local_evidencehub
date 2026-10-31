@@ -307,7 +307,9 @@ tells search engines not to index it. The code is 128 random bits; anything else
 unknown code does. The page shows the dossier as issued: the masked name ("J*** S***", the first letter of
 each part of the name), the template, the issue date, each competency's status and expiry on that date
 ("Restricted", with no date, for one decided by evidence of a sensitive type, whoever issued the dossier),
-the readiness on that date (the worker's real one: certifying it is what a dossier is for), the SHA-256 of the issued PDF (to compare with the file a contractor holds), and "revoked"
+the readiness on that date (by default the worker's real one: certifying it is what a dossier is for; under the
+`readinessbasis` setting "shown", the one over the statuses the page shows, where "Restricted" counts as not
+met, and no verdict at all for a dossier issued before the snapshot kept it), the SHA-256 of the issued PDF (to compare with the file a contractor holds), and "revoked"
 when it was. It never shows the identifier, the full name or a file, and it logs nothing. With
 `verifylive` on, it also shows each competency's status today, read with no rights at all: a competency
 decided by sensitive evidence reads "Restricted".
@@ -390,8 +392,9 @@ or who has no active plan from the template, gives one and the same error, and s
 caller who is not shown ID numbers in the template's context (the hub's identity-field rule). An unknown
 template reads like a template the caller cannot reach. A competency decided by a
 sensitive evidence shows status -1 and no expiry to a caller without `local/evidencehub:viewsensitive`,
-while `ready` stays the worker's real readiness, as a dossier states it: the verdict is what the gate
-needs, and it names no status or date. The pre-built service "Evidence hub readiness"
+while `ready` follows the `readinessbasis` setting: by default (`real`) it stays the worker's real
+readiness, as a dossier states it; under `shown` it is the readiness of the statuses the caller is shown, so a
+restricted competency counts as not met. Either way the verdict names no status or date. The pre-built service "Evidence hub readiness"
 (`local_evidencehub_readiness`) contains the function and is disabled until an administrator enables it
 and issues a token.
 
@@ -416,7 +419,17 @@ Site administration > Competencies > Readiness dossiers:
   these, an export downloads at once; above either, it is prepared in the background.
 - `local_evidencehub/maxexportworkers` (500): the most workers one export may name.
 - `local_evidencehub/exportretentiondays` (7): days a prepared ZIP is kept.
+- `local_evidencehub/readinessbasis` (`real`): which readiness verdict readers get, in the dossier PDF, on the
+  public verification page and from the web service. `real`: the worker's real readiness, whatever the
+  reader may see of each competency. `shown`: the readiness over what the reader is shown, where a
+  competency restricted to that reader counts as not met, as the hub's readiness rate counts it; the same
+  worker can then read "Not ready" to one reader and "Ready" to another. A dossier issued before this
+  setting existed has no "shown" verdict on its verification page, which then states none.
 - `local_evidencehub/verifylive` (off): show each competency's current status on the verification page.
+
+When `local_dimensions` is installed and its Competency Dimensions category is already in the admin tree, the
+plugin's pages (Validity policies, Evidence hub and Readiness dossiers) are listed inside it instead of
+directly under Competencies; otherwise they stay under Competencies.
 
 The notification "Readiness dossiers prepared in the background" (`messageprovider:dossierready`) can be
 configured under Site administration > General > Messaging > Notification settings.
@@ -464,7 +477,8 @@ Data stored
   acted and their note. Kept beyond the log store's lifetime, because compliance audits ask for it.
 - `local_evidencehub_dossier`: each readiness dossier issued about a worker: its verification code,
   the plan template, who issued it, a snapshot of what it states (the masked name, the template, the
-  issue date, each competency's status and expiry, the readiness: no identifier, full name or file),
+  issue date, each competency's status and expiry, the readiness as the worker's real one and as the page shows
+  it: no identifier, full name or file),
   the SHA-256 of its PDF, and whether and when it was revoked. Kept for good, because it backs the
   verification page; deleted with the worker's data.
 - `local_evidencehub_export`: each dossier export request: who asked, in which hub context, for which

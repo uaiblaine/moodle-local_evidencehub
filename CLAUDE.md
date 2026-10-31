@@ -185,7 +185,8 @@ tests/generator/  writes rows directly (create_status() stays direct for the tas
   (`contextid`; the template's for an older row), and `userevidenceview` over every worker of its dossiers.
 - **The dossier snapshot is what the public page may show**: masked name, template, issue time, each
   competency's code and expiry (a sensitive-decided one always restricted, whoever issued it; the PDF
-  keeps the requester's view), the worker's real readiness. Never the identifier, the full name or a file;
+  keeps the requester's view), both verdicts (`readiness`, real; `readinessshown`, over the public statuses).
+  Never the identifier, the full name or a file;
   `verify.php` reads nothing else (and `verifylive` reads status rows with no rights).
 - **Dossier files are read in one array query** (`dossier_builder::files()`): a recordset costs three
   reads on PostgreSQL, and the test bounds the statement count.
@@ -217,8 +218,10 @@ tests/generator/  writes rows directly (create_status() stays direct for the tas
   alerts) never runs there: a test of them calls `preventResetByRollback()`. On MariaDB it runs in
   every test that moves a pair into due, critical or expired, so a test asserting messages redirects
   them and runs on both families.
-- **The readiness web service shows the effective status but returns the real readiness** (as the
-  dossier snapshot); every worker refusal is one error (`errorreadinessnotfound`).
+- **Every readiness verdict follows the `readinessbasis` setting** (`dossier_config::readiness_basis()`): real
+  (default) or as the reader is shown it, a restricted competency unmet; the PDF, the public page (read at view time;
+  a snapshot without `readinessshown` states no verdict under "shown") and the web service. The web service shows the
+  effective status; every worker refusal is one error (`errorreadinessnotfound`).
 - **Templates print plain spellings**: `format_string(..., ['escape' => false])` into double stashes.
 - **"Today" is the site's calendar day** (`core_date::get_server_timezone_object()`), read from
   `\core\clock`, so tests freeze it with `mock_clock_with_frozen()`.
@@ -228,7 +231,9 @@ tests/generator/  writes rows directly (create_status() stays direct for the tas
 - **The drawer's side-sheet class is in its template** (`templates/drawer.mustache`), and it slides
   in with a CSS animation: core's `.modal` goes from `display: none` to block in one step, which a
   transition cannot animate (S0 spike: a class added after `create()` lost the first slide).
-- **`settings.php` adds two admin pages and the dossier settings page**; every setting is named
+- **`settings.php` adds two admin pages and the dossier settings page**, in local_dimensions' admin category when
+  it is already in the tree (`local\admin_tree`: plugins load by localised display name, so it is best effort and
+  falls back to `competencies`); every setting is named
   `local_evidencehub/<name>` with `<name>` + `<name>_desc` strings, and the identifier select loads its
   choices lazily (a callable), so loading settings.php never queries `user_info_field`.
 

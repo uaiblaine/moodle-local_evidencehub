@@ -27,6 +27,12 @@ final class dossier_config {
     /** @var string The identifier setting's value for the user's ID number. */
     public const string IDENTIFIER_IDNUMBER = 'idnumber';
 
+    /** @var string The readiness basis setting's value for the worker's real readiness. */
+    public const string READINESS_REAL = 'real';
+
+    /** @var string The readiness basis setting's value for the readiness of what the reader is shown. */
+    public const string READINESS_SHOWN = 'shown';
+
     /** @var int Up to this many workers an export streams in the request. */
     public const int DEFAULT_SYNCMAXWORKERS = 10;
 
@@ -133,6 +139,20 @@ final class dossier_config {
      */
     public static function verify_live(): bool {
         return get_config('local_evidencehub', 'verifylive') === '1';
+    }
+
+    /**
+     * Which readiness verdict the dossier PDF, the verification page and the web service give a reader.
+     *
+     * Real by default: only an exact stored 'shown' selects the verdict over what the reader is shown, so
+     * an unset, empty or unknown value reads as the worker's real readiness.
+     *
+     * @return string A READINESS_* constant of this class.
+     */
+    public static function readiness_basis(): string {
+        return get_config('local_evidencehub', 'readinessbasis') === self::READINESS_SHOWN
+            ? self::READINESS_SHOWN
+            : self::READINESS_REAL;
     }
 
     /**

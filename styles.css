@@ -192,6 +192,13 @@
     outline-offset: 2px;
 }
 
+/* The public verification page sits in the embedded layout, which gives its content no gutter of its own. */
+.local-evidencehub-verify-page {
+    max-width: 60rem;
+    margin-inline: auto;
+    padding: 1.5rem 1rem;
+}
+
 /* The public verification page: the code and the PDF's hash wrap anywhere on a phone. */
 .local-evidencehub-verify .local-evidencehub-verify-hash {
     overflow-wrap: anywhere;

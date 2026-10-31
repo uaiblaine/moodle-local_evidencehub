@@ -15,7 +15,7 @@
 // along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
 
 /**
- * Admin tree entries.
+ * Admin tree entries, in local_dimensions' category when it is there and in 'competencies' otherwise.
  *
  * Both pages do their own checks, the policies page in each framework's context, so the entries
  * name the plugin's capabilities rather than moodle/site:config. The dossier settings are the site's.
@@ -27,14 +27,16 @@
 
 defined('MOODLE_INTERNAL') || die();
 
-$ADMIN->add('competencies', new admin_externalpage(
+$parent = \local_evidencehub\local\admin_tree::parent_category($ADMIN);
+
+$ADMIN->add($parent, new admin_externalpage(
     'local_evidencehub_policies',
     new lang_string('policiespage', 'local_evidencehub'),
     new moodle_url('/local/evidencehub/policies.php'),
     'local/evidencehub:managepolicies'
 ));
 
-$ADMIN->add('competencies', new admin_externalpage(
+$ADMIN->add($parent, new admin_externalpage(
     'local_evidencehub_hub',
     new lang_string('hubpage', 'local_evidencehub'),
     new moodle_url('/local/evidencehub/index.php'),
@@ -43,7 +45,7 @@ $ADMIN->add('competencies', new admin_externalpage(
 
 if ($hassiteconfig) {
     $settings = new admin_settingpage('local_evidencehub', new lang_string('dossiersettings', 'local_evidencehub'));
-    $ADMIN->add('competencies', $settings);
+    $ADMIN->add($parent, $settings);
     if ($ADMIN->fulltree) {
         $settings->add(new admin_setting_configcheckbox(
             'local_evidencehub/includesensitivefiles',
@@ -86,6 +88,18 @@ if ($hassiteconfig) {
             new lang_string('exportretentiondays_desc', 'local_evidencehub'),
             \local_evidencehub\local\dossier_config::DEFAULT_RETENTIONDAYS,
             PARAM_INT
+        ));
+        $basis = \local_evidencehub\local\dossier_config::class;
+        $readinesschoices = [
+            $basis::READINESS_REAL => new lang_string('readinessbasis_real', 'local_evidencehub'),
+            $basis::READINESS_SHOWN => new lang_string('readinessbasis_shown', 'local_evidencehub'),
+        ];
+        $settings->add(new admin_setting_configselect(
+            'local_evidencehub/readinessbasis',
+            new lang_string('readinessbasis', 'local_evidencehub'),
+            new lang_string('readinessbasis_desc', 'local_evidencehub'),
+            \local_evidencehub\local\dossier_config::READINESS_REAL,
+            $readinesschoices
         ));
         $settings->add(new admin_setting_configcheckbox(
             'local_evidencehub/verifylive',

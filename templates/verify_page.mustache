@@ -32,7 +32,8 @@
     * found - The code names a dossier; everything below belongs to it.
     * name - The masked name, e.g. "J*** S***".
     * template, issued - The learning plan template and the issue date.
-    * readiness, readinessclass - The verdict on the issue date and its badge classes.
+    * hasreadiness - Whether the snapshot states the verdict the site's readiness basis asks for.
+    * readiness, readinessclass - That verdict and its badge classes; read only with hasreadiness.
     * revoked, revokedon - Whether and when the dossier was revoked.
     * pdfhash, code - The SHA-256 of the issued PDF, and the verification code.
     * live - Whether each competency also shows its current status.
@@ -46,6 +47,7 @@
         "name": "J*** S***",
         "template": "Electricians",
         "issued": "29 October 2026",
+        "hasreadiness": true,
         "readiness": "Ready",
         "readinessclass": "bg-success text-white",
         "revoked": false,
@@ -77,8 +79,10 @@
         <dd class="col-sm-8">{{template}}</dd>
         <dt class="col-sm-4">{{#str}} dossierissued, local_evidencehub {{/str}}</dt>
         <dd class="col-sm-8">{{issued}}</dd>
+        {{#hasreadiness}}
         <dt class="col-sm-4">{{#str}} dossierreadiness, local_evidencehub {{/str}}</dt>
         <dd class="col-sm-8"><span class="badge {{readinessclass}}">{{readiness}}</span></dd>
+        {{/hasreadiness}}
         <dt class="col-sm-4">{{#str}} verifycode, local_evidencehub {{/str}}</dt>
         <dd class="col-sm-8 local-evidencehub-verify-hash">{{code}}</dd>
         <dt class="col-sm-4">{{#str}} verifypdfhash, local_evidencehub {{/str}}</dt>

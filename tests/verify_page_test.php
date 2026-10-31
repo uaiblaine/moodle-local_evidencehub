@@ -18,6 +18,7 @@ namespace local_evidencehub;
 
 use local_evidencehub\local\dossier;
 use local_evidencehub\local\dossier_builder;
+use local_evidencehub\local\dossier_config;
 use local_evidencehub\local\status;
 use local_evidencehub\output\verify_page;
 use local_evidencehub\tests\dossier_pdf_spy;
@@ -66,6 +67,8 @@ final class verify_page_test extends \advanced_testcase {
         $this->sensitive = $c2;
         $templateid = $this->template([$c1, $c2]);
         $this->worker = $this->worker($templateid, ['firstname' => 'Joana', 'lastname' => 'Pereira', 'idnumber' => 'ID40231']);
+        // The only regulatory competency is the one decided by the sensitive evidence.
+        $this->regulatory($c2);
         $this->decided($this->worker, $c1);
         $this->decided($this->worker, $c2, 'aso');
         // A requester who sees the sensitive evidence: their PDF states it, the public snapshot does not.
@@ -204,6 +207,67 @@ final class verify_page_test extends \advanced_testcase {
         $this->assertSame(status::label(status::STATUS_VALID), $export['competencies'][0]['statuslabel']);
         $this->assertSame(status::label(status::STATUS_EXPIRED), $export['competencies'][0]['livelabel']);
         $this->assertSame(get_string('validityrestricted', 'local_evidencehub'), $export['competencies'][1]['livelabel']);
+    }
+
+    /**
+     * The verdict follows the readiness basis read at view time: the snapshot's real readiness by default,
+     * the one over the statuses it shows under "shown", where the sensitive row is restricted and unmet.
+     *
+     * @return void
+     */
+    public function test_the_verdict_follows_the_readiness_basis(): void {
+        $snapshot = json_decode($this->dossier->snapshot, true);
+        $this->assertSame(dossier::READINESS_READY, $snapshot['readiness'], 'Control: the real readiness is ready.');
+        $this->assertSame(dossier::READINESS_NOTREADY, $snapshot['readinessshown']);
+        $ready = dossier::readiness_label(dossier::READINESS_READY);
+        $notready = dossier::readiness_label(dossier::READINESS_NOTREADY);
+
+        $real = (new verify_page($this->dossier, true, false, dossier_config::READINESS_REAL))
+            ->export_for_template($this->get_renderer());
+        $this->assertTrue($real['hasreadiness']);
+        $this->assertSame($ready, $real['readiness']);
+        $shown = (new verify_page($this->dossier, true, false, dossier_config::READINESS_SHOWN))
+            ->export_for_template($this->get_renderer());
+        $this->assertTrue($shown['hasreadiness']);
+        $this->assertSame($notready, $shown['readiness']);
+
+        // The page script reads the setting itself.
+        $html = $this->run_page($this->dossier->code);
+        $this->assertStringContainsString('>' . $ready . '</span>', $html);
+        $this->assertStringNotContainsString('>' . $notready . '</span>', $html);
+        set_config('readinessbasis', dossier_config::READINESS_SHOWN, 'local_evidencehub');
+        $html = $this->run_page($this->dossier->code);
+        $this->assertStringContainsString('>' . $notready . '</span>', $html);
+        $this->assertStringNotContainsString('>' . $ready . '</span>', $html);
+    }
+
+    /**
+     * A snapshot issued before readinessshown existed states no verdict under "shown", and still its real one
+     * under "real".
+     *
+     * @return void
+     */
+    public function test_an_old_snapshot_states_no_verdict_under_shown(): void {
+        global $DB;
+        $snapshot = json_decode($this->dossier->snapshot, true);
+        unset($snapshot['readinessshown']);
+        $this->dossier->snapshot = json_encode($snapshot);
+        $DB->set_field(dossier::TABLE, 'snapshot', $this->dossier->snapshot, ['id' => $this->dossier->id]);
+        $heading = get_string('dossierreadiness', 'local_evidencehub');
+
+        $real = (new verify_page($this->dossier, true, false, dossier_config::READINESS_REAL))
+            ->export_for_template($this->get_renderer());
+        $this->assertTrue($real['hasreadiness']);
+        $this->assertSame(dossier::readiness_label(dossier::READINESS_READY), $real['readiness']);
+        $this->assertStringContainsString($heading, $this->run_page($this->dossier->code));
+
+        $shown = (new verify_page($this->dossier, true, false, dossier_config::READINESS_SHOWN))
+            ->export_for_template($this->get_renderer());
+        $this->assertFalse($shown['hasreadiness']);
+        set_config('readinessbasis', dossier_config::READINESS_SHOWN, 'local_evidencehub');
+        $html = $this->run_page($this->dossier->code);
+        $this->assertStringNotContainsString($heading, $html);
+        $this->assertStringContainsString('J*** P***', $html, 'Control: the rest of the page is shown.');
     }
 
     /**

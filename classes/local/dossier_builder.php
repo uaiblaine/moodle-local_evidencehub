@@ -107,10 +107,15 @@ final class dossier_builder {
         $wanted = [];
         foreach ($workers as $worker) {
             $worker->rows = $this->rows($worker, $columns, $statuses[$worker->userid] ?? []);
-            // The worker's real readiness, whatever the requester may see of each competency: the
-            // verdict is what a dossier certifies, and it reveals no status or date of its own.
+            // The worker's real readiness, whatever the requester may see of each competency: it feeds the
+            // snapshot, which is issued once and read by everyone.
             $worker->readiness = dossier::readiness(array_map(
                 fn(\stdClass $row): array => [$row->realcode, $row->kind],
+                $worker->rows
+            ));
+            // The readiness of what this requester is shown, for the PDF under the "shown" basis.
+            $worker->readinessshown = dossier::readiness(array_map(
+                fn(\stdClass $row): array => [$row->code, $row->kind],
                 $worker->rows
             ));
             foreach ($worker->rows as $row) {
@@ -365,7 +370,10 @@ final class dossier_builder {
         $manifest = [];
         $folders = [];
         $dossiers = [];
+        // The PDF's verdict follows the site's readiness basis setting.
+        $shown = dossier_config::readiness_basis() === dossier_config::READINESS_SHOWN;
         foreach ($plan->workers as $worker) {
+            $pdfreadiness = $shown ? $worker->readinessshown : $worker->readiness;
             $folder = clean_param($worker->fileid . '_' . $worker->lastname . '-' . $worker->firstname, PARAM_FILE);
             $folder = self::unique($folder, $folders);
             $names = [];
@@ -378,7 +386,7 @@ final class dossier_builder {
                 'template' => $plan->template->name,
                 'issued' => $issued,
                 'rows' => array_map([self::class, 'pdf_row'], $worker->rows),
-                'readiness' => dossier::readiness_label($worker->readiness),
+                'readiness' => dossier::readiness_label($pdfreadiness),
                 'code' => $code,
                 'verifyurl' => (new \moodle_url('/local/evidencehub/verify.php', ['code' => $code]))->out(false),
             ]);
@@ -420,12 +428,16 @@ final class dossier_builder {
      *
      * A competency decided by a sensitive evidence is always stored restricted, without its expiry, whoever
      * builds the dossier: the page is anonymous, while the requester's own right to see it covers the PDF
-     * only. The readiness is the worker's real one ({@see self::prepare()}).
+     * only. It states two verdicts, so the verification page can follow the site's basis at view time
+     * ({@see dossier_config::readiness_basis()}): readiness is the worker's real one ({@see self::prepare()}),
+     * readinessshown the one over the snapshot's own statuses, where a sensitive row is restricted and so
+     * counts as not met.
      *
      * @param \stdClass $worker A worker of the plan.
      * @param string $template The template's plain name.
      * @param int $now The issue time.
-     * @return array name (masked), template, issued, competencies (id, name, status, expiry), readiness.
+     * @return array name (masked), template, issued, competencies (id, name, status, expiry), readiness,
+     *     readinessshown.
      */
     public static function snapshot(\stdClass $worker, string $template, int $now): array {
         return [
@@ -439,6 +451,10 @@ final class dossier_builder {
                 'expiry' => $row->sensitive ? null : $row->expiry,
             ], $worker->rows),
             'readiness' => $worker->readiness,
+            'readinessshown' => dossier::readiness(array_map(
+                fn(\stdClass $row): array => [$row->sensitive ? status::EFFECTIVE_RESTRICTED : $row->realcode, $row->kind],
+                $worker->rows
+            )),
         ];
     }
 

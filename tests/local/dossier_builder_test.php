@@ -195,6 +195,60 @@ final class dossier_builder_test extends \advanced_testcase {
     }
 
     /**
+     * The PDF's readiness follows the basis: the worker's real readiness, or that of the statuses the
+     * requester is shown. The snapshot keeps both, and the worker's real readiness stays the real one.
+     *
+     * @return void
+     */
+    public function test_the_pdf_readiness_follows_the_basis(): void {
+        [$c1] = $this->competencies(1);
+        $templateid = $this->template([$c1]);
+        $this->regulatory($c1);
+        $ana = $this->worker($templateid);
+        // The only regulatory competency is decided by a sensitive evidence and is compliant.
+        $this->decided($ana, $c1, 'aso');
+        $ready = dossier::readiness_label(dossier::READINESS_READY);
+        $notready = dossier::readiness_label(dossier::READINESS_NOTREADY);
+        $printed = function (\stdClass $requester) use ($templateid, $ana): array {
+            $this->setUser($requester);
+            $spy = new \local_evidencehub\tests\dossier_pdf_spy();
+            $builder = new dossier_builder(\context_system::instance(), $templateid, $spy);
+            $plan = $builder->prepare([$ana->id]);
+            $export = $this->getDataGenerator()->get_plugin_generator('local_evidencehub')->create_export([
+                'requestedby' => $requester->id,
+                'templateid' => $templateid,
+            ]);
+            $zip = \core_files\archive_writer::get_file_writer('basis.zip', \core_files\archive_writer::ZIP_WRITER);
+            $dossiers = $builder->build($zip, $plan, $export);
+            return [$spy->rendered[0]->readiness, $plan->workers[0], json_decode($dossiers[0]->snapshot, true)];
+        };
+        $plain = $this->requester([$ana]);
+        $sensitive = $this->requester([$ana], ['local/evidencehub:viewsensitive']);
+
+        // Real, the default: every requester's PDF says ready.
+        [$pdf, $worker, $snapshot] = $printed($plain);
+        $this->assertSame(status::EFFECTIVE_RESTRICTED, $worker->rows[0]->code, 'Control: the row is restricted.');
+        $this->assertSame($ready, $pdf);
+        $this->assertSame(dossier::READINESS_READY, $snapshot['readiness']);
+        $this->assertSame(dossier::READINESS_NOTREADY, $snapshot['readinessshown'], 'The snapshot shows the row restricted.');
+
+        // Shown: the restricted requester reads not ready; the real readiness is untouched.
+        set_config('readinessbasis', dossier_config::READINESS_SHOWN, 'local_evidencehub');
+        [$pdf, $worker, $snapshot] = $printed($plain);
+        $this->assertSame($notready, $pdf);
+        $this->assertSame(dossier::READINESS_READY, $worker->readiness);
+        $this->assertSame(dossier::READINESS_READY, $snapshot['readiness']);
+        $this->assertSame(dossier::READINESS_NOTREADY, $snapshot['readinessshown']);
+
+        // Control: the requester who is shown the competency reads ready under the same basis, and the snapshot,
+        // issued for everyone, is the same.
+        [$pdf, $worker, $snapshot] = $printed($sensitive);
+        $this->assertSame(status::STATUS_VALID, $worker->rows[0]->code);
+        $this->assertSame($ready, $pdf);
+        $this->assertSame(dossier::READINESS_NOTREADY, $snapshot['readinessshown']);
+    }
+
+    /**
      * A worker the requester may not read, without an active plan from the template, or deleted, is left out.
      *
      * @return void

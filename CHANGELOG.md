@@ -6,6 +6,26 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+### Changed
+
+- Version 2026100510: the site setting `local_evidencehub/readinessbasis` chooses which readiness verdict
+  readers get from the dossier PDF, the public verification page and the web service. `real` (default, the
+  previous behaviour) states the worker's real readiness; `shown` states the readiness over what the reader is
+  shown, so a competency restricted to that reader counts as not met. A dossier's snapshot now keeps both
+  verdicts (`readiness` and `readinessshown`); under `shown` a snapshot issued before this version has no
+  `readinessshown` and its page states no verdict.
+- Version 2026100510: the plugin's three admin entries (Validity policies, Evidence hub, Readiness dossiers)
+  are added to the `local_dimensions` category when it is already in the admin tree, and to `competencies`
+  otherwise (`local\admin_tree::parent_category()`). Plugins load their settings in order of their localised
+  names, so the category is found where "Competency Dimensions" sorts before "Evidence hub".
+
+### Fixed
+
+- The hub and the validity policies list named themselves twice in the breadcrumb: core already adds the active
+  admin entry or category More menu node, so the page adds its own node only when none is active.
+- The public verification page had no side gutter in the embedded layout: its content now sits in a centred
+  container with padding (`.local-evidencehub-verify-page`).
+
 ### Added
 
 - Stage S9, the family bridge (version 2026100509): a listener for `local_dimensions`' hook

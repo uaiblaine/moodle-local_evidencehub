@@ -20,6 +20,7 @@ use core_competency\plan;
 use local_evidencehub\local\hub_filter;
 use local_evidencehub\local\hub_query;
 use local_evidencehub\local\hub_scope;
+use local_evidencehub\local\policy;
 
 /**
  * Plan templates, workers with plans from them, status rows and viewers, for the hub's tests.
@@ -111,6 +112,32 @@ trait hub_scenario {
             'effectiveexpiry' => $expiry,
             'metaid' => $metaid,
         ]);
+    }
+
+    /**
+     * Put a competency under a regulatory policy, saved as an administrator; the current user is restored.
+     *
+     * @param int $competencyid The competency.
+     * @return void
+     */
+    protected function regulatory(int $competencyid): void {
+        global $DB, $USER;
+        $previous = $USER;
+        $this->setAdminUser();
+        policy::save((object) [
+            'frameworkid' => (int) $DB->get_field('competency', 'competencyframeworkid', ['id' => $competencyid], MUST_EXIST),
+            'competencyid' => $competencyid,
+            'kind' => policy::KIND_REGULATORY,
+            'requireverified' => 0,
+            'requireproficiency' => 0,
+            'minhours' => null,
+            'alert1' => 60,
+            'alert2' => 30,
+            'gracedays' => 0,
+            'cyclemonths' => 0,
+            'onexpiry' => policy::ONEXPIRY_LOG,
+        ]);
+        $this->setUser($previous->id ? $previous : null);
     }
 
     /**

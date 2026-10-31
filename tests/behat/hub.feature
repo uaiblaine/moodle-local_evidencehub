@@ -39,6 +39,8 @@ Feature: The evidence hub
     And I am on the "OPS" "category" page
     When I navigate to "Evidence hub" in current page administration
     Then I should see "Opened from Operations"
+    And "//ol[contains(concat(' ', normalize-space(@class), ' '), ' breadcrumb ')]/li[normalize-space()='Evidence hub']" "xpath_element" should exist
+    And "(//ol[contains(concat(' ', normalize-space(@class), ' '), ' breadcrumb ')]/li[normalize-space()='Evidence hub'])[2]" "xpath_element" should not exist
     When I set the field "Learning plan template" to "Electricians (Operations)"
     And I press "Apply"
     Then I should see "Expired" in the ".local-evidencehub-kpis" "css_element"
@@ -47,3 +49,12 @@ Feature: The evidence hub
     When I click on "Compliant" "link" in the ".local-evidencehub-chips" "css_element"
     Then I should see "Bia Lima" in the ".local-evidencehub-grid" "css_element"
     And I should see "Ana Souza" in the ".local-evidencehub-grid" "css_element"
+
+  Scenario: The hub and the policies list name themselves once in the breadcrumb
+    Given I log in as "admin"
+    When I visit "/local/evidencehub/index.php"
+    Then "//ol[contains(concat(' ', normalize-space(@class), ' '), ' breadcrumb ')]/li[normalize-space()='Evidence hub']" "xpath_element" should exist
+    And "(//ol[contains(concat(' ', normalize-space(@class), ' '), ' breadcrumb ')]/li[normalize-space()='Evidence hub'])[2]" "xpath_element" should not exist
+    When I visit "/local/evidencehub/policies.php"
+    Then "//ol[contains(concat(' ', normalize-space(@class), ' '), ' breadcrumb ')]/li[normalize-space()='Validity policies']" "xpath_element" should exist
+    And "(//ol[contains(concat(' ', normalize-space(@class), ' '), ' breadcrumb ')]/li[normalize-space()='Validity policies'])[2]" "xpath_element" should not exist
