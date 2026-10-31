@@ -20,6 +20,7 @@ use core\output\renderable;
 use core\output\renderer_base;
 use core\output\templatable;
 use local_evidencehub\local\dossier;
+use local_evidencehub\local\dossier_config;
 use local_evidencehub\local\meta;
 use local_evidencehub\local\status;
 use local_evidencehub\local\status_repository;
@@ -29,7 +30,8 @@ use local_evidencehub\local\status_repository;
  *
  * Reads the snapshot only, which holds the masked name and no identifier, full name or file (D8). With
  * verifylive on (D10) it adds each competency's current status, computed with no viewer rights: a pair
- * decided by a sensitive evidence reads "Restricted".
+ * decided by a sensitive evidence reads "Restricted". Its verdict follows the readiness basis setting: the
+ * snapshot's real one, or the one over the statuses the snapshot shows.
  *
  * @package    local_evidencehub
  * @copyright  2026 Anderson Blaine
@@ -42,6 +44,7 @@ class verify_page implements renderable, templatable {
      * @param \stdClass|null $dossier The dossier the code names, or null when it names none.
      * @param bool $searched Whether a code was given at all.
      * @param bool $live Whether to add the current status of each competency.
+     * @param string $basis The readiness basis setting ({@see dossier_config::readiness_basis()}), read at view time.
      */
     public function __construct(
         /** @var \stdClass|null The dossier. */
@@ -50,6 +53,8 @@ class verify_page implements renderable, templatable {
         private readonly bool $searched,
         /** @var bool Whether to add the current status. */
         private readonly bool $live,
+        /** @var string The readiness basis setting. */
+        private readonly string $basis = dossier_config::READINESS_REAL,
     ) {
     }
 
@@ -87,12 +92,18 @@ class verify_page implements renderable, templatable {
             }
             $competencies[] = $item;
         }
-        $readiness = (string) ($snapshot->readiness ?? dossier::READINESS_NOTREADY);
+        // Under "shown" the verdict is the snapshot's readinessshown; a snapshot issued before the field existed
+        // has none, and the page then states no verdict rather than the real one the setting rules out.
+        $shown = $this->basis === dossier_config::READINESS_SHOWN;
+        $hasreadiness = !$shown || isset($snapshot->readinessshown);
+        $stored = $shown ? ($snapshot->readinessshown ?? null) : ($snapshot->readiness ?? null);
+        $readiness = (string) ($stored ?? dossier::READINESS_NOTREADY);
         $format = get_string('strftimedate', 'core_langconfig');
         return $data + [
             'name' => (string) ($snapshot->name ?? ''),
             'template' => (string) ($snapshot->template ?? ''),
             'issued' => userdate((int) ($snapshot->issued ?? $this->dossier->timecreated), $format),
+            'hasreadiness' => $hasreadiness,
             'readiness' => dossier::readiness_label($readiness),
             'readinessclass' => dossier::readiness_badge_class($readiness),
             'revoked' => (int) $this->dossier->revoked === 1,

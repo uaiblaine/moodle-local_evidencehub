@@ -45,7 +45,10 @@ $PAGE->set_context($frameworkid ? policy::framework_context($frameworkid) : cont
 $PAGE->set_pagelayout('admin');
 $PAGE->set_title($title);
 $PAGE->set_heading($title);
-$PAGE->navbar->add($title, $listurl);
+// The list's admin entry is already in the breadcrumb when active; a framework's page needs the list as its parent.
+if (!$PAGE->settingsnav->find_active_node()) {
+    $PAGE->navbar->add($title, $listurl);
+}
 
 if (!\core_competency\api::is_enabled()) {
     echo $OUTPUT->header();

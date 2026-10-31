@@ -42,10 +42,18 @@ $PAGE->set_title($title);
 $CFG->additionalhtmlhead = ($CFG->additionalhtmlhead ?? '') . '<meta name="robots" content="noindex" />';
 
 $dossier = \local_evidencehub\local\dossier::find_by_code($code);
-$page = new \local_evidencehub\output\verify_page($dossier, $code !== '', \local_evidencehub\local\dossier_config::verify_live());
+$page = new \local_evidencehub\output\verify_page(
+    $dossier,
+    $code !== '',
+    \local_evidencehub\local\dossier_config::verify_live(),
+    \local_evidencehub\local\dossier_config::readiness_basis()
+);
 
 // Until header() runs, $OUTPUT is core's bootstrap renderer: the export comes after it.
 echo $OUTPUT->header();
+// The embedded layout gives the page no gutter: the plugin's container does (styles.css).
+echo $OUTPUT->container_start('local-evidencehub-verify-page');
 echo $OUTPUT->heading($title);
 echo $OUTPUT->render_from_template('local_evidencehub/verify_page', $page->export_for_template($OUTPUT));
+echo $OUTPUT->container_end();
 echo $OUTPUT->footer();

@@ -56,7 +56,11 @@ if ($context->contextlevel == CONTEXT_COURSECAT) {
 } else {
     $PAGE->set_heading($SITE->fullname);
 }
-$PAGE->navbar->add($title, $PAGE->url);
+// Core already puts this page in the breadcrumb when its node is active (the admin tree's entry, or the
+// category More menu's): adding it again would print it twice.
+if (!$PAGE->settingsnav->find_active_node()) {
+    $PAGE->navbar->add($title, $PAGE->url);
+}
 
 if (!\core_competency\api::is_enabled()) {
     echo $OUTPUT->header();

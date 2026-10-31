@@ -24,6 +24,7 @@ use core_external\external_single_structure;
 use core_external\external_value;
 use core\exception\invalid_parameter_exception;
 use local_evidencehub\local\dossier;
+use local_evidencehub\local\dossier_config;
 use local_evidencehub\local\hub_access;
 use local_evidencehub\local\hub_filter;
 use local_evidencehub\local\hub_kpis;
@@ -41,8 +42,10 @@ use local_evidencehub\local\status_repository;
  * Each competency's status is the effective one for the caller, as on the hub: a competency decided by a
  * sensitive evidence reads restricted (-1), without its expiry, to a caller without
  * local/evidencehub:viewsensitive over the worker, and counts as not met in its own blocking flag. The
- * overall ready flag is the worker's real readiness, as a dossier's snapshot states it: the verdict is what
- * the gate needs, and it names no status or date. A worker who cannot be found, cannot be read or has no
+ * overall ready flag follows the site's readiness basis ({@see dossier_config::readiness_basis()}): the
+ * worker's real readiness by default, as a dossier's snapshot states it, or, under "shown", the readiness
+ * of the statuses this caller is shown. Either way it names no status or date. A worker who cannot be
+ * found, cannot be read or has no
  * active plan from the template gives one error, so the service is no oracle of who exists.
  *
  * @package    local_evidencehub
@@ -176,6 +179,7 @@ final class get_readiness extends external_api {
 
         $computed = null;
         $real = [];
+        $shown = [];
         $competencies = [];
         foreach (hub_matrix::columns($filter) as $column) {
             $pair = $pairs[$column->id] ?? null;
@@ -185,6 +189,7 @@ final class get_readiness extends external_api {
                 $computed = max($computed ?? 0, (int) $pair->timemodified);
             }
             $real[] = [$realcode, $column->kind];
+            $shown[] = [$code, $column->kind];
             $expiry = $pair === null ? 0 : (int) $pair->eexpiry;
             $competencies[] = [
                 'id' => $column->id,
@@ -201,7 +206,9 @@ final class get_readiness extends external_api {
             ];
         }
         return [
-            'ready' => dossier::readiness($real) !== dossier::READINESS_NOTREADY,
+            'ready' => dossier::readiness(
+                dossier_config::readiness_basis() === dossier_config::READINESS_SHOWN ? $shown : $real
+            ) !== dossier::READINESS_NOTREADY,
             'computed' => $computed,
             'competencies' => $competencies,
         ];
@@ -216,7 +223,8 @@ final class get_readiness extends external_api {
         return new external_single_structure([
             'ready' => new external_value(
                 PARAM_BOOL,
-                'Whether the worker is ready: no competency under a regulatory policy is unmet, whatever the caller sees'
+                'Whether the worker is ready: no competency under a regulatory policy is unmet. The site setting '
+                    . 'readinessbasis decides whether that counts the worker\'s real statuses or only those the caller sees'
             ),
             'computed' => new external_value(
                 PARAM_INT,

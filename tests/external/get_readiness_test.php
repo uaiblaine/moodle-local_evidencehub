@@ -27,6 +27,7 @@ namespace local_evidencehub\external;
 
 use core_competency\plan;
 use core_external\external_api;
+use local_evidencehub\local\dossier_config;
 use local_evidencehub\local\policy;
 use local_evidencehub\local\status;
 use local_evidencehub\tests\hub_scenario;
@@ -299,6 +300,37 @@ final class get_readiness_test extends \advanced_testcase {
         $met = $this->data(['userid' => $this->worker->id]);
         $this->assertSame(status::EFFECTIVE_RESTRICTED, $met['competencies'][0]['status']);
         $this->assertTrue($met['ready']);
+    }
+
+    /**
+     * Under the "shown" basis the flag counts a competency restricted to the caller as not met; a caller
+     * shown the competency gets the real verdict, and the default basis ignores the restriction.
+     *
+     * @return void
+     */
+    public function test_the_ready_flag_follows_the_readiness_basis(): void {
+        [$c1, $c2] = $this->competencyids;
+        $this->status_row((int) $this->worker->id, $c1, status::STATUS_VALID, 20280101, 'aso');
+        $this->status_row((int) $this->worker->id, $c2, status::STATUS_VALID, 20280101);
+        $plain = $this->viewer(self::CALLER);
+        $sensitive = $this->viewer(array_merge(self::CALLER, ['local/evidencehub:viewsensitive']));
+
+        // Real, the default.
+        $this->setUser($plain);
+        $data = $this->data(['userid' => $this->worker->id]);
+        $this->assertSame(status::EFFECTIVE_RESTRICTED, $data['competencies'][0]['status'], 'Control: C1 is restricted.');
+        $this->assertTrue($data['ready']);
+
+        set_config('readinessbasis', dossier_config::READINESS_SHOWN, 'local_evidencehub');
+        $data = $this->data(['userid' => $this->worker->id]);
+        $this->assertFalse($data['ready']);
+        $this->assertTrue($data['competencies'][0]['blocking']);
+
+        // Control: shown the competency, the same basis says ready.
+        $this->setUser($sensitive);
+        $data = $this->data(['userid' => $this->worker->id]);
+        $this->assertSame(status::STATUS_VALID, $data['competencies'][0]['status']);
+        $this->assertTrue($data['ready']);
     }
 
     /**
