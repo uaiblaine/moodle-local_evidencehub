@@ -35,4 +35,25 @@ final class export {
 
     /** @var int The task gave up; the requester was told. */
     public const int STATUS_FAILED = 3;
+
+    /** @var int The ZIP was kept until timeexpires and the cleanup task deleted it; the dossier rows stay. */
+    public const int STATUS_EXPIRED = 4;
+
+    /**
+     * The human-readable name of a state.
+     *
+     * @param int $status A STATUS_* constant.
+     * @return string
+     * @throws \coding_exception On an unknown state.
+     */
+    public static function label(int $status): string {
+        return match ($status) {
+            self::STATUS_QUEUED => get_string('export_queued', 'local_evidencehub'),
+            self::STATUS_RUNNING => get_string('export_running', 'local_evidencehub'),
+            self::STATUS_DONE => get_string('export_done', 'local_evidencehub'),
+            self::STATUS_FAILED => get_string('export_failed', 'local_evidencehub'),
+            self::STATUS_EXPIRED => get_string('export_expired', 'local_evidencehub'),
+            default => throw new \coding_exception('Unknown dossier export state: ' . $status),
+        };
+    }
 }

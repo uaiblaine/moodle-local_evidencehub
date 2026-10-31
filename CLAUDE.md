@@ -74,7 +74,8 @@ was resumed on a container that skipped the setup script: attach `moodle-dev` an
 ```
 version.php, db/access.php, db/install.php (seeds types), db/install.xml (7 tables)
 db/hooks.php, db/events.php   tool_lp prompt (footer hook); observers (classes/observer.php)
-db/tasks.php      evaluate_validity (hourly), reconcile_validity (weekly)
+db/tasks.php      evaluate_validity (hourly), reconcile_validity (weekly), cleanup_dossier_exports (daily)
+db/messages.php   dossierready (the background export's link, or its failure)
 evidence.php      the worker's evidence page (renderable output/evidence_page, amd/src/evidence_page)
 policies.php      framework list / one framework's policies (output/policy_frameworks,
                   output/framework_policies, amd/src/policies); settings.php adds its admin entry
@@ -83,6 +84,9 @@ index.php         the hub (output/hub_page, amd/src/hub_page); entries: settings
                   drawer: amd/src/drawer (core/modal subclass, templates/drawer), body from lib.php's
                   output_fragment_pair (output/pair_drawer, templates/pair_drawer)
                   view=matrix: output/hub_matrix_page, templates/hub_matrix (a partial of hub_page)
+                  action=exportdossiers: local/dossier_export (selection, stream or task)
+verify.php        the public verification page of a dossier (output/verify_page); no require_login()
+settings.php      the admin entries, and the dossier settings page (local/dossier_config reads them)
 classes/local/    status, meta, audit, export: stored constants and their labels
                   meta also holds the YYYYMMDD date helpers; types: the seeded default types
                   details: THE details API (save, verify, reject, the reset rule); all callers use it
@@ -93,16 +97,23 @@ classes/local/    status, meta, audit, export: stored constants and their labels
                   fragments), hub_filter, hub_query (base_sql, page_keys, page_details, rows),
                   hub_kpis (one statement per method, cached by generation), hub_download,
                   hub_matrix (workers_sql, cells_sql, count_sql: the matrix over base_sql)
+                  dossier (codes, masked name, readiness, list, revoke), dossier_config (settings),
+                  dossier_builder (prepare as the requester, build into any archive_writer),
+                  dossier_plan (value object), dossier_pdf (TCPDF page; barcode() is the test seam),
+                  dossier_export (selection, thresholds, queue/stream, store, notify, servable_file, cleanup)
 classes/reportbuilder/ datasource validity, entities validity + evidence_details
 classes/form/     evidence (core evidence + details in one submit), verify, policy (dynamic forms)
 classes/event/    evidence_details_updated, evidence_verified, evidence_rejected,
-                  validity_status_changed, validity_policy_updated
-classes/task/     evaluate_validity, reconcile_validity, recompute_scope (ad hoc)
+                  validity_status_changed, validity_policy_updated, dossier_exported, dossier_revoked
+classes/task/     evaluate_validity, reconcile_validity, recompute_scope (ad hoc),
+                  build_dossier_export (ad hoc, as the requester), cleanup_dossier_exports
 classes/privacy/  provider: worker rows in the worker's user context; actor columns kept
 tests/            privacy/provider_test, local/{types,constants,meta,details,policy,
                   validity_calculator,status_repository}_test, form/*, output/*, task/*,
                   observer_test, hook_callbacks_test, marketplace_readiness_test, behat/
 tests/classes/    scenario trait: users holding chosen capabilities, evidence, details;
+                  hub_scenario, dossier_scenario (requesters, decided evidence with files, a ZIP read
+                  back), dossier_pdf_spy (records the QR URLs);
                   held_lock_factory: refuses chosen user_<id> locks (via $CFG->lock_factory)
 tests/generator/  writes rows directly (create_status() stays direct for the task tests)
 ```
@@ -110,7 +121,7 @@ tests/generator/  writes rows directly (create_status() stays direct for the tas
 ## Versions
 
 5.3 only, one branch (`main`), numbered in the 5.3 namespace `20261005XX`. `db/upgrade.php` starts at
-2026100504 (the status row's `issensitive`); every later step ends in a savepoint no higher than
+2026100504 (the status row's `issensitive`), then 2026100507 (the export's `contextid`); every later step ends in a savepoint no higher than
 `version.php`.
 
 ## Architecture gotchas
@@ -154,7 +165,23 @@ tests/generator/  writes rows directly (create_status() stays direct for the tas
 - **The hub's cohort check includes the page context itself**, unlike `cohort_get_cohort()`, whose
   callers are courses (`hub_access::cohorts()` says why).
 - **`archive_writer::get_file_writer()` takes a file NAME**: a path makes ZipStream write the ZIP
-  to stdout without a word.
+  to stdout without a word. Its request directory goes with the task: copy the ZIP into file storage
+  (`dossier_export::store()`) before the task ends.
+- **A dossier is built as the requester, wherever it is built.** `dossier_builder::prepare()` checks
+  with `$USER`; the ad hoc task is queued with `set_userid()` (core's cron calls `setup_user()` with it)
+  and refuses to run as anyone else. The request-time selection is cut by `hub_query::base_sql()`.
+- **A prepared ZIP is served by `dossier_export::servable_file()` only**: the requester's own user
+  context, a done and unexpired export, `exportdossier` and `view` in the export's recorded hub context
+  (`contextid`; the template's for an older row), and `userevidenceview` over every worker of its dossiers.
+- **The dossier snapshot is what the public page may show**: masked name, template, issue time, each
+  competency's code and expiry (a sensitive-decided one always restricted, whoever issued it; the PDF
+  keeps the requester's view), the worker's real readiness. Never the identifier, the full name or a file;
+  `verify.php` reads nothing else (and `verifylive` reads status rows with no rights).
+- **Dossier files are read in one array query** (`dossier_builder::files()`): a recordset costs three
+  reads on PostgreSQL, and the test bounds the statement count.
+- **TCPDF traps (S0)**: every table cell carries its width; helvetica for Latin-1 only, freesans
+  otherwise (`dossier_pdf::font()`); no em dash or arrow in the PDF's own strings, or every page is set
+  in freesans.
 - **Privacy:** deleting an actor (verifier, issuer, requester of others' dossiers) leaves their
   columns in other workers' rows, mirroring `core_competency\privacy\provider`. A new table with a
   user column goes into `get_metadata()`; `provider_test` checks every declared column exists.
@@ -178,8 +205,9 @@ tests/generator/  writes rows directly (create_status() stays direct for the tas
 - **The drawer's side-sheet class is in its template** (`templates/drawer.mustache`), and it slides
   in with a CSS animation: core's `.modal` goes from `display: none` to block in one step, which a
   transition cannot animate (S0 spike: a class added after `create()` lost the first slide).
-- **`settings.php` only adds an admin page**, so `marketplace_readiness_test` carries the
-  local_dictionaries variant of the settings check (an external page and no setting is accepted).
+- **`settings.php` adds two admin pages and the dossier settings page**; every setting is named
+  `local_evidencehub/<name>` with `<name>` + `<name>_desc` strings, and the identifier select loads its
+  choices lazily (a callable), so loading settings.php never queries `user_info_field`.
 
 ## Testing notes
 

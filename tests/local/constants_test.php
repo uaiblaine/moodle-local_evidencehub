@@ -40,6 +40,7 @@ use PHPUnit\Framework\Attributes\DataProvider;
 #[CoversClass(meta::class)]
 #[CoversClass(audit::class)]
 #[CoversClass(policy::class)]
+#[CoversClass(export::class)]
 final class constants_test extends \advanced_testcase {
     /**
      * The labelled constant groups.
@@ -54,6 +55,7 @@ final class constants_test extends \advanced_testcase {
             'policy kind' => [policy::class, 'KIND_', 'kind_label'],
             'expiry behaviour' => [policy::class, 'ONEXPIRY_', 'onexpiry_label'],
             'policy source' => [policy::class, 'SOURCE_', 'source_label'],
+            'export state' => [export::class, 'STATUS_', 'label'],
         ];
     }
 

@@ -95,3 +95,28 @@ function local_evidencehub_output_fragment_pair(array $args): string {
     $output = $PAGE->get_renderer('core');
     return $output->render_from_template('local_evidencehub/pair_drawer', $drawer->export_for_template($output));
 }
+
+/**
+ * Serve a prepared dossier ZIP to the user who asked for it.
+ *
+ * Every check is {@see \local_evidencehub\local\dossier_export::servable_file()}'s: the requester's own user
+ * context, an export done and not expired, and exportdossier still held in the template's context.
+ *
+ * @param stdClass $course The course (the site).
+ * @param stdClass|null $cm Unused.
+ * @param context $context The file's context.
+ * @param string $filearea The file area.
+ * @param array $args itemid, then the path and file name.
+ * @param bool $forcedownload Unused: a ZIP is always downloaded.
+ * @param array $options Options for send_stored_file().
+ * @return bool False when the file is not served.
+ */
+function local_evidencehub_pluginfile($course, $cm, $context, $filearea, $args, $forcedownload, array $options = []) {
+    require_login(null, false);
+    $file = \local_evidencehub\local\dossier_export::servable_file($context, $filearea, $args);
+    if ($file === null) {
+        return false;
+    }
+    send_stored_file($file, 0, 0, true, $options);
+    return true;
+}

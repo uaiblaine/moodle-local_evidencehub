@@ -50,6 +50,8 @@
       userid, competencyid, inspectlabel and drawertitle for its drawer button.
     * pagingbar - The pager, rendered by core.
     * formats (name, label), sesskey - The download.
+    * canexport - Whether the viewer may export dossiers here: the "Export dossiers" button, which posts
+      action=exportdossiers with the ticked rows (one dossier per worker).
 
     Example context (json):
     {
@@ -102,7 +104,8 @@
         ],
         "pagingbar": "",
         "formats": [{"name": "csv", "label": "Comma separated values (.csv)"}],
-        "sesskey": "abc123"
+        "sesskey": "abc123",
+        "canexport": true
     }
 }}
 <div class="local-evidencehub-hub" data-region="local-evidencehub-hub" data-contextid="{{contextid}}" data-templateid="{{templateid}}">
@@ -271,8 +274,15 @@
                 </select>
             </div>
             <button type="submit" class="btn btn-secondary">{{#str}} hubdownload, local_evidencehub {{/str}}</button>
+            {{#canexport}}
+            <button type="submit" name="action" value="exportdossiers" class="btn btn-primary"
+                data-action="exportdossiers">{{#str}} dossierexport, local_evidencehub {{/str}}</button>
+            {{/canexport}}
         </div>
         <p class="form-text">{{#str}} hubdownloadhelp, local_evidencehub {{/str}}</p>
+        {{#canexport}}
+        <p class="form-text">{{#str}} dossierexporthelp, local_evidencehub {{/str}}</p>
+        {{/canexport}}
         {{/hasrows}}
         {{^hasrows}}
         <p class="text-muted">{{#str}} hubnorows, local_evidencehub {{/str}}</p>

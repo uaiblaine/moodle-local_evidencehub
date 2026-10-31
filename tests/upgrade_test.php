@@ -66,6 +66,36 @@ final class upgrade_test extends \advanced_testcase {
             'competencyid, issensitive'
         );
         $this->assertSame([$c1 => 1, $c2 => 0, $c3 => 0], array_map('intval', $flags));
-        $this->assertEquals(2026100504, get_config('local_evidencehub', 'version'));
+        // The run goes on to the last step's savepoint.
+        $this->assertEquals(2026100507, get_config('local_evidencehub', 'version'));
+    }
+
+    /**
+     * Upgrading from 2026100506 adds the export's hub context, null on the rows already there.
+     *
+     * @return void
+     */
+    public function test_the_export_context_is_added(): void {
+        global $DB;
+        $this->resetAfterTest();
+        $dbman = $DB->get_manager();
+        $table = new \xmldb_table('local_evidencehub_export');
+        $field = new \xmldb_field('contextid');
+        $export = $this->getDataGenerator()->get_plugin_generator('local_evidencehub')->create_export([
+            'requestedby' => 2,
+            'templateid' => 1,
+            'contextid' => \context_system::instance()->id,
+        ]);
+        // As a 2026100506 site holds the table: no column.
+        $dbman->drop_field($table, $field);
+        $this->assertFalse($dbman->field_exists($table, $field));
+        set_config('version', 2026100506, 'local_evidencehub');
+
+        $this->assertTrue(xmldb_local_evidencehub_upgrade(2026100506));
+
+        $this->assertTrue($dbman->field_exists($table, $field));
+        $this->assertNull($DB->get_field('local_evidencehub_export', 'contextid', ['id' => $export->id]));
+        $this->assertFalse($DB->get_columns('local_evidencehub_export')['contextid']->not_null);
+        $this->assertEquals(2026100507, get_config('local_evidencehub', 'version'));
     }
 }

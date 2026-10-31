@@ -22,6 +22,7 @@ use core\output\templatable;
 use core_competency\api;
 use core_competency\user_evidence;
 use local_evidencehub\local\details;
+use local_evidencehub\local\dossier;
 use local_evidencehub\local\meta;
 use local_evidencehub\local\status;
 
@@ -139,12 +140,58 @@ class evidence_page implements renderable, templatable {
             $items[] = $item;
         }
 
+        $dossiers = $this->dossiers();
         return [
             'userid' => $this->userid,
             'canadd' => $canmanage,
             'hasitems' => !empty($items),
             'items' => $items,
+            'hasdossiers' => !empty($dossiers),
+            'dossiers' => $dossiers,
+            'actionurl' => (new \moodle_url('/local/evidencehub/evidence.php', ['userid' => $this->userid]))->out(false),
+            'sesskey' => sesskey(),
         ];
+    }
+
+    /**
+     * The dossiers issued about the worker (LGPD art. 18: whom their data was shared with), newest first.
+     *
+     * @return array List of [id, created, createdby, template, revoked, revokedon, canrevoke, revokelabel].
+     */
+    private function dossiers(): array {
+        $format = get_string('strftimedatetimeshort', 'core_langconfig');
+        $names = [];
+        $dossiers = [];
+        foreach (dossier::for_worker($this->userid) as $record) {
+            $creatorid = (int) $record->createdby;
+            if (!array_key_exists($creatorid, $names)) {
+                $creator = \core_user::get_user($creatorid);
+                $names[$creatorid] = $creator && !$creator->deleted ? fullname($creator) : '';
+            }
+            $templatecontext = $record->templatecontextid === null
+                ? null : \context::instance_by_id((int) $record->templatecontextid, IGNORE_MISSING);
+            $template = $record->templatename === null ? '' : format_string(
+                $record->templatename,
+                true,
+                ['context' => $templatecontext ?: \context_system::instance(), 'escape' => false]
+            );
+            $created = userdate((int) $record->timecreated, $format);
+            $revoked = (int) $record->revoked === 1;
+            $dossiers[] = [
+                'id' => (int) $record->id,
+                'created' => $created,
+                'createdby' => $names[$creatorid],
+                'template' => $template,
+                'revoked' => $revoked,
+                'revokedon' => $revoked && $record->timerevoked ? userdate((int) $record->timerevoked, $format) : '',
+                'canrevoke' => !$revoked && dossier::can_revoke($record),
+                'revokelabel' => get_string('dossierrevokelabel', 'local_evidencehub', (object) [
+                    'template' => $template,
+                    'created' => $created,
+                ]),
+            ];
+        }
+        return $dossiers;
     }
 
     /**

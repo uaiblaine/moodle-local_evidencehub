@@ -31,6 +31,9 @@
     * canadd - Whether the viewer may add evidence.
     * hasitems - Whether there is any evidence.
     * items - The evidence, see local_evidencehub/evidence_item.
+    * hasdossiers, dossiers - The dossiers issued about the worker: id, created, createdby, template, revoked,
+      revokedon, canrevoke, revokelabel.
+    * actionurl, sesskey - Where a revocation posts.
 
     Example context (json):
     {
@@ -69,7 +72,15 @@
                     }
                 ]
             }
-        ]
+        ],
+        "hasdossiers": true,
+        "dossiers": [
+            {"id": 5, "created": "29/10/26, 14:32", "createdby": "Carla Menezes", "template": "Electricians",
+             "revoked": false, "revokedon": "", "canrevoke": true,
+             "revokelabel": "Revoke the dossier for Electricians of 29/10/26, 14:32"}
+        ],
+        "actionurl": "https://example.com/local/evidencehub/evidence.php?userid=3",
+        "sesskey": "abc123"
     }
 }}
 <div class="local-evidencehub-evidence" data-region="local-evidencehub-evidence" data-userid="{{userid}}">
@@ -88,4 +99,48 @@
     {{^hasitems}}
     <p class="text-muted">{{#str}} noevidence, local_evidencehub {{/str}}</p>
     {{/hasitems}}
+
+    <section class="local-evidencehub-shared mt-4" aria-labelledby="local-evidencehub-shared-{{uniqid}}">
+        <h3 id="local-evidencehub-shared-{{uniqid}}" class="h5">{{#str}} shareddossiers, local_evidencehub {{/str}}</h3>
+        {{#hasdossiers}}
+        <table class="table generaltable local-evidencehub-shared-table">
+            <thead>
+                <tr>
+                    <th scope="col">{{#str}} shareddossierswhen, local_evidencehub {{/str}}</th>
+                    <th scope="col">{{#str}} shareddossiersby, local_evidencehub {{/str}}</th>
+                    <th scope="col">{{#str}} template, local_evidencehub {{/str}}</th>
+                    <th scope="col">{{#str}} status, local_evidencehub {{/str}}</th>
+                    <th scope="col"><span class="visually-hidden">{{#str}} dossierrevoke, local_evidencehub {{/str}}</span></th>
+                </tr>
+            </thead>
+            <tbody>
+                {{#dossiers}}
+                <tr data-dossierid="{{id}}">
+                    <td>{{created}}</td>
+                    <td>{{createdby}}</td>
+                    <td>{{template}}</td>
+                    <td>
+                        {{#revoked}}<span class="badge bg-danger text-white">{{#str}} dossierrevokedon, local_evidencehub, {{revokedon}} {{/str}}</span>{{/revoked}}
+                        {{^revoked}}<span class="badge bg-success text-white">{{#str}} dossiervalid, local_evidencehub {{/str}}</span>{{/revoked}}
+                    </td>
+                    <td>
+                        {{#canrevoke}}
+                        <form method="post" action="{{actionurl}}">
+                            <input type="hidden" name="sesskey" value="{{sesskey}}">
+                            <input type="hidden" name="action" value="revokedossier">
+                            <input type="hidden" name="dossierid" value="{{id}}">
+                            <button type="submit" class="btn btn-outline-danger btn-sm"
+                                aria-label="{{revokelabel}}">{{#str}} dossierrevoke, local_evidencehub {{/str}}</button>
+                        </form>
+                        {{/canrevoke}}
+                    </td>
+                </tr>
+                {{/dossiers}}
+            </tbody>
+        </table>
+        {{/hasdossiers}}
+        {{^hasdossiers}}
+        <p class="text-muted">{{#str}} shareddossiersnone, local_evidencehub {{/str}}</p>
+        {{/hasdossiers}}
+    </section>
 </div>

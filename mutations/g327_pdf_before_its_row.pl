@@ -1,0 +1,1 @@
+s/(\s*\$dossier->id = \$DB->insert_record\(dossier::TABLE, \$dossier\);\n\s*\$dossiers\[\] = \$dossier;)(\n\s*\$path = \$folder \. '\/' \. self::unique\(\$worker->fileid \. '_dossier\.pdf', \$names\);\n\s*\$zip->add_file_from_string\(\$path, \$pdf\);)/$2$1/;

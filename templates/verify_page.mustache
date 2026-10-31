@@ -1,0 +1,123 @@
+{{!
+    This file is part of Moodle - http://moodle.org/
+
+    Moodle is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    Moodle is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
+}}
+{{!
+    @template local_evidencehub/verify_page
+
+    The public verification page of a readiness dossier: its snapshot as issued, never an identifier,
+    a full name or a file.
+
+    Classes required for JS:
+    * none
+
+    Data attributes required for JS:
+    * none
+
+    Context variables required for this template:
+    * actionurl - Where the code form goes.
+    * notfound - A code was given and names no dossier (or is not a code at all).
+    * found - The code names a dossier; everything below belongs to it.
+    * name - The masked name, e.g. "J*** S***".
+    * template, issued - The learning plan template and the issue date.
+    * readiness, readinessclass - The verdict on the issue date and its badge classes.
+    * revoked, revokedon - Whether and when the dossier was revoked.
+    * pdfhash, code - The SHA-256 of the issued PDF, and the verification code.
+    * live - Whether each competency also shows its current status.
+    * competencies - name, statuslabel, badgeclass, expiry (as at issuance), and livelabel, livebadgeclass.
+
+    Example context (json):
+    {
+        "actionurl": "https://example.com/local/evidencehub/verify.php",
+        "notfound": false,
+        "found": true,
+        "name": "J*** S***",
+        "template": "Electricians",
+        "issued": "29 October 2026",
+        "readiness": "Ready",
+        "readinessclass": "bg-success text-white",
+        "revoked": false,
+        "revokedon": "",
+        "pdfhash": "4be1c0ffee",
+        "code": "9f3a7c2104bde71c9f3a7c2104bde71c",
+        "live": true,
+        "competencies": [
+            {"name": "Work at height", "statuslabel": "Compliant", "badgeclass": "bg-success text-white",
+             "expiry": "2027-11-16", "livelabel": "Due soon", "livebadgeclass": "bg-warning text-dark"}
+        ]
+    }
+}}
+<div class="local-evidencehub-verify" data-region="local-evidencehub-verify">
+    {{#notfound}}
+    <div class="alert alert-warning">{{#str}} verifynotfound, local_evidencehub {{/str}}</div>
+    {{/notfound}}
+    {{#found}}
+    {{#revoked}}
+    <div class="alert alert-danger local-evidencehub-verify-revoked">{{#str}} verifyrevoked, local_evidencehub, {{revokedon}} {{/str}}</div>
+    {{/revoked}}
+    {{^revoked}}
+    <div class="alert alert-success">{{#str}} verifyauthentic, local_evidencehub {{/str}}</div>
+    {{/revoked}}
+    <dl class="row local-evidencehub-verify-facts">
+        <dt class="col-sm-4">{{#str}} worker, local_evidencehub {{/str}}</dt>
+        <dd class="col-sm-8 local-evidencehub-verify-name">{{name}}</dd>
+        <dt class="col-sm-4">{{#str}} template, local_evidencehub {{/str}}</dt>
+        <dd class="col-sm-8">{{template}}</dd>
+        <dt class="col-sm-4">{{#str}} dossierissued, local_evidencehub {{/str}}</dt>
+        <dd class="col-sm-8">{{issued}}</dd>
+        <dt class="col-sm-4">{{#str}} dossierreadiness, local_evidencehub {{/str}}</dt>
+        <dd class="col-sm-8"><span class="badge {{readinessclass}}">{{readiness}}</span></dd>
+        <dt class="col-sm-4">{{#str}} verifycode, local_evidencehub {{/str}}</dt>
+        <dd class="col-sm-8 local-evidencehub-verify-hash">{{code}}</dd>
+        <dt class="col-sm-4">{{#str}} verifypdfhash, local_evidencehub {{/str}}</dt>
+        <dd class="col-sm-8 local-evidencehub-verify-hash">{{pdfhash}}</dd>
+    </dl>
+    <table class="table generaltable local-evidencehub-verify-table">
+        <thead>
+            <tr>
+                <th scope="col">{{#str}} competency, local_evidencehub {{/str}}</th>
+                <th scope="col">{{#str}} verifystatusatissue, local_evidencehub {{/str}}</th>
+                <th scope="col">{{#str}} effectiveexpiry, local_evidencehub {{/str}}</th>
+                {{#live}}
+                <th scope="col">{{#str}} verifystatusnow, local_evidencehub {{/str}}</th>
+                {{/live}}
+            </tr>
+        </thead>
+        <tbody>
+            {{#competencies}}
+            <tr>
+                <td>{{name}}</td>
+                <td><span class="badge {{badgeclass}}">{{statuslabel}}</span></td>
+                <td>{{expiry}}</td>
+                {{#live}}
+                <td><span class="badge {{livebadgeclass}}">{{livelabel}}</span></td>
+                {{/live}}
+            </tr>
+            {{/competencies}}
+        </tbody>
+    </table>
+    <p class="form-text">{{#str}} verifynote, local_evidencehub {{/str}}</p>
+    {{/found}}
+    <form method="get" action="{{actionurl}}" class="local-evidencehub-verify-form row g-2 align-items-end mt-3">
+        <div class="col-md-6">
+            <label for="local-evidencehub-verify-code-{{uniqid}}" class="form-label">{{#str}} verifycode, local_evidencehub {{/str}}</label>
+            <input type="text" id="local-evidencehub-verify-code-{{uniqid}}" name="code" class="form-control" maxlength="32"
+                autocomplete="off">
+        </div>
+        <div class="col-md-auto">
+            <button type="submit" class="btn btn-secondary">{{#str}} verifycheck, local_evidencehub {{/str}}</button>
+        </div>
+    </form>
+</div>

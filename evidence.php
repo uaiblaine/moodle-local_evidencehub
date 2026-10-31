@@ -58,6 +58,14 @@ if ($userid != $USER->id) {
     $PAGE->set_heading(fullname($user));
 }
 
+// A revocation from the "Shared dossiers" list, by the dossier's creator or an exporter on the site.
+if (optional_param('action', '', PARAM_ALPHA) === 'revokedossier') {
+    \local_evidencehub\local\dossier_export::require_post();
+    require_sesskey();
+    \local_evidencehub\local\dossier::revoke(required_param('dossierid', PARAM_INT), $userid);
+    redirect($PAGE->url, get_string('dossierrevoked', 'local_evidencehub'), null, \core\output\notification::NOTIFY_SUCCESS);
+}
+
 $page = new \local_evidencehub\output\evidence_page($userid);
 $PAGE->requires->js_call_amd('local_evidencehub/evidence_page', 'init');
 
