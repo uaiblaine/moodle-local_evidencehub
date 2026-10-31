@@ -154,4 +154,30 @@ final class hook_callbacks_test extends \advanced_testcase {
         details::save($this->missing, $this->details_data());
         $this->assertNull($this->prompt(hook_callbacks::PAGETYPE_LIST, $this->ctx()));
     }
+
+    /**
+     * Dispatching local_dimensions' hook through the manager yields the worker's pills; skipped without it.
+     *
+     * @return void
+     */
+    public function test_the_status_badges_hook_is_answered(): void {
+        $hookclass = '\\local_dimensions\\hook\\competency_status_badges';
+        if (!class_exists($hookclass)) {
+            $this->markTestSkipped('local_dimensions with the competency_status_badges hook is not installed.');
+        }
+        $generator = $this->getDataGenerator()->get_plugin_generator('core_competency');
+        $competency = $generator->create_competency(['competencyframeworkid' => $generator->create_framework()->get('id')]);
+        $this->getDataGenerator()->get_plugin_generator('local_evidencehub')->create_status([
+            'userid' => $this->worker->id,
+            'competencyid' => $competency->get('id'),
+            'status' => local\status::STATUS_DUE,
+            'effectiveexpiry' => 20270301,
+        ]);
+        $this->setUser($this->user_with(['moodle/competency:userevidenceview']));
+        $id = (int) $competency->get('id');
+
+        $hook = new $hookclass((int) $this->worker->id, [$id]);
+        \core\di::get(\core\hook\manager::class)->dispatch($hook);
+        $this->assertSame([['label' => 'Validity: Due soon, 2027-03-01', 'tone' => 'warning']], $hook->get_badges($id));
+    }
 }
