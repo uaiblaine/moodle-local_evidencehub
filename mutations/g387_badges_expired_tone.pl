@@ -1,0 +1,1 @@
+s/status::STATUS_CRITICAL, status::STATUS_EXPIRED => self::TONE_DANGER,/status::STATUS_CRITICAL => self::TONE_DANGER,/;

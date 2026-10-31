@@ -73,7 +73,8 @@ was resumed on a container that skipped the setup script: attach `moodle-dev` an
 
 ```
 version.php, db/access.php, db/install.php (seeds types), db/install.xml (7 tables)
-db/hooks.php, db/events.php   tool_lp prompt (footer hook); observers (classes/observer.php)
+db/hooks.php, db/events.php   tool_lp prompt (footer hook) and the local_dimensions pills
+                  (competency_status_badges -> local/validity_badges); observers (classes/observer.php)
 db/tasks.php      evaluate_validity (hourly), reconcile_validity (weekly), cleanup_dossier_exports (daily),
                   send_weekly_digest (hourly; the round opens Monday 07:00)
 db/messages.php   dossierready, validitydue, validityexpired, verificationrequested, weeklydigest
@@ -131,6 +132,10 @@ tests/generator/  writes rows directly (create_status() stays direct for the tas
 
 ## Architecture gotchas
 
+- **The family bridge is a listener, not a dependency**: `db/hooks.php` names
+  `\local_dimensions\hook\competency_status_badges`, a class that may not exist (core records the callback
+  unloaded), so nothing in `validity_badges` may reference a local_dimensions class; tones are plain strings.
+  A pair with no status row gets a pill only under an explicit policy, never under the built-in default.
 - **Dates are calendar days stored as `YYYYMMDD` integers** (`issuedate`, `expirydate`,
   `effectiveexpiry`): a certificate's date has no time of day, and a timestamp would move it
   across midnight with the timezone. Format with `local\meta::iso_date()`; compare as integers.

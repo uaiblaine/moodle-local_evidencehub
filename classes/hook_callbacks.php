@@ -80,4 +80,20 @@ final class hook_callbacks {
             'missing' => $missing,
         ]]);
     }
+
+    /**
+     * Answer local_dimensions' request for the validity pills of a worker's competencies.
+     *
+     * The pills are decided by {@see local\validity_badges::for_user()}; the hook class belongs to
+     * local_dimensions and is not required, so its tones are passed through as plain strings.
+     *
+     * @param \local_dimensions\hook\competency_status_badges $hook The hook.
+     * @return void
+     */
+    public static function competency_status_badges(\local_dimensions\hook\competency_status_badges $hook): void {
+        $badges = local\validity_badges::for_user($hook->get_userid(), $hook->get_competencyids());
+        foreach ($badges as $competencyid => $badge) {
+            $hook->add_badge((int) $competencyid, $badge['label'], $badge['tone']);
+        }
+    }
 }

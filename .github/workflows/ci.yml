@@ -39,3 +39,4 @@ jobs:
     with:
       runner: ${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && vars.CI_RUNNER || '' }}
       moodle-core-branch: MOODLE_503_STABLE
+      plugin-dependencies: uaiblaine/moodle-local_dimensions,main

@@ -8,6 +8,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- Stage S9, the family bridge (version 2026100509): a listener for `local_dimensions`' hook
+  `competency_status_badges` (`db/hooks.php`; neither plugin requires the other, and core records a callback for
+  an absent hook class without loading it). `local\validity_badges::for_user()` answers, for the current user,
+  the "Validity: ..." pill of each asked competency of a worker: nothing for a guest, with competencies disabled
+  or when the user cannot read the worker's evidence; "Restricted", without a date, for a pair decided by a
+  sensitive evidence the viewer may not see; the status and, for compliant, due, critical and expired, its
+  effective expiry; "Pending, no evidence" for a pair with no status row only under an explicit competency or
+  framework policy. CI installs `local_dimensions` (`plugin-dependencies`).
 - Stage S8: alerts and the readiness web service (version 2026100508). Four message providers:
   `validitydue` and `validityexpired` tell the worker when a pair's status enters due or critical, or
   expired, from an external observer of `validity_status_changed` (so only after every open transaction

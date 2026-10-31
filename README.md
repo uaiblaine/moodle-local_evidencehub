@@ -16,7 +16,8 @@ details beside it in tables of its own and never changes a core rating. It is de
 this release holds the data model, the capabilities, the privacy provider, the evidence details
 (entering, verifying and rejecting them), the validity engine with its policies, the hub with its
 readiness matrix and its inspection drawer, and the readiness dossiers with their public verification
-page.
+page, the alerts and the readiness web service, and the validity pills on the learner views of
+`local_dimensions`.
 
 
 Requirements
@@ -27,6 +28,8 @@ Requirements
   of core)
 - Optional: `tool_cohortroles` (part of core) to give mentors the user-context capabilities over
   the workers of their cohorts
+- Optional: `local_dimensions` (5.3) to show validity pills on its plan overview and competency
+  tracker; neither plugin requires the other
 
 
 Installation
@@ -335,9 +338,16 @@ needs, and it names no status or date. The pre-built service "Evidence hub readi
 and issues a token.
 
 
-Settings
---------
-
+**Validity pills in local_dimensions.** When `local_dimensions` is installed, its plan overview and its
+competency tracker show a pill beside each competency of the learner, such as "Validity: Due soon,
+2027-03-01". The pill reads the stored status, as the hub does, to whoever may read the learner's evidence
+(`moodle/competency:userevidenceview` in the learner's user context) and to the learner; anyone else, and a
+guest, sees none. A competency decided by a sensitive evidence reads "Validity: Restricted", with no date, to
+a viewer without `local/evidencehub:viewsensitive` over the learner. A competency with no status shows
+"Validity: Pending, no evidence" only when a policy of its own or of its framework applies: under the
+built-in default it shows nothing, so a site that has not set validity up sees no pill on every competency.
+The bridge is the `\local_dimensions\hook\competency_status_badges` hook; without `local_dimensions` it is
+never called.
 Site administration > Competencies > Readiness dossiers:
 
 - `local_evidencehub/includesensitivefiles` (off): include the files of sensitive evidence in dossiers,
