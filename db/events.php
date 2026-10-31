@@ -57,6 +57,16 @@ $observers = [
         'callback' => [\local_evidencehub\observer::class, 'details_changed'],
     ],
     [
+        'eventname' => '\local_evidencehub\event\evidence_details_updated',
+        'callback' => [\local_evidencehub\observer::class, 'details_updated'],
+    ],
+    [
+        'eventname' => '\local_evidencehub\event\validity_status_changed',
+        'callback' => [\local_evidencehub\observer::class, 'validity_status_changed'],
+        // After every open transaction commits: an alert never announces a change that rolls back.
+        'internal' => false,
+    ],
+    [
         'eventname' => '\local_evidencehub\event\evidence_verified',
         'callback' => [\local_evidencehub\observer::class, 'details_changed'],
     ],

@@ -285,6 +285,54 @@ rest of the competency history.
 - *Delete expired dossier exports* (`\local_evidencehub\task\cleanup_dossier_exports`, daily): deletes
   the prepared ZIPs past their retention, and expires exports left queued, running or failed for longer
   than that; the dossier records stay.
+- *Send the weekly evidence digest* (`\local_evidencehub\task\send_weekly_digest`, hourly): a round
+  opens each Monday at 07:00 in the site's timezone and sends each mentor one digest, at most 200 mentors
+  per run, so a large site spreads the round over the following runs.
+- *Send verification requests* (`\local_evidencehub\task\send_verification_request`, ad hoc): asks the
+  verifiers once an evidence's details entered the pending state.
+
+**Alerts.** Four notifications, each configurable under Site administration > General > Messaging >
+Notification settings, composed in the recipient's language and never sent to a deleted, suspended or
+unconfirmed user:
+
+- "Your evidence of a competency is due for renewal" (`messageprovider:validitydue`, popup and email):
+  to the worker, when a pair's status enters *Due soon* or *Due, critical* (each a new alert).
+- "Your evidence of a competency has expired" (`messageprovider:validityexpired`, popup and email): to
+  the worker, when a pair's status enters *Expired*.
+- "Evidence awaiting your verification" (`messageprovider:verificationrequested`, popup; email off by
+  default): when an evidence's details enter the pending state (entered, changed, or sent back to pending
+  by the owner's edit) and one of its competencies has a policy that requires verified evidence. It goes
+  to the holders of `local/evidencehub:verify` who also read the worker's evidence, through a role
+  assigned **in the worker's user context**; never to the worker; for an evidence of a sensitive type only
+  to those who also hold `local/evidencehub:viewsensitive` there.
+- "Weekly summary of the workers you follow" (`messageprovider:weeklydigest`, popup and email): to each
+  mentor, a user holding `local/evidencehub:receivealerts` and `moodle/competency:userevidenceview`
+  through roles assigned in a worker's user context. Per worker with something to report, the pairs
+  that are not compliant (due, critical, expired, awaiting verification, missing, or restricted) with
+  their status and expiry as the mentor may see them on the hub, and the count of compliant pairs, for
+  the plan templates the mentor may read (`moodle/competency:templateview`). A mentor with nothing to
+  report gets no message.
+
+Only roles assigned in the worker's user context count, the way `tool_cohortroles` assigns a mentor
+over a cohort's members: a role in the system or a category would alert every manager about every
+worker. Sites that verify centrally use the hub's lists and drawer instead.
+
+**Web service.** `local_evidencehub_get_readiness` (read, not available to AJAX) answers a gate system:
+for a learning plan template (`templateid`) and exactly one of a worker's `userid` or `useridnumber`
+(the user's ID number), it returns `ready` (no competency under a regulatory policy is unmet),
+`computed` (when the latest status read was computed) and, for each competency of the template, its
+`id`, `shortname`, `idnumber`, `status` (the effective code for the caller: -1 restricted, 0 missing,
+1 awaiting verification, 2 compliant, 3 due, 4 due and critical, 5 expired), `expiry` (YYYY-MM-DD) and
+`blocking`. The caller needs `local/evidencehub:view` in the template's context, the right to read the
+template, and `moodle/competency:userevidenceview` over the worker; a worker who cannot be found or read,
+or who has no active plan from the template, gives one and the same error, and so does an ID number for a
+caller who is not shown ID numbers in the template's context (the hub's identity-field rule). An unknown
+template reads like a template the caller cannot reach. A competency decided by a
+sensitive evidence shows status -1 and no expiry to a caller without `local/evidencehub:viewsensitive`,
+while `ready` stays the worker's real readiness, as a dossier states it: the verdict is what the gate
+needs, and it names no status or date. The pre-built service "Evidence hub readiness"
+(`local_evidencehub_readiness`) contains the function and is disabled until an administrator enables it
+and issues a token.
 
 
 Settings
@@ -305,6 +353,9 @@ Site administration > Competencies > Readiness dossiers:
 The notification "Readiness dossiers prepared in the background" (`messageprovider:dossierready`) can be
 configured under Site administration > General > Messaging > Notification settings.
 
+The weekly digest keeps its round and the last mentor handled in two plugin config values,
+`local_evidencehub/digestround` and `local_evidencehub/digestafter`, written by the task (no setting).
+
 
 Capabilities
 ------------
@@ -319,8 +370,9 @@ Capabilities
   competency framework or of one competency, in the framework's context.
 - `local/evidencehub:managetypes` (system; manager): manage the evidence types.
 - `local/evidencehub:exportdossier` (course category; manager): export readiness dossiers.
-- `local/evidencehub:receivealerts` (user; no archetype): be told when a worker's evidence is due,
-  expired or awaiting verification.
+- `local/evidencehub:receivealerts` (user; no archetype): together with
+  `moodle/competency:userevidenceview`, both through roles assigned in a worker's user context, receive
+  the weekly digest about that worker.
 
 The user-context capabilities follow core competencies: a role assigned in a worker's user
 context, typically through `tool_cohortroles`, reaches that worker.
@@ -364,6 +416,7 @@ export requests with the ZIPs still kept for them. A deletion request for a work
 export requests (the dossiers of those exports describe other workers and stay). As in core
 competencies, deleting an actor leaves the workers' rows, including the column naming the actor.
 The evidence and its files are core's and follow core's privacy provider.
+The alerts and digests are core notifications, exported and deleted by core's messaging privacy provider.
 
 
 Troubleshooting

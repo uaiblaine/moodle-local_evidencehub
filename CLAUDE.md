@@ -74,8 +74,10 @@ was resumed on a container that skipped the setup script: attach `moodle-dev` an
 ```
 version.php, db/access.php, db/install.php (seeds types), db/install.xml (7 tables)
 db/hooks.php, db/events.php   tool_lp prompt (footer hook); observers (classes/observer.php)
-db/tasks.php      evaluate_validity (hourly), reconcile_validity (weekly), cleanup_dossier_exports (daily)
-db/messages.php   dossierready (the background export's link, or its failure)
+db/tasks.php      evaluate_validity (hourly), reconcile_validity (weekly), cleanup_dossier_exports (daily),
+                  send_weekly_digest (hourly; the round opens Monday 07:00)
+db/messages.php   dossierready, validitydue, validityexpired, verificationrequested, weeklydigest
+db/services.php   local_evidencehub_get_readiness (classes/external/get_readiness), service disabled
 evidence.php      the worker's evidence page (renderable output/evidence_page, amd/src/evidence_page)
 policies.php      framework list / one framework's policies (output/policy_frameworks,
                   output/framework_policies, amd/src/policies); settings.php adds its admin entry
@@ -101,12 +103,15 @@ classes/local/    status, meta, audit, export: stored constants and their labels
                   dossier_builder (prepare as the requester, build into any archive_writer),
                   dossier_plan (value object), dossier_pdf (TCPDF page; barcode() is the test seam),
                   dossier_export (selection, thresholds, queue/stream, store, notify, servable_file, cleanup)
+                  alerts (immediate alerts, user-context holders, recipient's language), digest (mentors,
+                  their workers, the report over base_sql with the mentor's scope)
 classes/reportbuilder/ datasource validity, entities validity + evidence_details
 classes/form/     evidence (core evidence + details in one submit), verify, policy (dynamic forms)
 classes/event/    evidence_details_updated, evidence_verified, evidence_rejected,
                   validity_status_changed, validity_policy_updated, dossier_exported, dossier_revoked
 classes/task/     evaluate_validity, reconcile_validity, recompute_scope (ad hoc),
-                  build_dossier_export (ad hoc, as the requester), cleanup_dossier_exports
+                  build_dossier_export (ad hoc, as the requester), cleanup_dossier_exports,
+                  send_weekly_digest, send_verification_request (ad hoc, one queued per evidence)
 classes/privacy/  provider: worker rows in the worker's user context; actor columns kept
 tests/            privacy/provider_test, local/{types,constants,meta,details,policy,
                   validity_calculator,status_repository}_test, form/*, output/*, task/*,
@@ -196,6 +201,19 @@ tests/generator/  writes rows directly (create_status() stays direct for the tas
   (`recompute_or_queue()`); the tasks trace and skip a failing pair.
 - **The pill of a competency follows its deciding evidence**: a sensitive deciding evidence shows
   "Restricted" on every linked item to a viewer without `viewsensitive`.
+- **Alerts go to roles assigned in the worker's user context only** (`alerts::grants_sql()`, then
+  `has_capability()` to honour prohibitions): a system or category holder would be alerted about every
+  worker. The validity alerts run in an external observer (`internal => false`), so never for a change
+  that rolls back; verification requests go through an ad hoc task queued with `checkforexisting`,
+  because the form resets and saves in one transaction before it links the competency.
+- **Messages are composed in the recipient's language** (`alerts::in_language()`); a test fakes the
+  pt_br pack with a `langconfig.php` in `$CFG->dataroot/lang/pt_br`.
+- **PHPUnit on PostgreSQL wraps each test in a transaction**, so an external observer (the validity
+  alerts) never runs there: a test of them calls `preventResetByRollback()`. On MariaDB it runs in
+  every test that moves a pair into due, critical or expired, so a test asserting messages redirects
+  them and runs on both families.
+- **The readiness web service shows the effective status but returns the real readiness** (as the
+  dossier snapshot); every worker refusal is one error (`errorreadinessnotfound`).
 - **Templates print plain spellings**: `format_string(..., ['escape' => false])` into double stashes.
 - **"Today" is the site's calendar day** (`core_date::get_server_timezone_object()`), read from
   `\core\clock`, so tests freeze it with `mock_clock_with_frozen()`.

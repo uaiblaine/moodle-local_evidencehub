@@ -1,0 +1,1 @@
+s/if \(\$meta !== null && details::apply_edit_rule\(\$meta, \(int\) \$event->userid\)\) \{\n            alerts::request_verification\(\(int\) \$meta->id\);\n        \}/if (\$meta !== null) {\n            details::apply_edit_rule(\$meta, (int) \$event->userid);\n        }/;

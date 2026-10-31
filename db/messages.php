@@ -25,6 +25,34 @@
 defined('MOODLE_INTERNAL') || die();
 
 $messageproviders = [
+    // To the worker: their pair entered due or critical (each a new threshold).
+    'validitydue' => [
+        'defaults' => [
+            'popup' => MESSAGE_PERMITTED + MESSAGE_DEFAULT_ENABLED,
+            'email' => MESSAGE_PERMITTED + MESSAGE_DEFAULT_ENABLED,
+        ],
+    ],
+    // To the worker: their pair entered expired.
+    'validityexpired' => [
+        'defaults' => [
+            'popup' => MESSAGE_PERMITTED + MESSAGE_DEFAULT_ENABLED,
+            'email' => MESSAGE_PERMITTED + MESSAGE_DEFAULT_ENABLED,
+        ],
+    ],
+    // To the verifiers assigned in the worker's user context: an evidence awaits verification.
+    'verificationrequested' => [
+        'defaults' => [
+            'popup' => MESSAGE_PERMITTED + MESSAGE_DEFAULT_ENABLED,
+            'email' => MESSAGE_PERMITTED,
+        ],
+    ],
+    // To mentors (receivealerts and userevidenceview in a worker's user context): what is not compliant.
+    'weeklydigest' => [
+        'defaults' => [
+            'popup' => MESSAGE_PERMITTED + MESSAGE_DEFAULT_ENABLED,
+            'email' => MESSAGE_PERMITTED + MESSAGE_DEFAULT_ENABLED,
+        ],
+    ],
     // To the requester of a dossier export prepared in the background: the link to the ZIP, or the failure.
     'dossierready' => [
         'defaults' => [

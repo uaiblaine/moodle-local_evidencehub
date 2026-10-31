@@ -1,0 +1,1 @@
+s/        hub_access::require_view\(\$context\);\n//;

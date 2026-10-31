@@ -8,6 +8,27 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- Stage S8: alerts and the readiness web service (version 2026100508). Four message providers:
+  `validitydue` and `validityexpired` tell the worker when a pair's status enters due or critical, or
+  expired, from an external observer of `validity_status_changed` (so only after every open transaction
+  commits, and only on a real change); `verificationrequested` asks the holders of `verify` assigned in the
+  worker's user context (never the worker; for a sensitive type only those with `viewsensitive`) when an
+  evidence's details enter pending under a policy requiring verification, through the ad hoc task
+  `send_verification_request` (queued once per evidence, after the commit, so the form's reset and save
+  make one request); `weeklydigest` sends each mentor (`receivealerts` and `userevidenceview` through
+  roles in a worker's user context, e.g. `tool_cohortroles`) the pairs not compliant as the hub shows them
+  to that mentor, with the compliant count. The scheduled task `send_weekly_digest` runs hourly; a round
+  opens on Monday 07:00 site time, 200 mentors a run, resuming from `digestafter`, one digest per mentor
+  per round. Every message is composed in the recipient's language and skips deleted, suspended and
+  unconfirmed users. The web service `local_evidencehub_get_readiness` (template and exactly one of
+  `userid` or `useridnumber`) returns the worker's real readiness and each competency's effective status
+  and expiry for the caller, with a blocking flag; every worker refusal is one error. Pre-built service
+  "Evidence hub readiness", disabled by default. Security read: a mentor's workers are confirmed with
+  `has_capability()` for both capabilities and only templates the mentor reads are reported; the round's
+  resume point is reset before the round is written; an immediate alert goes out only while the stored
+  status (and, for due and critical, the expiry) is still the event's; one failing verification recipient
+  no longer stops the others; an unknown template and an ID number the caller is not shown read like a
+  template or worker out of reach.
 - Stage S7: readiness dossiers. "Export dossiers" on the hub's list and matrix (for holders of
   `exportdossier` and `view`) posts the ticked workers with the filter; the selection is cut by the
   filter's visible rows and `maxexportworkers`. `local\dossier_builder` checks everything as the

@@ -1,0 +1,1 @@
+s/                  JOIN \{user\} u ON u.id = ra.userid\n                 WHERE ra.contextid = :uchcontextid AND/                  JOIN {user} u ON u.id = ra.userid\n                 WHERE (ra.contextid = :uchcontextid OR ra.contextid > 0) AND/;
