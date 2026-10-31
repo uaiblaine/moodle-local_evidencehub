@@ -107,9 +107,13 @@ class hub_page implements renderable, templatable {
             ]),
             'hiddenworkers' => $kpis['hidden'] ? get_string('hubhiddenworkers', 'local_evidencehub', $kpis['hidden']) : '',
             'noworkers' => $kpis['workers'] === 0,
+            // The dossiers' own checks run again where they are built: this only offers the action.
+            'canexport' => has_capability('local/evidencehub:exportdossier', $this->context),
         ];
         if ($filter->view === hub_filter::VIEW_MATRIX) {
             $data['matrix'] = (new hub_matrix_page($this->context, $filter, $this->scope, $kpis))->export_for_template($output);
+            $data['matrix']['filterfields'] = $this->filter_fields($filter);
+            $data['matrix']['canexport'] = $data['canexport'];
             return $data;
         }
 
@@ -119,13 +123,7 @@ class hub_page implements renderable, templatable {
         $identity = $query->identity_fields();
         $data += [
             'islist' => true,
-            'downloadfields' => array_merge($this->hidden_fields($filter), [
-                ['name' => 'templateid', 'value' => $filter->templateid],
-                ['name' => 'cohortid', 'value' => $filter->cohortid],
-                ['name' => 'search', 'value' => $filter->search],
-                ['name' => 'suspended', 'value' => (int) $filter->suspended],
-                ['name' => 'perpage', 'value' => $filter->perpage],
-            ]),
+            'downloadfields' => $this->filter_fields($filter),
             'total' => $total,
             'columns' => $this->columns($filter, $identity),
             'rows' => $this->rows($rows, new hub_download($this->context, $query), $identity),
@@ -192,6 +190,22 @@ class hub_page implements renderable, templatable {
         $fields[] = ['name' => 'dir', 'value' => $filter->dir];
         $fields[] = ['name' => 'view', 'value' => $filter->view];
         return $fields;
+    }
+
+    /**
+     * Every field of the filter, for the forms that post the selection: the download and the dossiers.
+     *
+     * @param hub_filter $filter The filter.
+     * @return array List of [name, value].
+     */
+    private function filter_fields(hub_filter $filter): array {
+        return array_merge($this->hidden_fields($filter), [
+            ['name' => 'templateid', 'value' => $filter->templateid],
+            ['name' => 'cohortid', 'value' => $filter->cohortid],
+            ['name' => 'search', 'value' => $filter->search],
+            ['name' => 'suspended', 'value' => (int) $filter->suspended],
+            ['name' => 'perpage', 'value' => $filter->perpage],
+        ]);
     }
 
     /**

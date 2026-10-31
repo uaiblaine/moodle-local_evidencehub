@@ -24,6 +24,8 @@ use core_privacy\local\request\transform;
 use core_privacy\local\request\userlist;
 use core_privacy\local\request\writer;
 use local_evidencehub\local\audit;
+use local_evidencehub\local\dossier_export;
+use local_evidencehub\local\export;
 use local_evidencehub\local\hub_filter;
 use local_evidencehub\local\meta;
 use local_evidencehub\local\status;
@@ -34,7 +36,7 @@ use local_evidencehub\local\status;
  * Every row belongs to one worker and lives in that worker's user context, as core_competency's
  * user evidence does: the details of the worker's evidence, the materialised validity, the audit
  * trail of the details and the dossiers issued about the worker. A dossier export request lives
- * in the requester's user context.
+ * in the requester's user context, with the ZIP prepared for it (file area export, itemid the export).
  *
  * The user's last filter of the hub is a user preference, exported with the others.
  *
@@ -61,6 +63,7 @@ class provider implements
     #[\Override]
     public static function get_metadata(collection $collection): collection {
         $collection->add_subsystem_link('core_competency', [], 'privacy:metadata:core_competency');
+        $collection->add_subsystem_link('core_files', [], 'privacy:metadata:core_files');
 
         $collection->add_database_table('local_evidencehub_meta', [
             'userevidenceid' => 'privacy:metadata:local_evidencehub_meta:userevidenceid',
@@ -104,7 +107,9 @@ class provider implements
             'templateid' => 'privacy:metadata:local_evidencehub_dossier:templateid',
             'createdby' => 'privacy:metadata:local_evidencehub_dossier:createdby',
             'snapshot' => 'privacy:metadata:local_evidencehub_dossier:snapshot',
+            'pdfhash' => 'privacy:metadata:local_evidencehub_dossier:pdfhash',
             'revoked' => 'privacy:metadata:local_evidencehub_dossier:revoked',
+            'timerevoked' => 'privacy:metadata:local_evidencehub_dossier:timerevoked',
             'timecreated' => 'privacy:metadata:timecreated',
         ], 'privacy:metadata:local_evidencehub_dossier');
 
@@ -112,7 +117,9 @@ class provider implements
             'requestedby' => 'privacy:metadata:local_evidencehub_export:requestedby',
             'templateid' => 'privacy:metadata:local_evidencehub_export:templateid',
             'subjectcount' => 'privacy:metadata:local_evidencehub_export:subjectcount',
+            'status' => 'privacy:metadata:local_evidencehub_export:status',
             'timecreated' => 'privacy:metadata:timecreated',
+            'timeexpires' => 'privacy:metadata:local_evidencehub_export:timeexpires',
         ], 'privacy:metadata:local_evidencehub_export');
 
         $collection->add_user_preference(hub_filter::PREFERENCE, 'privacy:metadata:preference:hubfilter');
@@ -295,7 +302,7 @@ class provider implements
     }
 
     /**
-     * Delete every row about one worker, and the worker's own export requests.
+     * Delete every row about one worker, and the worker's own export requests and their ZIPs.
      *
      * @param int $userid The worker.
      * @return void
@@ -315,6 +322,10 @@ class provider implements
             ['userid' => $userid]
         );
         $DB->delete_records('local_evidencehub_export', ['requestedby' => $userid]);
+        $context = \context_user::instance($userid, IGNORE_MISSING);
+        if ($context) {
+            get_file_storage()->delete_area_files($context->id, 'local_evidencehub', dossier_export::FILEAREA);
+        }
     }
 
     /**
@@ -434,7 +445,9 @@ class provider implements
                 'template' => format_string($record->templatename ?? '', true, ['context' => \context_system::instance()]),
                 'createdbyyou' => transform::yesno((int) $record->createdby === $userid),
                 'snapshot' => json_decode($record->snapshot),
+                'pdfhash' => $record->pdfhash,
                 'revoked' => transform::yesno($record->revoked),
+                'timerevoked' => $record->timerevoked ? transform::datetime($record->timerevoked) : null,
                 'timecreated' => transform::datetime($record->timecreated),
             ]);
         }
@@ -475,7 +488,7 @@ class provider implements
     }
 
     /**
-     * The dossier export requests the user made.
+     * The dossier export requests the user made, each with the ZIP still kept for it.
      *
      * @param \context $context The user's own context.
      * @param int $userid The user.
@@ -484,18 +497,24 @@ class provider implements
     protected static function export_requests(\context $context, int $userid): void {
         global $DB;
         $entries = [];
+        $path = static::path(get_string('privacy:path:requests', 'local_evidencehub'));
         foreach ($DB->get_records('local_evidencehub_export', ['requestedby' => $userid], 'timecreated, id') as $record) {
             $entries[] = (object) [
                 'templateid' => (int) $record->templateid,
                 'subjectcount' => (int) $record->subjectcount,
+                'status' => export::label((int) $record->status),
                 'timecreated' => transform::datetime($record->timecreated),
+                'timeexpires' => $record->timeexpires ? transform::datetime($record->timeexpires) : null,
             ];
+            writer::with_context($context)->export_area_files(
+                array_merge($path, [(string) $record->id]),
+                'local_evidencehub',
+                dossier_export::FILEAREA,
+                (int) $record->id
+            );
         }
         if ($entries) {
-            writer::with_context($context)->export_data(
-                static::path(get_string('privacy:path:requests', 'local_evidencehub')),
-                (object) ['requests' => $entries]
-            );
+            writer::with_context($context)->export_data($path, (object) ['requests' => $entries]);
         }
     }
 

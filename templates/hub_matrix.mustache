@@ -29,7 +29,9 @@
     * data-action="inspect" on each cell's button, with data-userid, data-competencyid and data-title
 
     Context variables required for this template:
-    * contextid, actionurl, sesskey - Where the selection of workers posts (its action comes with the dossiers).
+    * contextid, actionurl, sesskey, filterfields (name, value) - Where the selection of workers posts, with the
+      filter it was made in.
+    * canexport - Whether the viewer may export dossiers here: the "Export dossiers" button.
     * total - The worker count, as text.
     * legend - label, badgeclass of each effective status.
     * columncount, columns - id, name, kind (the policy's tag), kindlabel of each competency.
@@ -42,6 +44,8 @@
         "contextid": 1,
         "actionurl": "https://example.com/local/evidencehub/index.php",
         "sesskey": "abc123",
+        "filterfields": [{"name": "templateid", "value": 5}, {"name": "view", "value": "matrix"}],
+        "canexport": true,
         "total": "2 workers",
         "legend": [
             {"label": "Compliant", "badgeclass": "bg-success text-white"},
@@ -79,6 +83,9 @@
     <form method="post" action="{{actionurl}}" class="local-evidencehub-matrix-form">
         <input type="hidden" name="contextid" value="{{contextid}}">
         <input type="hidden" name="sesskey" value="{{sesskey}}">
+        {{#filterfields}}
+        <input type="hidden" name="{{name}}" value="{{value}}">
+        {{/filterfields}}
         <p class="local-evidencehub-total">{{total}}</p>
         {{#hasrows}}
         <div class="local-evidencehub-matrix-scroll">
@@ -133,6 +140,13 @@
         </div>
         <p class="form-text">{{#str}} hubmatrixhelp, local_evidencehub {{/str}}</p>
         {{{pagingbar}}}
+        {{#canexport}}
+        <div class="d-flex flex-wrap gap-2 align-items-center">
+            <button type="submit" name="action" value="exportdossiers" class="btn btn-primary"
+                data-action="exportdossiers">{{#str}} dossierexport, local_evidencehub {{/str}}</button>
+            <span class="form-text">{{#str}} dossierexporthelp, local_evidencehub {{/str}}</span>
+        </div>
+        {{/canexport}}
         {{/hasrows}}
         {{^hasrows}}
         <p class="text-muted">{{#str}} hubmatrixnorows, local_evidencehub {{/str}}</p>

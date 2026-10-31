@@ -30,6 +30,7 @@ use core_privacy\local\request\approved_userlist;
 use core_privacy\local\request\userlist;
 use core_privacy\local\request\writer;
 use local_evidencehub\local\audit;
+use local_evidencehub\local\dossier_export;
 use local_evidencehub\local\hub_filter;
 use local_evidencehub\local\meta;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -190,7 +191,7 @@ final class provider_test extends \core_privacy\tests\provider_testcase {
             'local_evidencehub_meta',
             'local_evidencehub_status',
         ], $declared);
-        $this->assertSame(['core_competency'], $links);
+        $this->assertSame(['core_competency', 'core_files'], $links);
 
         // The two tables left out hold configuration only: no column refers to a user.
         foreach (['local_evidencehub_type', 'local_evidencehub_policy'] as $table) {
@@ -311,6 +312,38 @@ final class provider_test extends \core_privacy\tests\provider_testcase {
         $requests = writer::with_context($this->ctx('requester'))->get_data($this->path('privacy:path:requests'))->requests;
         $this->assertCount(1, $requests);
         $this->assertSame(2, $requests[0]->subjectcount);
+    }
+
+    /**
+     * The ZIP prepared for a requester is exported with their requests and deleted with their data; another
+     * requester's ZIP stays (the control).
+     *
+     * @return void
+     */
+    public function test_the_prepared_zip_is_exported_and_deleted(): void {
+        $path = make_request_directory() . '/zip';
+        file_put_contents($path, 'zip bytes');
+        $file = dossier_export::store($this->w['export'], $path);
+        $gen = $this->getDataGenerator()->get_plugin_generator('local_evidencehub');
+        $otherexport = $gen->create_export(['requestedby' => $this->w['other']->id, 'templateid' => 1]);
+        $otherfile = dossier_export::store($otherexport, $path);
+
+        $this->export_context_data_for_user((int) $this->w['requester']->id, $this->ctx('requester'), 'local_evidencehub');
+        $files = writer::with_context($this->ctx('requester'))->get_files(
+            $this->path('privacy:path:requests', (string) $this->w['export']->id)
+        );
+        $this->assertSame([$file->get_filename()], array_keys($files));
+        $requests = writer::with_context($this->ctx('requester'))->get_data($this->path('privacy:path:requests'))->requests;
+        $this->assertSame(get_string('export_done', 'local_evidencehub'), $requests[0]->status);
+
+        provider::delete_data_for_user(new approved_contextlist(
+            $this->w['requester'],
+            'local_evidencehub',
+            [$this->ctx('requester')->id]
+        ));
+        $fs = get_file_storage();
+        $this->assertFalse($fs->file_exists_by_hash($file->get_pathnamehash()));
+        $this->assertTrue($fs->file_exists_by_hash($otherfile->get_pathnamehash()));
     }
 
     /**

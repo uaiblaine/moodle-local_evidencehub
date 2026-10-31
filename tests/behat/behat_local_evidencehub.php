@@ -40,7 +40,8 @@ class behat_local_evidencehub extends behat_base {
     /**
      * The URL of a page about one thing: "Evidence" takes a username, "Policies" a framework's idnumber,
      * "Hub" a site-level plan template's short name (every status shown), "Matrix" likewise, the matrix
-     * view at 100 workers a page.
+     * view at 100 workers a page, "Dossier verification" a username: the public page of the latest
+     * dossier issued about that user.
      *
      * @param string $type The page type.
      * @param string $identifier The username, the framework's idnumber or the template's short name.
@@ -67,6 +68,13 @@ class behat_local_evidencehub extends behat_base {
                 'statusfilter' => 1,
                 'view' => 'matrix',
                 'perpage' => 100,
+            ]),
+            'dossier verification' => new moodle_url('/local/evidencehub/verify.php', [
+                'code' => $DB->get_field_sql(
+                    'SELECT code FROM {local_evidencehub_dossier} WHERE userid = :userid ORDER BY id DESC',
+                    ['userid' => $this->get_user_id_by_identifier($identifier)],
+                    IGNORE_MULTIPLE
+                ),
             ]),
             default => throw new Exception('Unrecognised local_evidencehub page type "' . $type . '."'),
         };

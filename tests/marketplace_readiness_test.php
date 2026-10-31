@@ -28,7 +28,7 @@ use PHPUnit\Framework\Attributes\CoversNothing;
  * plugins: only COMPONENT and the core write map change.
  *
  * One more thing changes here, as in local_dictionaries: the settings check also accepts a
- * settings.php that stores no setting at all and only adds an admin page, which is this plugin's.
+ * settings.php that stores no setting at all and only adds an admin page.
  *
  * @package    local_evidencehub
  * @copyright  2026 Anderson Blaine

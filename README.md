@@ -15,7 +15,8 @@ The evidence itself stays core's (`competency_userevidence` and its files): the 
 details beside it in tables of its own and never changes a core rating. It is developed in stages;
 this release holds the data model, the capabilities, the privacy provider, the evidence details
 (entering, verifying and rejecting them), the validity engine with its policies, the hub with its
-readiness matrix and its inspection drawer; the dossiers come next.
+readiness matrix and its inspection drawer, and the readiness dossiers with their public verification
+page.
 
 
 Requirements
@@ -168,7 +169,7 @@ pair's inspection drawer. The status chips keep the workers with at least one pa
 statuses, whose rows still show every competency; the rows sort by name or, by default, most urgent
 first (the earliest last valid day among the worker's pairs not compliant), 25, 50 or 100 workers a
 page. The first column, with the worker's name, the identity fields the page shows and a checkbox
-selecting the worker (for the dossiers, which come next), stays in place while the table scrolls
+selecting the worker (for the dossiers), stays in place while the table scrolls
 sideways. The matrix
 reads the same pairs, access rules and restriction as the list, and its view is kept with the rest
 of the filter.
@@ -196,6 +197,65 @@ template requires the competency and the viewer may read the plan), and
 latest one copied, which on save is linked to the competency through core and recomputes the
 pair. Earlier evidence is never rewritten: a recycling adds a record to the timeline.
 
+**Readiness dossiers.** A holder of `local/evidencehub:exportdossier` and `local/evidencehub:view` in
+the hub's context sees "Export dossiers" under the list and the matrix. It exports one dossier per worker
+of the ticked rows (the list's pairs give their workers), checked on the server against the filter's
+rows as the requester sees them: a worker outside them is dropped, and a selection of more workers than
+`maxexportworkers` is refused. Each dossier is built as the requester: the hub's capabilities in its
+context, the template offered there, and core's `moodle/competency:userevidenceview` in each worker's
+user context. A worker who fails a check (or no longer has an active plan from the template) is left
+out and listed in the manifest as "not available", with no reason.
+
+The ZIP holds `manifest.csv` (the path, size and SHA-256 of every file, and the workers left out) and a
+folder per worker, `<identifier>_<last name>-<first name>/`, with:
+
+- `<identifier>_dossier.pdf`: one page with the site's name and logo, the worker's full name and
+  identifier, the template, the issue date, a table of the template's competencies (status as the
+  requester sees it, type of the deciding evidence, issue and expiry dates, issuer, verification), the
+  readiness on the issue date (ready; not ready when a competency under a regulatory policy is not
+  compliant, due or critical; at risk when only technical or behavioural ones are), and a QR code to the
+  verification page with the code printed beside it;
+- the files of the evidence that decides each competency, named
+  `<identifier>_<competency ID number>_<expiry YYYY-MM-DD or never>_<original name>`, with a counter on a
+  clash.
+
+**Sensitive files stay out by default.** The files of an evidence of a sensitive type are never in a
+dossier unless the setting `includesensitivefiles` is on **and** the requester holds
+`local/evidencehub:viewsensitive` in the worker's user context; its PDF row shows its type and validity
+only to a requester who may see it, "Restricted" otherwise. Note that core serves an evidence's files to
+anyone holding `moodle/competency:userevidenceview` over the worker: on this site that capability is
+effectively access to health data, and should be granted with that in mind.
+
+The identifier is the user's ID number, or a custom profile field of the text type chosen in
+`identifierfield` (a national identification number, for example); a worker without a value is "u" and
+the user id. It is printed in the PDF and the file names only, never on the verification page.
+
+An export of at most `syncmaxworkers` workers whose files weigh at most `syncmaxbytes` downloads at once
+and nothing is kept on the site. A larger one is prepared in the background by an ad hoc task running
+as the requester, stored in the requester's user context, and announced by a notification ("Readiness
+dossiers prepared in the background") with the link; only the requester can download it, for
+`exportretentiondays` days, while they still hold `local/evidencehub:exportdossier` and
+`local/evidencehub:view` in the hub's context the export was made in, and still read the evidence of every
+worker it holds a dossier about. A failure is notified too. In `manifest.csv`, a cell starting with `=`,
+`+`, `-`, `@`, a tab or a carriage return gets a leading single quote, so a spreadsheet never reads it as a
+formula.
+
+**The verification page** (`/local/evidencehub/verify.php?code=<code>`) is public on purpose: it never asks
+anyone to log in, so it works on a site that forces login and for a contractor without an account, and it
+tells search engines not to index it. The code is 128 random bits; anything else reads "not found", as an
+unknown code does. The page shows the dossier as issued: the masked name ("J*** S***", the first letter of
+each part of the name), the template, the issue date, each competency's status and expiry on that date
+("Restricted", with no date, for one decided by evidence of a sensitive type, whoever issued the dossier),
+the readiness on that date (the worker's real one: certifying it is what a dossier is for), the SHA-256 of the issued PDF (to compare with the file a contractor holds), and "revoked"
+when it was. It never shows the identifier, the full name or a file, and it logs nothing. With
+`verifylive` on, it also shows each competency's status today, read with no rights at all: a competency
+decided by sensitive evidence reads "Restricted".
+
+**Shared dossiers.** The worker's evidence page lists every dossier issued about them: when, by whom, for
+which template, and whether it was revoked. The dossier's creator, or a holder of
+`local/evidencehub:exportdossier` in the system context, can revoke it there; its verification page then
+says so.
+
 **Custom reports.** The report builder datasource "Competency validity" (one row per stored status,
 with the deciding evidence, the worker and the competency) is offered to holders of
 `local/evidencehub:view` in the system context. Its rows follow the hub's rules for the user the
@@ -220,6 +280,30 @@ rest of the competency history.
   night): recomputes every pair that has a linked evidence, a status or a proficient rating that
   counts, healing whatever a missed event left behind.
 - *Recompute validity after a policy change* (`\local_evidencehub\task\recompute_scope`, ad hoc).
+- *Prepare readiness dossiers* (`\local_evidencehub\task\build_dossier_export`, ad hoc, run as the
+  requester).
+- *Delete expired dossier exports* (`\local_evidencehub\task\cleanup_dossier_exports`, daily): deletes
+  the prepared ZIPs past their retention, and expires exports left queued, running or failed for longer
+  than that; the dossier records stay.
+
+
+Settings
+--------
+
+Site administration > Competencies > Readiness dossiers:
+
+- `local_evidencehub/includesensitivefiles` (off): include the files of sensitive evidence in dossiers,
+  for requesters who also hold `local/evidencehub:viewsensitive`.
+- `local_evidencehub/identifierfield` (ID number): the identifier in the PDF and the file names, the ID
+  number or a custom profile field of the text type.
+- `local_evidencehub/syncmaxworkers` (10) and `local_evidencehub/syncmaxbytes` (104857600, 100 MB): up to
+  these, an export downloads at once; above either, it is prepared in the background.
+- `local_evidencehub/maxexportworkers` (500): the most workers one export may name.
+- `local_evidencehub/exportretentiondays` (7): days a prepared ZIP is kept.
+- `local_evidencehub/verifylive` (off): show each competency's current status on the verification page.
+
+The notification "Readiness dossiers prepared in the background" (`messageprovider:dossierready`) can be
+configured under Site administration > General > Messaging > Notification settings.
 
 
 Capabilities
@@ -259,9 +343,14 @@ Data stored
 - `local_evidencehub_audit`: an append-only trail of what happened to each evidence's details, who
   acted and their note. Kept beyond the log store's lifetime, because compliance audits ask for it.
 - `local_evidencehub_dossier`: each readiness dossier issued about a worker: its verification code,
-  the plan template, who issued it, a snapshot of what it states, and whether it was revoked.
-- `local_evidencehub_export`: each dossier export request: who asked, for which template, how many
-  workers.
+  the plan template, who issued it, a snapshot of what it states (the masked name, the template, the
+  issue date, each competency's status and expiry, the readiness: no identifier, full name or file),
+  the SHA-256 of its PDF, and whether and when it was revoked. Kept for good, because it backs the
+  verification page; deleted with the worker's data.
+- `local_evidencehub_export`: each dossier export request: who asked, in which hub context, for which
+  template, how many workers, its state and when its ZIP expires. The ZIP of an export prepared in the background is a
+  file in the requester's user context (component `local_evidencehub`, file area `export`), deleted after
+  `exportretentiondays` days or with the requester's data.
 
 The user preference `local_evidencehub_hubfilter` keeps the last filter a user applied on the hub
 (template, cohort, statuses, search, sort, page size); a data request exports it. The hub's counts
@@ -271,7 +360,7 @@ names; a filter with a search is counted every time and never cached.
 A data request exports, in the worker's user context, the details of the worker's evidence, the
 trail, the dossiers about the worker and the validity of each competency; an actor (a verifier, a
 dossier issuer) also finds the rows they acted on in each worker's context, and a requester their
-export requests. A deletion request for a worker deletes every row about that worker and their
+export requests with the ZIPs still kept for them. A deletion request for a worker deletes every row about that worker and their
 export requests (the dossiers of those exports describe other workers and stay). As in core
 competencies, deleting an actor leaves the workers' rows, including the column naming the actor.
 The evidence and its files are core's and follow core's privacy provider.

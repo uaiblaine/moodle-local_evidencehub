@@ -8,6 +8,25 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- Stage S7: readiness dossiers. "Export dossiers" on the hub's list and matrix (for holders of
+  `exportdossier` and `view`) posts the ticked workers with the filter; the selection is cut by the
+  filter's visible rows and `maxexportworkers`. `local\dossier_builder` checks everything as the
+  requester and writes, into any `archive_writer`, a folder per worker (a TCPDF page with a QR code to the
+  verification page, and the deciding evidence's files, read in one statement over `{files}`) and
+  `manifest.csv` with every file's SHA-256 and the workers left out; sensitive files only with
+  `includesensitivefiles` and `viewsensitive` (D7); the identifier is the ID number or a text profile
+  field (D8). Up to `syncmaxworkers` workers and `syncmaxbytes` the ZIP streams; above, the ad hoc task
+  `build_dossier_export` runs as the requester, stores the ZIP in their user context for
+  `exportretentiondays` days and sends the `dossierready` notification; `cleanup_dossier_exports`
+  (daily) deletes expired ZIPs (D9). Each dossier stores a row with its code, PDF hash and a snapshot
+  without identifier or full name; the public `verify.php` shows that snapshot, the revocation and,
+  with `verifylive`, today's status (D10). The worker's evidence page lists the shared dossiers, which
+  their creator or a site exporter can revoke (POST only, one conditional update). The snapshot always
+  masks a competency decided by sensitive evidence; the export row records its hub context
+  (`contextid`, upgrade step 2026100507), where a download re-checks the rights, with every worker's
+  read access; manifest cells never start a formula; the task marks the export done inside its
+  transaction and the cleanup also expires exports left behind. Events `dossier_exported` and `dossier_revoked`; the
+  privacy provider exports and deletes the `export` file area. Seven settings on a new admin page.
 - Stage S6: the readiness matrix. The hub has a list and a matrix tab (`view=list|matrix`, part of the
   validated filter and its stored preference). The matrix shows one row per worker and one column per
   competency of the template, in the template's order, each heading with its policy kind's tag (REG,
@@ -19,8 +38,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   no status chip narrows the rows, and runs one count statement otherwise. The table has a fixed layout
   and a sticky worker column, and is rendered in full by the server; a Behat step measures the page's
   layout shift on 200 workers by 25 competencies, seeded by a bulk generator entity (`matrix seeds`).
-  Each row's checkbox posts the worker's id as `workers[]` (one dossier per worker); the server-side
-  handling of `workers[]`, and the matrix form's action, come with S7.
+  Each row's checkbox posts the worker's id as `workers[]` (one dossier per worker).
 - Stage S5: the inspection drawer. Each row of the hub's grid opens a side sheet (a `core/modal`
   with its own template) for one worker and competency, its body a fragment
   (`local_evidencehub_output_fragment_pair()`) that checks the context, `local/evidencehub:view`,

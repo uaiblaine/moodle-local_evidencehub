@@ -43,4 +43,13 @@ $tasks = [
         'month' => '*',
         'dayofweek' => '0',
     ],
+    [
+        'classname' => \local_evidencehub\task\cleanup_dossier_exports::class,
+        'blocking' => 0,
+        'minute' => '29',
+        'hour' => '2',
+        'day' => '*',
+        'month' => '*',
+        'dayofweek' => '*',
+    ],
 ];

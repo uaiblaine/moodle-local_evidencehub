@@ -1,0 +1,1 @@
+s/'verifyurl' => \(new \\moodle_url\('\/local\/evidencehub\/verify\.php', \['code' => \$code\]\)\)/'verifyurl' => (new \\moodle_url('\/local\/evidencehub\/verify.php', ['code' => dossier::new_code()]))/;

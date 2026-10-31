@@ -1,0 +1,134 @@
+<?php
+// This file is part of Moodle - http://moodle.org/
+//
+// Moodle is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// Moodle is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
+
+namespace local_evidencehub\output;
+
+use core\output\renderable;
+use core\output\renderer_base;
+use core\output\templatable;
+use local_evidencehub\local\dossier;
+use local_evidencehub\local\meta;
+use local_evidencehub\local\status;
+use local_evidencehub\local\status_repository;
+
+/**
+ * The public verification page of one dossier: its snapshot as issued, the revocation and the PDF's hash.
+ *
+ * Reads the snapshot only, which holds the masked name and no identifier, full name or file (D8). With
+ * verifylive on (D10) it adds each competency's current status, computed with no viewer rights: a pair
+ * decided by a sensitive evidence reads "Restricted".
+ *
+ * @package    local_evidencehub
+ * @copyright  2026 Anderson Blaine
+ * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
+ */
+class verify_page implements renderable, templatable {
+    /**
+     * The page of a code.
+     *
+     * @param \stdClass|null $dossier The dossier the code names, or null when it names none.
+     * @param bool $searched Whether a code was given at all.
+     * @param bool $live Whether to add the current status of each competency.
+     */
+    public function __construct(
+        /** @var \stdClass|null The dossier. */
+        private readonly ?\stdClass $dossier,
+        /** @var bool Whether a code was given. */
+        private readonly bool $searched,
+        /** @var bool Whether to add the current status. */
+        private readonly bool $live,
+    ) {
+    }
+
+    /**
+     * The template context.
+     *
+     * @param renderer_base $output The renderer.
+     * @return array The context of templates/verify_page.mustache.
+     */
+    #[\Override]
+    public function export_for_template(renderer_base $output): array {
+        $data = [
+            'actionurl' => (new \moodle_url('/local/evidencehub/verify.php'))->out(false),
+            'notfound' => $this->searched && $this->dossier === null,
+            'found' => $this->dossier !== null,
+        ];
+        if ($this->dossier === null) {
+            return $data;
+        }
+        $snapshot = json_decode($this->dossier->snapshot) ?: new \stdClass();
+        $current = $this->live ? $this->current((int) $this->dossier->userid, $snapshot->competencies ?? []) : [];
+        $competencies = [];
+        foreach ($snapshot->competencies ?? [] as $competency) {
+            $code = (int) $competency->status;
+            $item = [
+                'name' => (string) $competency->name,
+                'statuslabel' => status::effective_label($code),
+                'badgeclass' => status::effective_badge_class($code),
+                'expiry' => $competency->expiry === null ? '' : meta::iso_date((int) $competency->expiry),
+            ];
+            if ($this->live) {
+                $now = $current[(int) $competency->id] ?? status::EFFECTIVE_MISSING;
+                $item['livelabel'] = status::effective_label($now);
+                $item['livebadgeclass'] = status::effective_badge_class($now);
+            }
+            $competencies[] = $item;
+        }
+        $readiness = (string) ($snapshot->readiness ?? dossier::READINESS_NOTREADY);
+        $format = get_string('strftimedate', 'core_langconfig');
+        return $data + [
+            'name' => (string) ($snapshot->name ?? ''),
+            'template' => (string) ($snapshot->template ?? ''),
+            'issued' => userdate((int) ($snapshot->issued ?? $this->dossier->timecreated), $format),
+            'readiness' => dossier::readiness_label($readiness),
+            'readinessclass' => dossier::readiness_badge_class($readiness),
+            'revoked' => (int) $this->dossier->revoked === 1,
+            'revokedon' => $this->dossier->timerevoked ? userdate((int) $this->dossier->timerevoked, $format) : '',
+            'pdfhash' => (string) $this->dossier->pdfhash,
+            'code' => (string) $this->dossier->code,
+            'live' => $this->live,
+            'competencies' => $competencies,
+        ];
+    }
+
+    /**
+     * The current effective status of each competency of the snapshot, for no viewer in particular.
+     *
+     * @param int $userid The worker.
+     * @param array $competencies The snapshot's competencies.
+     * @return array Competency id => effective status code; a competency without a row is missing.
+     */
+    private function current(int $userid, array $competencies): array {
+        global $DB;
+        $ids = array_map(fn(\stdClass $competency): int => (int) $competency->id, $competencies);
+        if (!$ids) {
+            return [];
+        }
+        [$insql, $params] = $DB->get_in_or_equal($ids, SQL_PARAMS_NAMED, 'vfc');
+        $rows = $DB->get_records_select(
+            status_repository::TABLE,
+            "userid = :userid AND competencyid $insql",
+            $params + ['userid' => $userid],
+            '',
+            'id, competencyid, status, issensitive'
+        );
+        $current = [];
+        foreach ($rows as $row) {
+            $current[(int) $row->competencyid] = (int) $row->issensitive === 1 ? status::EFFECTIVE_RESTRICTED : (int) $row->status;
+        }
+        return $current;
+    }
+}

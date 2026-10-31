@@ -18,7 +18,7 @@
  * Admin tree entries.
  *
  * Both pages do their own checks, the policies page in each framework's context, so the entries
- * name the plugin's capabilities rather than moodle/site:config.
+ * name the plugin's capabilities rather than moodle/site:config. The dossier settings are the site's.
  *
  * @package    local_evidencehub
  * @copyright  2026 Anderson Blaine
@@ -40,3 +40,58 @@ $ADMIN->add('competencies', new admin_externalpage(
     new moodle_url('/local/evidencehub/index.php'),
     'local/evidencehub:view'
 ));
+
+if ($hassiteconfig) {
+    $settings = new admin_settingpage('local_evidencehub', new lang_string('dossiersettings', 'local_evidencehub'));
+    $ADMIN->add('competencies', $settings);
+    if ($ADMIN->fulltree) {
+        $settings->add(new admin_setting_configcheckbox(
+            'local_evidencehub/includesensitivefiles',
+            new lang_string('includesensitivefiles', 'local_evidencehub'),
+            new lang_string('includesensitivefiles_desc', 'local_evidencehub'),
+            0
+        ));
+        // The choices are read when the page shows them, never while settings.php loads (a fresh install included).
+        $settings->add(new admin_setting_configselect(
+            'local_evidencehub/identifierfield',
+            new lang_string('identifierfield', 'local_evidencehub'),
+            new lang_string('identifierfield_desc', 'local_evidencehub'),
+            \local_evidencehub\local\dossier_config::IDENTIFIER_IDNUMBER,
+            [\local_evidencehub\local\dossier_config::class, 'identifier_choices']
+        ));
+        $settings->add(new admin_setting_configtext(
+            'local_evidencehub/syncmaxworkers',
+            new lang_string('syncmaxworkers', 'local_evidencehub'),
+            new lang_string('syncmaxworkers_desc', 'local_evidencehub'),
+            \local_evidencehub\local\dossier_config::DEFAULT_SYNCMAXWORKERS,
+            PARAM_INT
+        ));
+        $settings->add(new admin_setting_configtext(
+            'local_evidencehub/syncmaxbytes',
+            new lang_string('syncmaxbytes', 'local_evidencehub'),
+            new lang_string('syncmaxbytes_desc', 'local_evidencehub'),
+            \local_evidencehub\local\dossier_config::DEFAULT_SYNCMAXBYTES,
+            PARAM_INT
+        ));
+        $settings->add(new admin_setting_configtext(
+            'local_evidencehub/maxexportworkers',
+            new lang_string('maxexportworkers', 'local_evidencehub'),
+            new lang_string('maxexportworkers_desc', 'local_evidencehub'),
+            \local_evidencehub\local\dossier_config::DEFAULT_MAXEXPORTWORKERS,
+            PARAM_INT
+        ));
+        $settings->add(new admin_setting_configtext(
+            'local_evidencehub/exportretentiondays',
+            new lang_string('exportretentiondays', 'local_evidencehub'),
+            new lang_string('exportretentiondays_desc', 'local_evidencehub'),
+            \local_evidencehub\local\dossier_config::DEFAULT_RETENTIONDAYS,
+            PARAM_INT
+        ));
+        $settings->add(new admin_setting_configcheckbox(
+            'local_evidencehub/verifylive',
+            new lang_string('verifylive', 'local_evidencehub'),
+            new lang_string('verifylive_desc', 'local_evidencehub'),
+            0
+        ));
+    }
+}

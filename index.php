@@ -28,6 +28,8 @@
 require_once(__DIR__ . '/../../config.php');
 
 use local_evidencehub\event\hub_downloaded;
+use local_evidencehub\local\dossier_builder;
+use local_evidencehub\local\dossier_export;
 use local_evidencehub\local\hub_access;
 use local_evidencehub\local\hub_download;
 use local_evidencehub\local\hub_filter;
@@ -67,6 +69,30 @@ if (!\core_competency\api::is_enabled()) {
 $fromrequest = hub_filter::has_request_params();
 $filter = $fromrequest ? hub_filter::from_request($context) : hub_filter::from_preference($context);
 $scope = hub_scope::for_user();
+
+// The list's form posts its download format too: the dossiers' button wins.
+if (optional_param('action', '', PARAM_ALPHA) === 'exportdossiers' && $filter !== null) {
+    dossier_export::require_post();
+    require_sesskey();
+    dossier_builder::require_export($context);
+    $returnurl = (new \local_evidencehub\output\hub_page($context, $filter, $scope))->url($filter);
+    try {
+        $userids = dossier_export::selection($context, $filter, $scope, dossier_export::posted_workers());
+    } catch (moodle_exception $e) {
+        redirect($returnurl, $e->getMessage(), null, \core\output\notification::NOTIFY_ERROR);
+    }
+    $plan = dossier_export::start($context, $filter->templateid, $userids);
+    if ($plan === null) {
+        redirect(
+            $returnurl,
+            get_string('dossierqueued', 'local_evidencehub', count($userids)),
+            null,
+            \core\output\notification::NOTIFY_SUCCESS
+        );
+    }
+    dossier_export::stream($context, $filter->templateid, $plan);
+    die();
+}
 
 $format = optional_param('download', '', PARAM_ALPHANUMEXT);
 if ($format !== '' && $filter !== null) {

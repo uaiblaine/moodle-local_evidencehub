@@ -49,5 +49,16 @@ function xmldb_local_evidencehub_upgrade($oldversion) {
         upgrade_plugin_savepoint(true, 2026100504, 'local', 'evidencehub');
     }
 
+    if ($oldversion < 2026100507) {
+        // The hub's context an export was authorised in: a download re-checks the requester's rights there.
+        // Older rows keep null, and their download falls back to the template's context.
+        $table = new xmldb_table('local_evidencehub_export');
+        $field = new xmldb_field('contextid', XMLDB_TYPE_INTEGER, '10', null, null, null, null, 'templateid');
+        if (!$dbman->field_exists($table, $field)) {
+            $dbman->add_field($table, $field);
+        }
+        upgrade_plugin_savepoint(true, 2026100507, 'local', 'evidencehub');
+    }
+
     return true;
 }
