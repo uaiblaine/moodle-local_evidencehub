@@ -20,6 +20,64 @@ page, the alerts and the readiness web service, and the validity pills on the le
 `local_dimensions`.
 
 
+Screenshots
+-----------
+
+*Moodle 5.3 with the Dimensions theme and demo data: one category, a "Warehouse operator readiness"
+template of eight safety competencies, and 24 workers. The manager has no
+`local/evidencehub:viewsensitive`; the HR reviewer has it.*
+
+### The evidence hub
+
+![The evidence hub for one template: KPI cards per status, the readiness share, status chips and the grid of pairs that need attention](docs/screenshots/hub.png)
+
+One template at a time, opened from its category. The cards count the pairs in each status, and
+"Ready" counts the workers whose every pair is compliant or due. The grid starts on
+**Needs attention**. The manager sees the occupational medical exams as "Restricted", because the
+type that decides them is sensitive.
+
+### The readiness matrix
+
+![The readiness matrix: one row per worker, one column per competency, cells coloured by status with the days left or overdue](docs/screenshots/matrix.png)
+
+The same filter, one row per worker. A cell shows the days left (or, negative, overdue) when a date
+matters, and a padlock when the pair is restricted to this viewer. Each column is headed by the
+kind of the competency's validity policy (REG, TEC, BEH).
+
+### The inspection drawer
+
+![The inspection drawer for one pair: status, the evidence in force with its details and verification, the policy that applies and the history](docs/screenshots/drawer.png)
+
+"Inspect" opens one pair: the evidence that decides it, the policy that applies and where it was set,
+the history of earlier evidence, and the audit trail. A reviewer verifies or rejects from here.
+
+### The worker's evidence page
+
+![A worker's evidence page: each evidence with its type, verification state, dates, issuer, hours and authenticity code, and the status of each linked competency](docs/screenshots/evidence-page.png)
+
+### Readiness dossier and its verification page
+
+![The first page of a readiness dossier PDF: the worker, the template, each competency's status and validity, and a QR code](docs/screenshots/dossier-pdf.png)
+
+![The public verification page of a dossier: masked name, template, issue date, readiness and each competency's status on the issue date](docs/screenshots/verify.png)
+
+The PDF is what the requester may see. The public page behind its QR code shows only the dossier's
+snapshot: a masked name, no identifier and no file, and "Restricted" for a sensitive competency
+whoever issued it.
+
+### Validity pills in local_dimensions
+
+![The local_dimensions plan overview seen by the worker: each competency with a coloured validity pill and its date](docs/screenshots/plan-pills-worker.png)
+
+![The same plan overview seen by the manager without viewsensitive: the occupational medical exam reads "Validity: Restricted"](docs/screenshots/plan-pills-manager.png)
+
+![The local_dimensions competency tracker with its validity pill under the title](docs/screenshots/tracker-pill.png)
+
+With `local_dimensions` installed, its plan overview and its tracker show one pill per competency.
+The worker sees their own medical exam with its date; the manager sees "Restricted". A competency
+with no evidence shows "Pending, no evidence" only because an explicit policy covers it.
+
+
 Requirements
 ------------
 
