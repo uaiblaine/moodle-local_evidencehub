@@ -1,0 +1,1 @@
+s/            \$this->remember\('digestafter', 0\);\n            \$this->remember\('digestround', \$round\);/            \$this->remember('digestround', \$round);\n            \$this->remember('digestafter', 0);/;

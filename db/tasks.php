@@ -52,4 +52,14 @@ $tasks = [
         'month' => '*',
         'dayofweek' => '*',
     ],
+    [
+        // Hourly: a round opens each Monday at 07:00 (site time) and spreads over runs, a capped chunk each.
+        'classname' => \local_evidencehub\task\send_weekly_digest::class,
+        'blocking' => 0,
+        'minute' => '7',
+        'hour' => '*',
+        'day' => '*',
+        'month' => '*',
+        'dayofweek' => '*',
+    ],
 ];

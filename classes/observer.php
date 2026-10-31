@@ -17,7 +17,11 @@
 namespace local_evidencehub;
 
 use core_competency\evidence;
+use local_evidencehub\event\evidence_details_updated;
+use local_evidencehub\event\validity_status_changed;
+use local_evidencehub\local\alerts;
 use local_evidencehub\local\details;
+use local_evidencehub\local\meta;
 use local_evidencehub\local\hub_kpis;
 use local_evidencehub\local\policy;
 use local_evidencehub\local\status_repository;
@@ -41,15 +45,16 @@ final class observer {
      * back to pending unless a verifier other than the owner changed it.
      *
      * Idempotent: only a verified or rejected row resets, so the details::save() that follows
-     * this plugin's own core update finds the row pending and writes no second reset.
+     * this plugin's own core update finds the row pending and writes no second reset. A reset asks the
+     * verifiers again ({@see alerts::request_verification()}).
      *
      * @param \core\event\competency_user_evidence_updated $event The event.
      * @return void
      */
     public static function user_evidence_updated(\core\event\competency_user_evidence_updated $event): void {
         $meta = details::get((int) $event->objectid);
-        if ($meta !== null) {
-            details::apply_edit_rule($meta, (int) $event->userid);
+        if ($meta !== null && details::apply_edit_rule($meta, (int) $event->userid)) {
+            alerts::request_verification((int) $meta->id);
         }
         status_repository::recompute_for_userevidence((int) $event->objectid);
     }
@@ -121,6 +126,34 @@ final class observer {
      */
     public static function details_changed(\core\event\base $event): void {
         status_repository::recompute_for_userevidence((int) $event->other['userevidenceid']);
+    }
+
+    /**
+     * The details of an evidence were entered or changed: when they are pending, the verifiers are asked.
+     *
+     * The stored row decides (the event's snapshot): a verifier's own edit leaves a decided row decided.
+     *
+     * @param evidence_details_updated $event The event.
+     * @return void
+     */
+    public static function details_updated(evidence_details_updated $event): void {
+        $meta = $event->get_record_snapshot(details::TABLE, (int) $event->objectid);
+        if ($meta && (int) $meta->verifystatus === meta::VERIFY_PENDING) {
+            alerts::request_verification((int) $meta->id);
+        }
+    }
+
+    /**
+     * A pair's status changed: the worker is told when it entered due, critical or expired.
+     *
+     * Registered as an external observer (internal false), so core runs it only once every open
+     * transaction committed, and never for a change that rolled back.
+     *
+     * @param validity_status_changed $event The event.
+     * @return void
+     */
+    public static function validity_status_changed(validity_status_changed $event): void {
+        alerts::validity_changed($event);
     }
 
     /**

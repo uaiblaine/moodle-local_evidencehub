@@ -1,0 +1,1 @@
+s/            if \(policy::resolve\(\(int\) \$record->id, \(int\) \$record->frameworkid\)->requireverified\) \{/            if (policy::resolve((int) \$record->id, (int) \$record->frameworkid) !== null) {/;
