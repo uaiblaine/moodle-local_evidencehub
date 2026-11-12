@@ -154,6 +154,22 @@ final class dossier {
     }
 
     /**
+     * Whether the current visitor may open the verification page, as tool_certificate decides for its own.
+     *
+     * A visitor who is not logged in has no roles of their own: the guest role answers for them, so a site can
+     * keep the page open under forcelogin and with guest login off.
+     *
+     * @return bool
+     */
+    public static function can_verify(): bool {
+        global $CFG;
+        if (isloggedin()) {
+            return has_capability('local/evidencehub:verifydossier', \context_system::instance());
+        }
+        return has_capability('local/evidencehub:verifydossier', \context_system::instance(), (int) $CFG->siteguest);
+    }
+
+    /**
      * Whether the current user may revoke a dossier: its creator, or a holder of exportdossier on the site.
      *
      * @param \stdClass $dossier The dossier row.

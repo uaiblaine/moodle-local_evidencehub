@@ -93,6 +93,20 @@ $capabilities = [
     ],
 
     /*
+     * Who may open a dossier's public verification page, as tool/certificate:verify does for certificates. A
+     * visitor without an account is checked as the guest role, so the default keeps the page open to anyone
+     * holding the code; a site that wants it closed prevents it for guest (and for user).
+     */
+    'local/evidencehub:verifydossier' => [
+        'captype' => 'read',
+        'contextlevel' => CONTEXT_SYSTEM,
+        'archetypes' => [
+            'guest' => CAP_ALLOW,
+            'user' => CAP_ALLOW,
+        ],
+    ],
+
+    /*
      * Who is told when a worker's evidence is about to expire, has expired or awaits verification.
      * Held in the worker's user context, so a mentor role given through tool_cohortroles reaches
      * exactly the workers of the mentor's cohorts. No archetype: the site decides who is alerted.

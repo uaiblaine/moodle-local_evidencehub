@@ -17,8 +17,8 @@
 {{!
     @template local_evidencehub/verify_page
 
-    The public verification page of a readiness dossier: its snapshot as issued, never an identifier,
-    a full name or a file.
+    The public verification page of a readiness dossier: its snapshot as issued, or only the revocation
+    once it is revoked; never an identifier, a full name or a file.
 
     Classes required for JS:
     * none
@@ -30,11 +30,11 @@
     * actionurl - Where the code form goes.
     * notfound - A code was given and names no dossier (or is not a code at all).
     * found - The code names a dossier; everything below belongs to it.
+    * revoked, revokedon - Whether and when the dossier was revoked; a revoked one carries nothing else below.
     * name - The masked name, e.g. "J*** S***".
     * template, issued - The learning plan template and the issue date.
     * hasreadiness - Whether the snapshot states the verdict the site's readiness basis asks for.
     * readiness, readinessclass - That verdict and its badge classes; read only with hasreadiness.
-    * revoked, revokedon - Whether and when the dossier was revoked.
     * pdfhash, code - The SHA-256 of the issued PDF, and the verification code.
     * live - Whether each competency also shows its current status.
     * competencies - name, statuslabel, badgeclass, expiry (as at issuance), and livelabel, livebadgeclass.
@@ -71,7 +71,6 @@
     {{/revoked}}
     {{^revoked}}
     <div class="alert alert-success">{{#str}} verifyauthentic, local_evidencehub {{/str}}</div>
-    {{/revoked}}
     <dl class="row local-evidencehub-verify-facts">
         <dt class="col-sm-4">{{#str}} worker, local_evidencehub {{/str}}</dt>
         <dd class="col-sm-8 local-evidencehub-verify-name">{{name}}</dd>
@@ -113,6 +112,7 @@
         </tbody>
     </table>
     <p class="form-text">{{#str}} verifynote, local_evidencehub {{/str}}</p>
+    {{/revoked}}
     {{/found}}
     <form method="get" action="{{actionurl}}" class="local-evidencehub-verify-form row g-2 align-items-end mt-3">
         <div class="col-md-6">

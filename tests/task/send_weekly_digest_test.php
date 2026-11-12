@@ -272,8 +272,10 @@ final class send_weekly_digest_test extends \advanced_testcase {
      * @return void
      */
     public function test_a_prevented_view_drops_that_worker(): void {
-        $hidden = $this->worker($this->templateid);
-        $shown = $this->worker($this->templateid);
+        // Names of their own: the generator draws them from a short list, and a shared one would read as the
+        // hidden worker in the body.
+        $hidden = $this->worker($this->templateid, ['firstname' => 'Hidden', 'lastname' => 'Worker']);
+        $shown = $this->worker($this->templateid, ['firstname' => 'Shown', 'lastname' => 'Worker']);
         $mentor = $this->mentor([$hidden, $shown], ['local/evidencehub:receivealerts', 'moodle/competency:userevidenceview']);
         $this->assertSame([(int) $hidden->id, (int) $shown->id], digest::workers((int) $mentor->id));
 

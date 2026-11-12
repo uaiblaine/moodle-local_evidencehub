@@ -28,7 +28,8 @@ use PHPUnit\Framework\Attributes\CoversClass;
 
 /**
  * The public verification page: the snapshot only, no identifier or full name, the same answer for an
- * unknown and a malformed code, the revocation, and the live status behind its setting.
+ * unknown and a malformed code, the revocation alone once revoked, the live status behind its setting, and
+ * who may open it (verifydossier, the guest role for a visitor).
  *
  * @package    local_evidencehub
  * @category   test
@@ -166,17 +167,111 @@ final class verify_page_test extends \advanced_testcase {
     }
 
     /**
-     * A revoked dossier says so, with the day.
+     * A revoked dossier says so, with the day, and nothing else: not the snapshot, nor today's statuses under
+     * verifylive. The control is the same dossier's page before the revocation, which shows all of it.
      *
      * @return void
      */
-    public function test_a_revoked_dossier_says_so(): void {
+    public function test_a_revoked_dossier_shows_the_revocation_only(): void {
         global $DB;
+        set_config('verifylive', 1, 'local_evidencehub');
+        $shown = [
+            'J*** P***',
+            $this->dossier->pdfhash,
+            status::label(status::STATUS_VALID),
+            get_string('verifystatusnow', 'local_evidencehub'),
+            get_string('verifynote', 'local_evidencehub'),
+        ];
+        $html = $this->run_page($this->dossier->code);
+        foreach ($shown as $text) {
+            $this->assertStringContainsString($text, $html, "Control: the page in force shows '$text'.");
+        }
+
         $DB->update_record(dossier::TABLE, (object) ['id' => $this->dossier->id, 'revoked' => 1, 'timerevoked' => 1798761600]);
         $html = $this->run_page($this->dossier->code);
+
         $day = userdate(1798761600, get_string('strftimedate', 'core_langconfig'));
         $this->assertStringContainsString(s(get_string('verifyrevoked', 'local_evidencehub', $day)), $html);
         $this->assertStringNotContainsString(get_string('verifyauthentic', 'local_evidencehub'), $html);
+        foreach ($shown as $text) {
+            $this->assertStringNotContainsString($text, $html, "A revoked dossier's page shows '$text'.");
+        }
+        $this->assertStringNotContainsString('local-evidencehub-verify-table', $html);
+    }
+
+    /**
+     * By default anyone may verify: a visitor who is not logged in (checked as the guest role) and a logged-in
+     * user. Preventing it for guest asks the visitor to log in before the code is read; the logged-in user still
+     * verifies, through the authenticated user role.
+     *
+     * @return void
+     */
+    public function test_a_visitor_is_checked_as_the_guest_role(): void {
+        global $CFG;
+        $user = $this->getDataGenerator()->create_user();
+        $this->assertTrue(dossier::can_verify(), 'Control: by default a visitor may verify.');
+        $this->assertStringContainsString('J*** P***', $this->run_page($this->dossier->code));
+
+        assign_capability(
+            'local/evidencehub:verifydossier',
+            CAP_PREVENT,
+            (int) $CFG->guestroleid,
+            \context_system::instance(),
+            true
+        );
+
+        $this->assertFalse(dossier::can_verify());
+        try {
+            $this->run_page($this->dossier->code);
+            $this->fail('A visitor the guest role does not let in must be sent to the login page.');
+        } catch (\moodle_exception $e) {
+            // Under PHPUnit (a CLI script) require_login()'s redirect throws instead of redirecting.
+            $this->assertSame('redirecterrordetected', $e->errorcode);
+        }
+        $this->setUser($user);
+        $this->assertTrue(dossier::can_verify());
+        $this->assertStringContainsString('J*** P***', $this->run_page($this->dossier->code));
+    }
+
+    /**
+     * A logged-in user without the capability is refused, whatever the code: the page reads no dossier for them.
+     * The guest user, logged in as guest, is checked through the guest role like a visitor.
+     *
+     * @return void
+     */
+    public function test_a_user_without_the_capability_is_refused(): void {
+        global $CFG;
+        $user = $this->getDataGenerator()->create_user();
+        $this->setUser($user);
+        $this->assertStringContainsString('J*** P***', $this->run_page($this->dossier->code), 'Control: the user verifies.');
+
+        assign_capability(
+            'local/evidencehub:verifydossier',
+            CAP_PREVENT,
+            (int) $CFG->defaultuserroleid,
+            \context_system::instance(),
+            true
+        );
+
+        $this->assertFalse(dossier::can_verify());
+        foreach ([$this->dossier->code, str_repeat('0', 32)] as $code) {
+            try {
+                $this->run_page($code);
+                $this->fail('A user without verifydossier must be refused.');
+            } catch (\moodle_exception $e) {
+                $this->assertSame('errorverifydossier', $e->errorcode, $code);
+            }
+        }
+        $this->setGuestUser();
+        $this->assertTrue(dossier::can_verify(), 'The guest user is checked as the guest role, which still holds it.');
+        assign_capability(
+            'local/evidencehub:verifydossier',
+            CAP_PREVENT,
+            (int) $CFG->guestroleid,
+            \context_system::instance(),
+            true
+        );
+        $this->assertFalse(dossier::can_verify());
     }
 
     /**

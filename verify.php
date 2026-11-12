@@ -17,9 +17,10 @@
 /**
  * The public verification page of a readiness dossier, opened from its QR code.
  *
- * Never calls require_login(): it must work under forcelogin and for a contractor without an account.
- * It shows the dossier's snapshot as issued, never the worker's identifier, full name or files, and
- * neither logs nor triggers anything: the page is anonymous and the code is the dossier's only secret.
+ * Asks for a login only from a visitor the guest role does not let in (local/evidencehub:verifydossier): by
+ * default it works under forcelogin and for a contractor without an account. It shows the dossier's snapshot
+ * as issued, or only the revocation, never the worker's identifier, full name or files, and neither logs nor
+ * triggers anything: the page is anonymous and the code is the dossier's only secret.
  *
  * @package    local_evidencehub
  * @copyright  2026 Anderson Blaine
@@ -40,6 +41,15 @@ $PAGE->set_pagelayout('embedded');
 $PAGE->set_title($title);
 // As core_renderer does for the login page: no search engine indexes a dossier.
 $CFG->additionalhtmlhead = ($CFG->additionalhtmlhead ?? '') . '<meta name="robots" content="noindex" />';
+
+// Before the code is read, so a visitor who may not verify learns nothing about it.
+if (!\local_evidencehub\local\dossier::can_verify()) {
+    if (!isloggedin()) {
+        // An account may hold what the guest role does not: the login page brings the visitor back here.
+        require_login();
+    }
+    throw new moodle_exception('errorverifydossier', 'local_evidencehub');
+}
 
 $dossier = \local_evidencehub\local\dossier::find_by_code($code);
 $page = new \local_evidencehub\output\verify_page(

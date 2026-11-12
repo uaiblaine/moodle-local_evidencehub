@@ -301,23 +301,26 @@ worker it holds a dossier about. A failure is notified too. In `manifest.csv`, a
 `+`, `-`, `@`, a tab or a carriage return gets a leading single quote, so a spreadsheet never reads it as a
 formula.
 
-**The verification page** (`/local/evidencehub/verify.php?code=<code>`) is public on purpose: it never asks
-anyone to log in, so it works on a site that forces login and for a contractor without an account, and it
-tells search engines not to index it. The code is 128 random bits; anything else reads "not found", as an
+**The verification page** (`/local/evidencehub/verify.php?code=<code>`) is public by default: who may open it
+is decided by `local/evidencehub:verifydossier`, as `tool/certificate:verify` decides for certificates. A
+visitor who is not logged in is checked as the guest role, which holds it by default, so the page works on a
+site that forces login and for a contractor without an account; a site that prevents it for guest asks such a
+visitor to log in, and one that prevents it for authenticated users too limits it to the roles it grants it to.
+It tells search engines not to index it. The code is 128 random bits; anything else reads "not found", as an
 unknown code does. The page shows the dossier as issued: the masked name ("J*** S***", the first letter of
 each part of the name), the template, the issue date, each competency's status and expiry on that date
 ("Restricted", with no date, for one decided by evidence of a sensitive type, whoever issued the dossier),
 the readiness on that date (by default the worker's real one: certifying it is what a dossier is for; under the
 `readinessbasis` setting "shown", the one over the statuses the page shows, where "Restricted" counts as not
-met, and no verdict at all for a dossier issued before the snapshot kept it), the SHA-256 of the issued PDF (to compare with the file a contractor holds), and "revoked"
-when it was. It never shows the identifier, the full name or a file, and it logs nothing. With
+met, and no verdict at all for a dossier issued before the snapshot kept it), the SHA-256 of the issued PDF (to compare with the file a contractor holds). A revoked
+dossier's page says only that it was revoked, and on which day. It never shows the identifier, the full name or a file, and it logs nothing. With
 `verifylive` on, it also shows each competency's status today, read with no rights at all: a competency
 decided by sensitive evidence reads "Restricted".
 
 **Shared dossiers.** The worker's evidence page lists every dossier issued about them: when, by whom, for
 which template, and whether it was revoked. The dossier's creator, or a holder of
 `local/evidencehub:exportdossier` in the system context, can revoke it there; its verification page then
-says so.
+says so, and shows nothing else.
 
 **Custom reports.** The report builder datasource "Competency validity" (one row per stored status,
 with the deciding evidence, the worker and the competency) is offered to holders of
@@ -451,6 +454,8 @@ Capabilities
   competency framework or of one competency, in the framework's context.
 - `local/evidencehub:managetypes` (system; manager): manage the evidence types.
 - `local/evidencehub:exportdossier` (course category; manager): export readiness dossiers.
+- `local/evidencehub:verifydossier` (system; guest and authenticated user): open a dossier's public
+  verification page. A visitor who is not logged in is checked as the guest role.
 - `local/evidencehub:receivealerts` (user; no archetype): together with
   `moodle/competency:userevidenceview`, both through roles assigned in a worker's user context, receive
   the weekly digest about that worker.

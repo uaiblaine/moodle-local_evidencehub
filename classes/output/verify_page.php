@@ -26,7 +26,8 @@ use local_evidencehub\local\status;
 use local_evidencehub\local\status_repository;
 
 /**
- * The public verification page of one dossier: its snapshot as issued, the revocation and the PDF's hash.
+ * The public verification page of one dossier: its snapshot as issued and the PDF's hash, or, once it is
+ * revoked, the revocation and nothing else.
  *
  * Reads the snapshot only, which holds the masked name and no identifier, full name or file (D8). With
  * verifylive on (D10) it adds each competency's current status, computed with no viewer rights: a pair
@@ -74,6 +75,15 @@ class verify_page implements renderable, templatable {
         if ($this->dossier === null) {
             return $data;
         }
+        $format = get_string('strftimedate', 'core_langconfig');
+        // A revoked dossier certifies nothing, so its page states the revocation alone: the snapshot is not read,
+        // nor are today's statuses under verifylive.
+        if ((int) $this->dossier->revoked === 1) {
+            return $data + [
+                'revoked' => true,
+                'revokedon' => $this->dossier->timerevoked ? userdate((int) $this->dossier->timerevoked, $format) : '',
+            ];
+        }
         $snapshot = json_decode($this->dossier->snapshot) ?: new \stdClass();
         $current = $this->live ? $this->current((int) $this->dossier->userid, $snapshot->competencies ?? []) : [];
         $competencies = [];
@@ -98,7 +108,6 @@ class verify_page implements renderable, templatable {
         $hasreadiness = !$shown || isset($snapshot->readinessshown);
         $stored = $shown ? ($snapshot->readinessshown ?? null) : ($snapshot->readiness ?? null);
         $readiness = (string) ($stored ?? dossier::READINESS_NOTREADY);
-        $format = get_string('strftimedate', 'core_langconfig');
         return $data + [
             'name' => (string) ($snapshot->name ?? ''),
             'template' => (string) ($snapshot->template ?? ''),
@@ -106,8 +115,7 @@ class verify_page implements renderable, templatable {
             'hasreadiness' => $hasreadiness,
             'readiness' => dossier::readiness_label($readiness),
             'readinessclass' => dossier::readiness_badge_class($readiness),
-            'revoked' => (int) $this->dossier->revoked === 1,
-            'revokedon' => $this->dossier->timerevoked ? userdate((int) $this->dossier->timerevoked, $format) : '',
+            'revoked' => false,
             'pdfhash' => (string) $this->dossier->pdfhash,
             'code' => (string) $this->dossier->code,
             'live' => $this->live,
