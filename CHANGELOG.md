@@ -8,6 +8,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- Version 2026100511: a new capability, `local/evidencehub:verifydossier` (system; guest and authenticated user
+  by default), decides who may open a dossier's public verification page, as `tool/certificate:verify` does for
+  certificates. A visitor who is not logged in is checked as the guest role and, refused, is asked to log in; a
+  logged-in user without it is refused. The default keeps the page open to anyone holding the code.
+- Version 2026100511: the verification page of a revoked dossier states the revocation and its date only: the
+  snapshot (masked name, template, verdict, competencies, code, PDF fingerprint) and, under `verifylive`, today's
+  statuses are no longer shown.
 - Version 2026100510: the site setting `local_evidencehub/readinessbasis` chooses which readiness verdict
   readers get from the dossier PDF, the public verification page and the web service. `real` (default, the
   previous behaviour) states the worker's real readiness; `shown` states the readiness over what the reader is

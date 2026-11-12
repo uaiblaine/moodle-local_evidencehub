@@ -1,1 +1,1 @@
-s/'revoked' => \(int\) \$this->dossier->revoked === 1,/'revoked' => false,/;
+s/'revoked' => true,/'revoked' => false,/;

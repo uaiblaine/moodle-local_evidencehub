@@ -88,7 +88,8 @@ index.php         the hub (output/hub_page, amd/src/hub_page); entries: settings
                   output_fragment_pair (output/pair_drawer, templates/pair_drawer)
                   view=matrix: output/hub_matrix_page, templates/hub_matrix (a partial of hub_page)
                   action=exportdossiers: local/dossier_export (selection, stream or task)
-verify.php        the public verification page of a dossier (output/verify_page); no require_login()
+verify.php        the public verification page of a dossier (output/verify_page); gated by verifydossier
+                  (dossier::can_verify(), the guest role for a visitor not logged in), as tool_certificate
 settings.php      the admin entries, and the dossier settings page (local/dossier_config reads them)
 classes/local/    status, meta, audit, export: stored constants and their labels
                   meta also holds the YYYYMMDD date helpers; types: the seeded default types
@@ -187,7 +188,8 @@ tests/generator/  writes rows directly (create_status() stays direct for the tas
   competency's code and expiry (a sensitive-decided one always restricted, whoever issued it; the PDF
   keeps the requester's view), both verdicts (`readiness`, real; `readinessshown`, over the public statuses).
   Never the identifier, the full name or a file;
-  `verify.php` reads nothing else (and `verifylive` reads status rows with no rights).
+  `verify.php` reads nothing else (and `verifylive` reads status rows with no rights). A revoked dossier's
+  page reads neither: it states the revocation alone.
 - **Dossier files are read in one array query** (`dossier_builder::files()`): a recordset costs three
   reads on PostgreSQL, and the test bounds the statement count.
 - **TCPDF traps (S0)**: every table cell carries its width; helvetica for Latin-1 only, freesans
