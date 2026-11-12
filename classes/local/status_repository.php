@@ -459,7 +459,7 @@ final class status_repository {
             status::STATUS_CRITICAL => 'evidence_status_critical',
             status::STATUS_EXPIRED => 'evidence_status_expired',
         };
-        // Expired under a review policy asks core for a review (D6); the rating itself never changes.
+        // Expired under a review policy asks core for a review; the rating itself never changes.
         $recommend = $to === status::STATUS_EXPIRED && (int) $policy->onexpiry === policy::ONEXPIRY_REVIEW;
         api::add_evidence(
             (int) $row->userid,

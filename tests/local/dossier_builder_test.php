@@ -21,7 +21,7 @@ use local_evidencehub\tests\hub_scenario;
 use PHPUnit\Framework\Attributes\CoversClass;
 
 /**
- * The dossier builder: the ZIP's folders, names, PDFs and manifest, the sensitive rule (D7), who is
+ * The dossier builder: the ZIP's folders, names, PDFs and manifest, the sensitive-file rule, who is
  * left out, the dossier rows and their snapshot, and the one statement over {files}.
  *
  * @package    local_evidencehub
@@ -262,7 +262,7 @@ final class dossier_builder_test extends \advanced_testcase {
         $noplan = $this->getDataGenerator()->create_user();
         $gone = $this->worker($templateid);
         $this->setUser($this->requester([$read, $noplan, $gone]));
-        // Deleted, with the plan core would leave behind a half-finished deletion.
+        // Marked deleted directly, so the plan stays, as after a half-finished deletion.
         $DB->set_field('user', 'deleted', 1, ['id' => $gone->id]);
 
         $plan = (new dossier_builder(\context_system::instance(), $templateid))->prepare(

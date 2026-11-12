@@ -251,10 +251,10 @@ final class dossier_builder {
     /**
      * One worker's row per competency, as the requester may see it.
      *
-     * The effective status follows the hub (S4): no status row is missing, and a pair decided by a sensitive
-     * evidence is restricted to a requester who is not the worker and lacks viewsensitive. A restricted row
-     * keeps its status only. The deciding evidence's files go in when its type is not sensitive, or when the
-     * site includes sensitive files and the requester holds viewsensitive in the worker's user context (D7).
+     * The effective status follows the hub ({@see hub_query::base_sql()}): no status row is missing, and a pair
+     * decided by a sensitive evidence is restricted to a requester who is not the worker and lacks viewsensitive.
+     * A restricted row keeps its status only. The deciding evidence's files go in when its type is not sensitive,
+     * or when the site includes sensitive files and the requester holds viewsensitive in the worker's user context.
      *
      * @param \stdClass $worker The worker.
      * @param array $columns The template's competencies.

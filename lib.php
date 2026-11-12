@@ -100,7 +100,8 @@ function local_evidencehub_output_fragment_pair(array $args): string {
  * Serve a prepared dossier ZIP to the user who asked for it.
  *
  * Every check is {@see \local_evidencehub\local\dossier_export::servable_file()}'s: the requester's own user
- * context, an export done and not expired, and exportdossier still held in the template's context.
+ * context, an export done and not expired, view and exportdossier still held in the hub's context the
+ * export was authorised in, and every worker in the ZIP still readable.
  *
  * @param stdClass $course The course (the site).
  * @param stdClass|null $cm Unused.

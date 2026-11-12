@@ -213,8 +213,8 @@ final class details {
     /**
      * The reset rule on a row read under its lock; writes only the decision columns.
      *
-     * The caller holds the row's lock: save() and apply_edit_rule() take it once at their entry,
-     * so this never takes it again.
+     * The caller holds the row's lock (save() and apply_edit_rule() take it around their write), so
+     * this never takes it again.
      *
      * @param \stdClass $meta The fresh meta row; changed in place when it resets.
      * @param int $actorid Who changed the details.

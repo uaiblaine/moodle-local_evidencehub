@@ -34,8 +34,9 @@ use local_evidencehub\local\status_repository;
  * linked evidence as a timeline, their audit trail and the actions the viewer may take.
  *
  * The caller checked the access ({@see local_evidencehub_output_fragment_pair()}). Each item follows
- * S2's sensitive rule on its own: an evidence of a sensitive type the viewer may not read shows its
- * type and "Restricted details" only, and its audit rows their date and action only.
+ * the sensitive rule ({@see details::is_restricted()}) on its own: an evidence of a sensitive type the
+ * viewer may not read shows its type and "Restricted details" only, and its audit rows their date,
+ * action and evidence name only.
  *
  * @package    local_evidencehub
  * @copyright  2026 Anderson Blaine
@@ -434,7 +435,7 @@ class pair_drawer implements renderable, templatable {
 
     /**
      * The deciding evidence's section: its item with the policy's minimum hours, its files, and the
-     * authenticity code only to who may manage or verify the worker's evidence (S2's page rule).
+     * authenticity code only to whoever may manage or verify the worker's evidence, as on {@see evidence_page}.
      *
      * @param array $item The deciding item.
      * @param \stdClass $policy The resolved policy.
@@ -544,8 +545,8 @@ class pair_drawer implements renderable, templatable {
     /**
      * The audit rows of the timeline's evidence, newest first.
      *
-     * A restricted item's rows show their date and action only. A note shows only to the worker and
-     * to holders of local/evidencehub:verify in the worker's context (S2's rule for the reject note).
+     * A restricted item's rows show their date, action and evidence name only. A note shows only to the
+     * worker and to holders of local/evidencehub:verify in the worker's context, as on {@see evidence_page}.
      *
      * @param array $items The timeline.
      * @return array List of [date, action, actor, evidence, note].

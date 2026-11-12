@@ -70,8 +70,9 @@ final class dossier_config {
     /**
      * The identifier printed in a dossier's file names and PDF.
      *
-     * A profile field that no longer exists, or is no longer of the text type, falls back to the ID
-     * number: core_user\fields joins a named field with an inner join, which would drop every worker.
+     * A profile field that is no longer offered (deleted, or no longer of the text type) falls back to the
+     * ID number: core_user\fields joins a named field with an inner join, so a deleted one would drop every
+     * worker.
      *
      * @return string 'idnumber' or 'profile_field_<shortname>'.
      */
@@ -133,7 +134,7 @@ final class dossier_config {
     /**
      * Whether the verification page adds each competency's current status to the snapshot.
      *
-     * Off by default (D10): only an explicit '1' turns it on.
+     * Off by default: only an explicit '1' turns it on.
      *
      * @return bool
      */

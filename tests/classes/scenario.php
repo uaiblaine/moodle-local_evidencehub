@@ -19,7 +19,7 @@ namespace local_evidencehub\tests;
 use core_competency\user_evidence;
 
 /**
- * Users holding chosen capabilities, evidence and details, for the S2 tests.
+ * Users holding chosen capabilities, evidence and details, for the tests.
  *
  * Every role is assigned in the system context, so it reaches every worker's user context the
  * way a manager role does.

@@ -33,10 +33,10 @@ final class export {
     /** @var int The ZIP is ready until timeexpires. */
     public const int STATUS_DONE = 2;
 
-    /** @var int The task gave up; the requester was told. */
+    /** @var int The build failed: a queued export's requester gets a message, a streamed one's sees the error. */
     public const int STATUS_FAILED = 3;
 
-    /** @var int The ZIP was kept until timeexpires and the cleanup task deleted it; the dossier rows stay. */
+    /** @var int The cleanup task retired it: a done ZIP past timeexpires, or a request left behind; the dossier rows stay. */
     public const int STATUS_EXPIRED = 4;
 
     /**

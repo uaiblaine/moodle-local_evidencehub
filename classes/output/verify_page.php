@@ -29,9 +29,9 @@ use local_evidencehub\local\status_repository;
  * The public verification page of one dossier: its snapshot as issued and the PDF's hash, or, once it is
  * revoked, the revocation and nothing else.
  *
- * Reads the snapshot only, which holds the masked name and no identifier, full name or file (D8). With
- * verifylive on (D10) it adds each competency's current status, computed with no viewer rights: a pair
- * decided by a sensitive evidence reads "Restricted". Its verdict follows the readiness basis setting: the
+ * Reads the snapshot only, which holds the masked name and no identifier, full name or file. With the
+ * verifylive setting on it adds each competency's current status, computed with no viewer rights: a pair
+ * whose status row is flagged sensitive reads "Restricted". Its verdict follows the readiness basis setting: the
  * snapshot's real one, or the one over the statuses the snapshot shows.
  *
  * @package    local_evidencehub

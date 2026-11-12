@@ -153,8 +153,9 @@ final class validity_calculator {
     }
 
     /**
-     * The candidate that decides among several: the latest effective expiry (never beats any
-     * day), then the latest issue, then the highest details id, so a rating loses a tie.
+     * The candidate that decides among several: the latest effective expiry (one that never
+     * expires beats any day), then the latest issue, then the highest details id, so a rating
+     * loses a tie.
      *
      * @param array $pairs Non-empty list of [candidate, effective expiry or null].
      * @return array The deciding [candidate, effective expiry or null].

@@ -30,7 +30,8 @@ final class dossier_plan {
      * @param \stdClass $template The plan template: id, name (plain), contextid.
      * @param array $workers List of workers kept, by name: userid, firstname, lastname, fullname, identifier
      *     (as printed), fileid (as in file names), rows (one per competency of the template, in its order),
-     *     files (list of [name in the worker's folder, stored_file]) and readiness (a dossier READINESS_*).
+     *     files (list of [name in the worker's folder, stored_file]), readiness (the real one) and
+     *     readinessshown (over what the requester is shown), each a dossier READINESS_*.
      * @param array $omitted The user ids asked for and left out: no longer available to the requester.
      * @param int $bytes The size of every evidence file the dossiers hold.
      */

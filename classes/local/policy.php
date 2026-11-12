@@ -30,7 +30,7 @@ use local_evidencehub\event\validity_policy_updated;
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 final class policy {
-    /** @var int Regulatory (health and safety): verified evidence only, strict expiry, blocking. */
+    /** @var int Regulatory (health and safety): evidence only, never a rating; strict expiry; blocking. */
     public const int KIND_REGULATORY = 1;
 
     /** @var int Technical or role-specific: evidence or a proficient rating, grace days, not blocking. */
@@ -85,7 +85,7 @@ final class policy {
     }
 
     /**
-     * What a new policy row of a kind starts with: regulatory evidence must be verified (D4).
+     * What a new policy row of a kind starts with: regulatory evidence must be verified.
      *
      * The form proposes these when an administrator creates a row; the resolver never applies them.
      *

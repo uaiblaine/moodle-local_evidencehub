@@ -23,7 +23,7 @@ use PHPUnit\Framework\Attributes\CoversClass;
 
 /**
  * The dossier's PDF page: the verification URL in its QR code, the font for its characters, and a width on
- * every table cell (the S0 traps).
+ * every table cell.
  *
  * @package    local_evidencehub
  * @category   test

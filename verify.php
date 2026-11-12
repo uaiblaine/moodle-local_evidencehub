@@ -59,7 +59,7 @@ $page = new \local_evidencehub\output\verify_page(
     \local_evidencehub\local\dossier_config::readiness_basis()
 );
 
-// Until header() runs, $OUTPUT is core's bootstrap renderer: the export comes after it.
+// The export comes after header(): until its first method call, $OUTPUT is core's bootstrap renderer, not a renderer_base.
 echo $OUTPUT->header();
 // The embedded layout gives the page no gutter: the plugin's container does (styles.css).
 echo $OUTPUT->container_start('local-evidencehub-verify-page');

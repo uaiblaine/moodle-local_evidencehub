@@ -22,9 +22,10 @@ use core_competency\user_evidence;
 /**
  * The validity pills local_dimensions shows beside a worker's competencies.
  *
- * Pure answer to "which pills may the current user see for this worker's competencies": the hook callback only
- * hands it to the hook, so the rule is testable without local_dimensions. The tone values are the family's
- * tone tokens, spelled out here so that nothing in this class loads a local_dimensions class.
+ * Decides which pills the current user may see for a worker's competencies; the hook callback only hands the
+ * answer to the hook, so the rule is testable without local_dimensions. The tone values mirror the TONE_*
+ * constants of {@see \local_dimensions\hook\competency_status_badges}, spelled out here because local_dimensions
+ * may not be installed and nothing in this class may load one of its classes.
  *
  * @package    local_evidencehub
  * @copyright  2026 Anderson Blaine

@@ -122,7 +122,7 @@ final class validity_badges_test extends \advanced_testcase {
     /**
      * Every status, with its label, tone and whether the expiry is shown.
      *
-     * @return array Name => [status, expected label key, tone, dated].
+     * @return array Name => [status, expected English label, tone, dated].
      */
     public static function statuses(): array {
         return [
@@ -234,8 +234,7 @@ final class validity_badges_test extends \advanced_testcase {
     }
 
     /**
-     * Control: with viewsensitive, and the worker themself, the sensitive pair reads as it is; a
-     * non-sensitive pair is never restricted.
+     * Control: with viewsensitive, and the worker themself, the sensitive pair reads as it is.
      *
      * @return void
      */
@@ -349,7 +348,7 @@ final class validity_badges_test extends \advanced_testcase {
         $answer = validity_badges::for_user((int) $this->worker->id, [(int) $this->competency->get('id')]);
         $this->assertSame([(int) $this->competency->get('id')], array_keys($answer));
 
-        // A status row of another worker for the same competency is not the worker's.
+        // Asked about another worker, the same competency answers nothing: the worker's row is not read.
         $someone = $this->getDataGenerator()->create_user();
         $this->assertSame([], validity_badges::for_user((int) $someone->id, [(int) $this->competency->get('id')]));
     }

@@ -23,7 +23,7 @@ namespace local_evidencehub\local;
  * the list never disagree on a pair: {@see self::workers()} groups the base set by worker, keeps the
  * workers with at least one pair in the filter's statuses, sorts them and keeps one page;
  * {@see self::cells()} reads every pair of that page's workers, with their names. Each statement has
- * a method of its own returning its SQL, so a measurement can run it alone.
+ * a method of its own returning its SQL, so a test can run it alone.
  *
  * @package    local_evidencehub
  * @copyright  2026 Anderson Blaine

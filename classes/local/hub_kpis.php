@@ -138,7 +138,7 @@ final class hub_kpis {
     }
 
     /**
-     * Pairs per effective status (S0 Q4 shape).
+     * Pairs per effective status.
      *
      * @param hub_filter $filter The filter.
      * @param hub_scope $scope The viewer's capability cuts.
@@ -159,7 +159,7 @@ final class hub_kpis {
     }
 
     /**
-     * Workers, and how many of them have every pair compliant, due or critical (S0 Q5 shape).
+     * Workers, and how many of them have every pair compliant, due or critical.
      *
      * A restricted pair is not among those, so a worker whose readiness hangs on evidence the viewer
      * may not see counts as not ready rather than revealing it.

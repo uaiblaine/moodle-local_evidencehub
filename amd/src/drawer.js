@@ -86,8 +86,8 @@ const openForm = (button, pair) => {
  * The drawer. Its template carries the side-sheet class from creation, so the first opening slides in;
  * focus trap, Escape and the return of focus are core's.
  *
- * Not exported: Moodle's AMD build makes a module with a default export resolve to that export alone,
- * so a default class beside the named open() left open() undefined for every importer.
+ * Not exported: Moodle's AMD build resolves a module with a default export to that export alone, so a
+ * default class here would leave the named open() undefined for AMD importers.
  */
 class Drawer extends Modal {
     static TYPE = 'local_evidencehub/drawer';

@@ -109,7 +109,7 @@ final class cleanup_dossier_exports_test extends \advanced_testcase {
         }
         $this->assertSame(1, $this->files_of($kept));
         $this->assertSame(export::STATUS_DONE, (int) $DB->get_field(dossier_export::TABLE, 'status', ['id' => $kept->id]));
-        // Only a done export is cleaned.
+        // A failed export expires by its age, not by timeexpires: a recent one stays.
         $this->assertSame(1, $this->files_of($failed));
         $this->assertSame(4, $DB->count_records(dossier::TABLE));
     }

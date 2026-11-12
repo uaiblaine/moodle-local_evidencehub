@@ -154,10 +154,11 @@ final class dossier {
     }
 
     /**
-     * Whether the current visitor may open the verification page, as tool_certificate decides for its own.
+     * Whether the current visitor may open the verification page.
      *
      * A visitor who is not logged in has no roles of their own: the guest role answers for them, so a site can
-     * keep the page open under forcelogin and with guest login off.
+     * keep the page open under forcelogin and with guest login off. Mirrors
+     * {@see \tool_certificate\permission::can_verify()}.
      *
      * @return bool
      */
