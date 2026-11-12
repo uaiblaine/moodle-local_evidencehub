@@ -33,6 +33,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- Version 2026100513: the dossier identifier setting (`local_evidencehub/identifierfield`) offered a class name and a
+  method name instead of the ID number and the text profile fields, and its default was never stored, so every
+  upgrade listed it as a new setting. Its choices are now a closure: core's select setting takes an array callable
+  for the choices themselves. Dossiers kept printing the ID number throughout.
 - The hub and the validity policies list named themselves twice in the breadcrumb: core already adds the active
   admin entry or category More menu node, so the page adds its own node only when none is active.
 - The public verification page had no side gutter in the embedded layout: its content now sits in a centred
