@@ -119,8 +119,10 @@ final class dossier_config_test extends \advanced_testcase {
         // A page keys a plugin's setting by the plugin and the name, unseparated.
         $setting = admin_get_root(true, true)->locate('local_evidencehub')->settings->local_evidencehubidentifierfield;
         $this->assertTrue($setting->load_choices());
-        $this->assertSame([dossier_config::IDENTIFIER_IDNUMBER, 'profile_field_cpf'], array_keys($setting->choices));
+        // A site may already hold other text fields (a plugin's install can add one): assert only on these two.
+        $this->assertSame(dossier_config::IDENTIFIER_IDNUMBER, array_key_first($setting->choices));
         $this->assertSame('CPF', $setting->choices['profile_field_cpf']);
+        $this->assertArrayNotHasKey('profile_field_ok', $setting->choices);
 
         // The default is stored, so an upgrade stops listing the setting as new.
         $this->assertSame('', $setting->write_setting($setting->get_defaultsetting()));
