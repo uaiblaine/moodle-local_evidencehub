@@ -237,7 +237,8 @@ tests/generator/  writes rows directly (create_status() stays direct for the tas
   it is already in the tree (`local\admin_tree`: plugins load by localised display name, so it is best effort and
   falls back to `competencies`); every setting is named
   `local_evidencehub/<name>` with `<name>` + `<name>_desc` strings, and the identifier select loads its
-  choices lazily (a callable), so loading settings.php never queries `user_info_field`.
+  choices lazily (a closure, `identifier_choices(...)`: core's configselect takes an array callable for the
+  choices themselves), so loading settings.php never queries `user_info_field`.
 
 ## Testing notes
 

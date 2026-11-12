@@ -54,12 +54,13 @@ if ($hassiteconfig) {
             0
         ));
         // The choices are read when the page shows them, never while settings.php loads (a fresh install included).
+        // They must be a closure: core's configselect takes an array callable for the choices themselves.
         $settings->add(new admin_setting_configselect(
             'local_evidencehub/identifierfield',
             new lang_string('identifierfield', 'local_evidencehub'),
             new lang_string('identifierfield_desc', 'local_evidencehub'),
             \local_evidencehub\local\dossier_config::IDENTIFIER_IDNUMBER,
-            [\local_evidencehub\local\dossier_config::class, 'identifier_choices']
+            \local_evidencehub\local\dossier_config::identifier_choices(...)
         ));
         $settings->add(new admin_setting_configtext(
             'local_evidencehub/syncmaxworkers',
