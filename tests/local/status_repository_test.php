@@ -558,4 +558,65 @@ final class status_repository_test extends \advanced_testcase {
         $this->recompute();
         $this->assertSame(1, (int) $this->row()->issensitive);
     }
+
+    /**
+     * A rewrite of the row that changes nothing the KPIs count keeps their generation: the weekly
+     * reconcile rewrites every row and must not empty every cached count.
+     *
+     * @return void
+     */
+    public function test_a_rewrite_with_the_same_status_keeps_the_kpis(): void {
+        $this->linked();
+        $before = hub_kpis::generation();
+        $this->recompute();
+        $inserted = hub_kpis::generation();
+        $this->assertNotSame($before, $inserted, 'A new row left the KPIs standing.');
+
+        $this->freeze('2026-06-16 12:00');
+        $this->recompute();
+        $this->assertSame(status::STATUS_VALID, (int) $this->row()->status);
+        $this->assertSame($inserted, hub_kpis::generation(), 'A rewrite with the same status retired the KPIs.');
+
+        // The control: a change of status retires them.
+        $this->freeze('2028-01-02 12:00');
+        $this->recompute();
+        $this->assertSame(status::STATUS_EXPIRED, (int) $this->row()->status);
+        $this->assertNotSame($inserted, hub_kpis::generation());
+    }
+
+    /**
+     * A row whose deciding type turns sensitive keeps its status and still retires the KPIs: they count
+     * a pair the viewer may not see as restricted.
+     *
+     * @return void
+     */
+    public function test_a_change_of_sensitivity_alone_retires_the_kpis(): void {
+        $meta = $this->linked(['typeid' => $this->type_id('nrcertificate')]);
+        $this->recompute();
+        $generation = hub_kpis::generation();
+
+        $ue = new \core_competency\user_evidence((int) $meta->userevidenceid);
+        details::save($ue, $this->details_data(['typeid' => $this->type_id('aso'), 'issuedate' => 20260101]));
+        $this->assertSame([status::STATUS_VALID, 1], [(int) $this->row()->status, (int) $this->row()->issensitive]);
+        $this->assertNotSame($generation, hub_kpis::generation(), 'A change of sensitivity left the KPIs standing.');
+    }
+
+    /**
+     * A removed row retires the KPIs; a pair that had no row and still has none keeps them.
+     *
+     * @return void
+     */
+    public function test_only_a_removed_row_retires_the_kpis(): void {
+        global $DB;
+        $meta = $this->linked();
+        $this->recompute();
+        $DB->delete_records('competency_userevidencecomp', ['userevidenceid' => $meta->userevidenceid]);
+        $generation = hub_kpis::generation();
+        $this->assertNull($this->recompute());
+        $removed = hub_kpis::generation();
+        $this->assertNotSame($generation, $removed, 'A removed row left the KPIs standing.');
+
+        $this->assertNull($this->recompute());
+        $this->assertSame($removed, hub_kpis::generation(), 'A pair with no row before or after retired the KPIs.');
+    }
 }

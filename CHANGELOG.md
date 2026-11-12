@@ -33,6 +33,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- Version 2026100514: a recomputation retired the hub's cached KPIs whenever it rewrote a status row, even when
+  the row's status and sensitivity stayed the same, so the weekly reconcile emptied every cached count once per
+  pair. They are now retired only when a row appears, goes, or changes its status or its sensitive flag.
 - Version 2026100513: the dossier identifier setting (`local_evidencehub/identifierfield`) offered a class name and a
   method name instead of the ID number and the text profile fields, and its default was never stored, so every
   upgrade listed it as a new setting. Its choices are now a closure: core's select setting takes an array callable
