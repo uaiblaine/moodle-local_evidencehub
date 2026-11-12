@@ -270,7 +270,7 @@ final class validity_calculator_test extends \basic_testcase {
     }
 
     /**
-     * A regulatory pair with nothing that counts blocks; with nothing at all it is not ready either.
+     * A regulatory pair whose only evidence is unverified is unverified, blocking and not ready.
      *
      * @return void
      */

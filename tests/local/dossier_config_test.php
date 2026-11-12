@@ -28,9 +28,9 @@ namespace local_evidencehub\local;
 use PHPUnit\Framework\Attributes\CoversClass;
 
 /**
- * The two default-off switches read only an explicit '1' as on.
+ * The two default-off switches read only an explicit '1' as on, and the readiness basis only an exact 'shown'.
  *
- * The install writes '0' for both, so a missing value (a site upgraded before the setting existed,
+ * The install writes '0' for both switches, so a missing value (a site upgraded before the setting existed,
  * or one an administrator cleared) is the case that tells the rule apart from "anything but '0'".
  *
  * @package    local_evidencehub

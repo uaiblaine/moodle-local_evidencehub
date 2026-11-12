@@ -70,7 +70,7 @@ final class meta_test extends \advanced_testcase {
     }
 
     /**
-     * An impossible start or a negative count is refused.
+     * An impossible start is refused.
      *
      * @return void
      */
@@ -134,7 +134,7 @@ final class meta_test extends \advanced_testcase {
         $this->assertSame(20280229, meta::from_timestamp($saopaulo, 'America/Sao_Paulo'));
         $this->assertSame(20280229, meta::from_timestamp($tokyo, 'Asia/Tokyo'));
         $this->assertSame(12 * HOURSECS, $saopaulo - $tokyo);
-        // Read in the other timezone, the instant is another day: the helpers never mix them.
+        // One hour before that midnight is still the previous day in the same timezone.
         $this->assertSame(20280228, meta::from_timestamp($saopaulo - HOURSECS, 'America/Sao_Paulo'));
     }
 

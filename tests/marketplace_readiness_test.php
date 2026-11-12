@@ -22,12 +22,11 @@ use PHPUnit\Framework\Attributes\CoversNothing;
  * Pins the Moodle plugins directory requirements no other gate checks.
  *
  * Each test is one rule of the plugin submission guidelines (Licensing,
- * Strings, Settings storage, CSS styles, Boilerplate, Privacy) or one finding
- * a directory reviewer raised on this fleet. They read files only, so they run
- * wherever the PHPUnit suite runs. The class is meant to be copied between
- * plugins: only COMPONENT and the core write map change.
+ * Strings, Settings storage, CSS styles, Boilerplate, Privacy). They read files
+ * only, so they run wherever the PHPUnit suite runs. The class is meant to be
+ * copied between plugins: only COMPONENT and the core write map change.
  *
- * One more thing changes here, as in local_dictionaries: the settings check also accepts a
+ * This copy also differs from the template: the settings check accepts a
  * settings.php that stores no setting at all and only adds an admin page.
  *
  * @package    local_evidencehub

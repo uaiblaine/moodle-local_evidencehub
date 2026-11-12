@@ -54,7 +54,8 @@ final class upgrade_test extends \advanced_testcase {
         $this->status_row((int) $worker->id, $c1, status::STATUS_VALID, 20300101, 'aso');
         $this->status_row((int) $worker->id, $c2, status::STATUS_VALID, 20300101, 'nrcertificate');
         $this->status_row((int) $worker->id, $c3, status::STATUS_UNVERIFIED);
-        // As a 2026100503 site holds them: the column added, nothing filled.
+        // The state the step's fill starts from: the column exists (its field_exists() guard skips adding it)
+        // and every flag is still 0.
         $DB->set_field('local_evidencehub_status', 'issensitive', 0);
         set_config('version', 2026100503, 'local_evidencehub');
 

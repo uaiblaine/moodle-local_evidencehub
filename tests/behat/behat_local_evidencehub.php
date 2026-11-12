@@ -89,7 +89,7 @@ class behat_local_evidencehub extends behat_base {
      * @param string $limit The largest sum accepted, e.g. 0.01.
      * @return void
      * @throws ExpectationException When the page shifted more.
-     * @throws SkippedException When the browser reports no layout shifts at all.
+     * @throws SkippedException When the browser does not support layout-shift entries.
      */
     public function the_layout_shift_of_the_page_should_be_at_most(string $limit): void {
         $supported = $this->evaluate_script('(function () {

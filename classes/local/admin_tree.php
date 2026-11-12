@@ -33,14 +33,12 @@ final class admin_tree {
     /**
      * The category for the plugin's entries: the companion's when it exists in the tree, else core's.
      *
-     * Neither plugin requires the other, so the category is looked up, never assumed. It exists when
-     * local_dimensions' settings.php has already run: admin/settings/plugins.php includes the settings.php
-     * of the local plugins one after another, sorted by the plugins' localised display name
-     * (core_collator::asort_objects_by_property() on 'displayname'), not by component name. "Competency
-     * Dimensions" sorts before "Evidence hub" in the English and Brazilian Portuguese packs, but nothing
-     * guarantees it for a language whose names sort the other way. When the category is not there yet
-     * (loaded later, or competencies disabled, which makes local_dimensions register none) the entries go
-     * to 'competencies', where they worked before: the pages stay reachable either way.
+     * Neither plugin requires the other, so the category is looked up, never assumed. It exists only when
+     * local_dimensions' settings.php has already run: admin/settings/plugins.php loads local plugins'
+     * settings sorted by their localised display name, not by component, so the order depends on the
+     * language ("Competency Dimensions" sorts before "Evidence hub" in English). When the category is not
+     * there (loaded later, or competencies disabled, when local_dimensions registers none) the entries go
+     * to 'competencies' and stay reachable.
      *
      * @param \admin_root $root The admin tree being built.
      * @return string The name of the category to add the entries to.

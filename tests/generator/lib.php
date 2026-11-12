@@ -30,7 +30,8 @@ use local_evidencehub\local\meta;
 use local_evidencehub\local\status;
 
 /**
- * Creates the plugin's rows directly, before the stages that write them through an API exist.
+ * Creates the plugin's rows directly, bypassing the APIs that write them in production, so a test can seed
+ * states those APIs would not produce (verified details, a status row no recomputation wrote).
  *
  * @package    local_evidencehub
  * @category   test

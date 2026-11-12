@@ -42,11 +42,10 @@ use local_evidencehub\local\status_repository;
  * Each competency's status is the effective one for the caller, as on the hub: a competency decided by a
  * sensitive evidence reads restricted (-1), without its expiry, to a caller without
  * local/evidencehub:viewsensitive over the worker, and counts as not met in its own blocking flag. The
- * overall ready flag follows the site's readiness basis ({@see dossier_config::readiness_basis()}): the
- * worker's real readiness by default, as a dossier's snapshot states it, or, under "shown", the readiness
- * of the statuses this caller is shown. Either way it names no status or date. A worker who cannot be
- * found, cannot be read or has no
- * active plan from the template gives one error, so the service is no oracle of who exists.
+ * overall ready flag follows {@see dossier_config::readiness_basis()}: the worker's real readiness by
+ * default, or, under "shown", the readiness of the statuses this caller is shown. Either way the flag is
+ * one boolean and names no status or date. A worker who cannot be found, cannot be read or has no active
+ * plan from the template gives one error, so the service is no oracle of who exists.
  *
  * @package    local_evidencehub
  * @copyright  2026 Anderson Blaine

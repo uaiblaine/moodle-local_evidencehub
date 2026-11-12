@@ -121,7 +121,7 @@ final class dossier_exported extends base {
     }
 
     /**
-     * The template id maps to nothing on restore.
+     * Neither value in other maps to anything on restore.
      *
      * @return array
      */

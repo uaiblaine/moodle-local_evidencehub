@@ -32,7 +32,7 @@ use local_evidencehub\local\status_repository;
  * the hub's cached KPIs when the set of pairs a template requires may have changed.
  *
  * Every recomputation goes through {@see status_repository}; an observer only picks the pairs. A pair
- * whose user is locked by another recomputation is queued, not lost; any other failure is left to
+ * whose user is locked by another recomputation is queued, not lost; any other exception is left to
  * core's event manager, which reports it through debugging() and carries on with the request.
  *
  * @package    local_evidencehub

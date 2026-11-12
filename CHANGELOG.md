@@ -8,6 +8,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- Version 2026100512: the code comments were audited against Moodle's guidance and the code they describe: 30
+  that contradicted their code are corrected, and planning and environment references are gone, from the
+  comments and from this changelog. No code changed; `amd/build/drawer.min.js.map` is rebuilt for its source's
+  JSDoc.
+
 - Version 2026100511: a new capability, `local/evidencehub:verifydossier` (system; guest and authenticated user
   by default), decides who may open a dossier's public verification page, as `tool/certificate:verify` does for
   certificates. A visitor who is not logged in is checked as the guest role and, refused, is asked to log in; a
@@ -35,7 +40,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
-- Stage S9, the family bridge (version 2026100509): a listener for `local_dimensions`' hook
+- The family bridge (version 2026100509): a listener for `local_dimensions`' hook
   `competency_status_badges` (`db/hooks.php`; neither plugin requires the other, and core records a callback for
   an absent hook class without loading it). `local\validity_badges::for_user()` answers, for the current user,
   the "Validity: ..." pill of each asked competency of a worker: nothing for a guest, with competencies disabled
@@ -43,7 +48,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   sensitive evidence the viewer may not see; the status and, for compliant, due, critical and expired, its
   effective expiry; "Pending, no evidence" for a pair with no status row only under an explicit competency or
   framework policy. CI installs `local_dimensions` (`plugin-dependencies`).
-- Stage S8: alerts and the readiness web service (version 2026100508). Four message providers:
+- Alerts and the readiness web service (version 2026100508). Four message providers:
   `validitydue` and `validityexpired` tell the worker when a pair's status enters due or critical, or
   expired, from an external observer of `validity_status_changed` (so only after every open transaction
   commits, and only on a real change); `verificationrequested` asks the holders of `verify` assigned in the
@@ -64,26 +69,26 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   status (and, for due and critical, the expiry) is still the event's; one failing verification recipient
   no longer stops the others; an unknown template and an ID number the caller is not shown read like a
   template or worker out of reach.
-- Stage S7: readiness dossiers. "Export dossiers" on the hub's list and matrix (for holders of
+- Readiness dossiers (version 2026100507). "Export dossiers" on the hub's list and matrix (for holders of
   `exportdossier` and `view`) posts the ticked workers with the filter; the selection is cut by the
   filter's visible rows and `maxexportworkers`. `local\dossier_builder` checks everything as the
   requester and writes, into any `archive_writer`, a folder per worker (a TCPDF page with a QR code to the
   verification page, and the deciding evidence's files, read in one statement over `{files}`) and
   `manifest.csv` with every file's SHA-256 and the workers left out; sensitive files only with
-  `includesensitivefiles` and `viewsensitive` (D7); the identifier is the ID number or a text profile
-  field (D8). Up to `syncmaxworkers` workers and `syncmaxbytes` the ZIP streams; above, the ad hoc task
+  `includesensitivefiles` and `viewsensitive`; the identifier is the ID number or a text profile
+  field. Up to `syncmaxworkers` workers and `syncmaxbytes` the ZIP streams; above, the ad hoc task
   `build_dossier_export` runs as the requester, stores the ZIP in their user context for
   `exportretentiondays` days and sends the `dossierready` notification; `cleanup_dossier_exports`
-  (daily) deletes expired ZIPs (D9). Each dossier stores a row with its code, PDF hash and a snapshot
+  (daily) deletes expired ZIPs. Each dossier stores a row with its code, PDF hash and a snapshot
   without identifier or full name; the public `verify.php` shows that snapshot, the revocation and,
-  with `verifylive`, today's status (D10). The worker's evidence page lists the shared dossiers, which
+  with `verifylive`, today's status. The worker's evidence page lists the shared dossiers, which
   their creator or a site exporter can revoke (POST only, one conditional update). The snapshot always
   masks a competency decided by sensitive evidence; the export row records its hub context
   (`contextid`, upgrade step 2026100507), where a download re-checks the rights, with every worker's
   read access; manifest cells never start a formula; the task marks the export done inside its
   transaction and the cleanup also expires exports left behind. Events `dossier_exported` and `dossier_revoked`; the
   privacy provider exports and deletes the `export` file area. Seven settings on a new admin page.
-- Stage S6: the readiness matrix. The hub has a list and a matrix tab (`view=list|matrix`, part of the
+- The readiness matrix (version 2026100506). The hub has a list and a matrix tab (`view=list|matrix`, part of the
   validated filter and its stored preference). The matrix shows one row per worker and one column per
   competency of the template, in the template's order, each heading with its policy kind's tag (REG,
   TEC, BEH), a legend of the statuses, and a cell per pair: the effective status's colour, the days left
@@ -95,7 +100,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   and a sticky worker column, and is rendered in full by the server; a Behat step measures the page's
   layout shift on 200 workers by 25 competencies, seeded by a bulk generator entity (`matrix seeds`).
   Each row's checkbox posts the worker's id as `workers[]` (one dossier per worker).
-- Stage S5: the inspection drawer. Each row of the hub's grid opens a side sheet (a `core/modal`
+- The inspection drawer (version 2026100505). Each row of the hub's grid opens a side sheet (a `core/modal`
   with its own template) for one worker and competency, its body a fragment
   (`local_evidencehub_output_fragment_pair()`) that checks the context, `local/evidencehub:view`,
   the right to read the worker's evidence and the competency (core's `read_competency()`), and the
@@ -108,7 +113,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   learning plan and register recycling. The evidence form takes a `competencyid` (and a
   `recyclefrom` whose type and issuer it copies when that evidence is the worker's, linked to the
   competency and readable) and links a new evidence to the competency through core on save.
-- Stage S4: the hub page (`/local/evidencehub/index.php`), opened from Site administration >
+- The hub page (`/local/evidencehub/index.php`), opened from Site administration >
   Competencies > Evidence hub or from a course category's More menu, locked there to that
   category's learning plan templates. For one template it lists every (worker, competency) pair of
   the workers with an active plan from it: KPI tiles per status with the readiness rate and how many
@@ -123,7 +128,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   provider). A report builder datasource "Competency validity" serves site-level compliance staff.
   The status row stores whether its deciding evidence's type is sensitive (`issensitive`, filled by
   the first upgrade step, 2026100504), so the hub reads it without joining meta and type per pair.
-- Stage S3: validity engine. A pure validity calculator works out each (worker, competency) status
+- The validity engine. A pure validity calculator works out each (worker, competency) status
   (compliant, due, critical, expired, pending) from the linked evidence, the latest proficient
   rating and the competency's policy, with calendar days in the site's timezone; the status
   repository stores it under a per-user lock and, on a change, fires `validity_status_changed` and
@@ -137,7 +142,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   of each linked competency, or only "Restricted" when a sensitive evidence the viewer may not see
   decides it. A status change and its log entry commit together; a pair whose user is locked is
   queued, and a failing pair never stops a task run.
-- Stage S2: evidence details. A worker's evidence page (`/local/evidencehub/evidence.php`) lists
+- Evidence details. A worker's evidence page (`/local/evidencehub/evidence.php`) lists
   core's evidence of prior learning with its validity details and verification state, and opens
   one modal form that creates or edits the core evidence and its details in one save, plus a modal
   to verify or reject them. tool_lp's evidence pages prompt whoever may manage the evidence to
@@ -149,7 +154,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   sensitive type are neither shown, edited nor decided on by a viewer without
   `local/evidencehub:viewsensitive`, and the writers of one evidence's details serialise under a
   lock and write only their own columns.
-- Stage S1: the data model (seven tables), five seeded evidence types, seven capabilities, English
+- The data model (seven tables), five seeded evidence types, seven capabilities, English
   and Brazilian Portuguese strings, and a privacy provider covering every table with personal data.
 - The export request keeps a count of its workers instead of the proposal's list of ids: the
   dossier rows of the export already say who it covered, and a list inside a text column could not

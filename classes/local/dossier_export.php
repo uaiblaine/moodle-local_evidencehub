@@ -25,7 +25,7 @@ use local_evidencehub\task\build_dossier_export;
  * drivers, the stored ZIP, its message, who may download it, and its cleanup.
  *
  * Every export has a row: a streamed one is created and finished in the same request; a queued one waits
- * for the ad hoc task {@see build_dossier_export}, which runs as the requester (D9).
+ * for the ad hoc task {@see build_dossier_export}, which runs as the requester.
  *
  * @package    local_evidencehub
  * @copyright  2026 Anderson Blaine
@@ -70,7 +70,7 @@ final class dossier_export {
     }
 
     /**
-     * The posted workers that belong to the filter's set as the viewer sees it (S4's access cut), by id.
+     * The posted workers that belong to the filter's set as the viewer sees it in the hub, by id.
      *
      * A worker outside the set (another template, a worker the viewer may not read, outside the cohort or
      * the search) is dropped: the post only narrows the set, it never widens it.
@@ -106,7 +106,7 @@ final class dossier_export {
     }
 
     /**
-     * Whether an export streams in the request: at most syncmaxworkers workers and syncmaxbytes of files (D9).
+     * Whether an export streams in the request: at most syncmaxworkers workers and syncmaxbytes of files.
      *
      * @param int $workers How many workers it names.
      * @param int $bytes The size of its evidence files.

@@ -189,8 +189,8 @@ class hub_matrix_page implements renderable, templatable {
     /**
      * A cell's short visible text: days left while due, days since once expired, a dash when missing.
      *
-     * A restricted pair shows no number: its base set carries no expiry for it, and its code shows
-     * nothing here either ({@see \local_evidencehub\local\hub_query::base_sql()}).
+     * A restricted pair shows no number: the base set reads its expiry as 0
+     * ({@see \local_evidencehub\local\hub_query::base_sql()}).
      *
      * @param int $code The effective status.
      * @param int $expiry The effective expiry as the base set reads it, YYYYMMDD or 0 for none.

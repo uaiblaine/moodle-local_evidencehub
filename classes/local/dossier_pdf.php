@@ -19,10 +19,10 @@ namespace local_evidencehub\local;
 /**
  * One worker's readiness dossier as a PDF page, built in memory with core's TCPDF.
  *
- * Two traps from the S0 spike: TCPDF's writeHTML() lays out each table row on its own, so every cell of
- * every row carries its width ({@see self::html()}); and helvetica, a PDF core font, holds Latin-1 only,
- * so a page with any other character is set in freesans, which embeds a subset of a TrueType font and
- * doubles the size ({@see self::font()}).
+ * Two TCPDF traps: writeHTML() lays out each table row on its own, so every cell of every row carries its
+ * width ({@see self::html()}); and helvetica, a PDF core font, holds Latin-1 only, so a page with any other
+ * character is set in freesans, which embeds a subset of a TrueType font and makes the file larger
+ * ({@see self::font()}).
  *
  * Not final: the tests subclass it to read the URL handed to the QR code ({@see self::barcode()}).
  *

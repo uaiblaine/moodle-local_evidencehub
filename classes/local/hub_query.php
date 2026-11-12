@@ -21,10 +21,11 @@ use core_competency\plan;
 /**
  * The hub's grid: the (worker, competency) pairs a plan template requires, as the viewer may see them.
  *
- * A page is read in two statements (S0: one statement with every detail joined took 0.5-0.8 s on
- * MariaDB over 300k pairs, the deferred join stays under 300 ms): {@see self::page_keys()} sorts only
- * the narrow key of the base set and keeps one page, {@see self::page_details()} reads that page's
- * details by primary and unique keys. The download reads everything in one statement, {@see self::rows()}.
+ * A page is read in two statements, a deferred join, because one statement with every detail joined
+ * is several times slower on a large site (0.5-0.8 s against under 300 ms over 300k pairs on MariaDB):
+ * {@see self::page_keys()} sorts only the narrow key of the base set and keeps one page,
+ * {@see self::page_details()} reads that page's details by primary and unique keys. The download reads
+ * everything in one statement, {@see self::rows()}.
  *
  * Every statement reads the effective status of a pair ({@see self::base_sql()}): a pair decided by a
  * sensitive evidence the viewer may not see is "restricted", in the grid, the status filter, the sort
@@ -66,7 +67,7 @@ final class hub_query {
      * The restriction is worked out once, in the innermost table, so each capability fragment's
      * placeholders appear once per statement. It reads the status row's issensitive (the deciding
      * evidence's type, stored by {@see status_repository}) rather than joining meta and type for every
-     * pair: S0's re-measurement halved the base set's cost with it.
+     * pair, which roughly doubles the base set's cost.
      *
      * The search reads the worker's first and last name, and the ID number only when it is among the
      * identity fields the viewer is shown in the page context: a search must not find a worker by a
@@ -148,7 +149,7 @@ final class hub_query {
     private static function order_by(hub_filter $filter): string {
         $dir = $filter->dir === 'desc' ? 'DESC' : 'ASC';
         return match ($filter->sort) {
-            // COALESCE keeps PostgreSQL from walking the lastname index under LIMIT (S0: 841 ms to 60 ms).
+            // COALESCE keeps PostgreSQL from walking the lastname index under LIMIT, which is far slower.
             hub_filter::SORT_WORKER => "COALESCE(u.lastname, '') $dir, COALESCE(u.firstname, '') $dir, b.userid, b.competencyid",
             hub_filter::SORT_COMPETENCY => "c.shortname $dir, b.competencyid, b.userid",
             hub_filter::SORT_STATUS => "b.estatus $dir, b.userid, b.competencyid",
