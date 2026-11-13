@@ -170,8 +170,9 @@ tests/generator/  writes rows directly (create_status() stays direct for the tas
   layout with explicit widths (the column count is an inline custom property), and cells use text
   or core's pix icons only. `tests/behat/matrix.feature` measures it on a bulk seed (generator entity
   `matrix seeds`, 200 x 25).
-- **The KPI cache has no TTL**: every status write or delete and the plan, cohort and user events
-  in `db/events.php` replace the generation; core fires no event for a template's competencies, so
+- **The KPI cache has no TTL**: a status row inserted, deleted or changed in status or issensitive
+  (a rewrite that changes neither keeps it) and the plan, cohort and user events in
+  `db/events.php` replace the generation; core fires no event for a template's competencies, so
   the key reads `hub_kpis::template_signature()` (the one statement a cached call sends).
 - **The hub's cohort check includes the page context itself**, unlike `cohort_get_cohort()`, whose
   callers are courses (`hub_access::cohorts()` says why).

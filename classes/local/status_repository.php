@@ -49,7 +49,9 @@ final class status_repository {
      * rolls the row back and the next recomputation retries both; it never changes a rating. After
      * the commit it retires the hub's cached KPIs ({@see hub_kpis::bump_generation()}) and fires
      * validity_status_changed: internal observers run at once, even inside a transaction, so they
-     * must never see a change that may still roll back.
+     * must never see a change that may still roll back. The KPIs are retired only when the row
+     * appears, goes, or changes a column they count (status, issensitive): the weekly reconcile
+     * rewrites every row, and retiring them for each would empty every node's cached counts.
      *
      * @param int $userid The worker.
      * @param int $competencyid The competency.
@@ -62,9 +64,8 @@ final class status_repository {
             throw new \moodle_exception('errorstatuslocked', 'local_evidencehub');
         }
         try {
-            [$result, $row, $from] = self::write($userid, $competencyid);
-            if ($row !== null || $from !== null) {
-                // A row was written or deleted: the hub's cached counts may be wrong now.
+            [$result, $row, $from, $counted] = self::write($userid, $competencyid);
+            if ($counted) {
                 hub_kpis::bump_generation();
             }
             if ($row !== null && $from !== (int) $row->status) {
@@ -289,7 +290,8 @@ final class status_repository {
      *
      * @param int $userid The worker.
      * @param int $competencyid The competency.
-     * @return array [validity or null, the stored row or null, the previous status or null].
+     * @return array [validity or null, the stored row or null, the previous status or null, whether the
+     *     hub's KPIs may count the pair otherwise now].
      * @throws \Throwable Whatever failed; the transaction is rolled back first.
      */
     private static function write(int $userid, int $competencyid): array {
@@ -307,9 +309,13 @@ final class status_repository {
     /**
      * The body of write(), inside its transaction.
      *
+     * The KPIs read a row's presence, its status and its issensitive ({@see hub_query::base_sql()}), so
+     * only a change to one of those is reported as counted.
+     *
      * @param int $userid The worker.
      * @param int $competencyid The competency.
-     * @return array [validity or null, the stored row or null, the previous status or null].
+     * @return array [validity or null, the stored row or null, the previous status or null, whether the
+     *     hub's KPIs may count the pair otherwise now].
      */
     private static function write_in(int $userid, int $competencyid): array {
         global $DB;
@@ -328,7 +334,7 @@ final class status_repository {
             if ($existing) {
                 $DB->delete_records(self::TABLE, ['id' => $existing->id]);
             }
-            return [null, null, $from];
+            return [null, null, $from, $existing !== false];
         }
 
         $row = (object) [
@@ -343,6 +349,8 @@ final class status_repository {
             'timemodified' => $now,
         ];
         $changed = $from !== $result->status;
+        // A new row is always a change ($from is null), so issensitive is read only from a stored row.
+        $counted = $changed || (int) $existing->issensitive !== $row->issensitive;
         if ($existing) {
             $row->id = (int) $existing->id;
             // When the status value last changed, not when the row was last computed.
@@ -357,7 +365,7 @@ final class status_repository {
         if ($changed) {
             self::log($row, $policy, $result);
         }
-        return [$result, $row, $from];
+        return [$result, $row, $from, $counted];
     }
 
     /**

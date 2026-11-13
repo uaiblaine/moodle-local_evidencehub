@@ -29,8 +29,9 @@ Nothing is kept in `localcachedir`, statics across requests, APCu or a file unde
 | Scheduled tasks, each twice in new containers | `evaluate_validity` 1 query, `cleanup_dossier_exports` 3, `send_weekly_digest` 6 then 1 (round already done), `reconcile_validity` 1945 (every pair recomputed) |
 | Two `reconcile_validity` at once, in two containers | both finished; no duplicate pair, nothing queued by a lock timeout |
 
-## Open
+## Resolved since
 
-- `reconcile_validity` recomputes every pair and `status_repository::recompute()` replaces the KPI
-  generation for every row it rewrites, changed or not: a run with no change still retires every
-  node's KPI cache and writes the generation once per pair.
+- `reconcile_validity` recomputes every pair, and `status_repository::recompute()` used to replace the
+  KPI generation for every row it rewrote, changed or not. It now replaces it only when a row appears,
+  goes, or changes its status or its sensitive flag, so a reconcile run with no change leaves every
+  node's KPI cache in place (version 2026100514).
