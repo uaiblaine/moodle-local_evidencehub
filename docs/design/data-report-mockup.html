@@ -1,0 +1,635 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Evidence hub as a data report: mockup</title>
+<meta name="description" content="Mockup for docs/design/data-report-study.md: the evidence hub's list drawn on the fleet's data report mould (band, filter bar, chips, bounded grid, cards, pager, loading states, core's table as the fallback), with invented data.">
+<style>
+:root {
+  --eh-bg: #f5f6f8; --eh-surface: #fff; --eh-surface-alt: #f8f9fa; --eh-surface-inset: #eef0f3;
+  --eh-hover: #eef4fb; --eh-line: #dee2e6; --eh-control-line: #8f959e;
+  --eh-ink: #1d2125; --eh-ink-strong: #000; --eh-ink-muted: #5b6470; --eh-ink-faint: #8a939c;
+  --eh-accent: #0f6cbf; --eh-brand-fill: #0f6cbf; --eh-on-brand-fill: #fff;
+  --eh-brand-tint: #e7f1fb; --eh-brand-edge: #a9cbee; --eh-brand-ink: #0a4f8c;
+  --eh-success-tint: #e8f5ee; --eh-success-edge: #a3cfb5; --eh-success-ink: #0f5132;
+  --eh-warning-tint: #fff6e0; --eh-warning-edge: #e9c46a; --eh-warning-ink: #664d03;
+  --eh-danger-tint: #fbeaea; --eh-danger-edge: #e3a1a1; --eh-danger-ink: #842029;
+  --eh-info-tint: #e6f6fa; --eh-info-edge: #9fd6e4; --eh-info-ink: #055160;
+  --eh-neutral-tint: #f1f3f5; --eh-neutral-edge: #ced4da; --eh-neutral-ink: #495057;
+  --eh-focus-ring: #1d2125; --eh-focus-width: 2px; --eh-shadow: rgb(0 0 0 / 10%);
+  --eh-radius-xs: 4px; --eh-radius-sm: 6px; --eh-radius-md: 8px; --eh-radius-lg: 12px; --eh-radius-xl: 16px;
+  --eh-elevation-sm: 0 1px 2px rgba(7, 0, 147, .08), 0 1px 3px rgba(7, 0, 147, .06);
+  --eh-elevation-md: 0 4px 12px rgba(7, 0, 147, .10);
+  --eh-elevation-lg: 0 12px 32px rgba(7, 0, 147, .14);
+  --eh-fast: 150ms; --eh-base: 250ms; --eh-ease: cubic-bezier(0.4, 0, 0.2, 1);
+  --eh-proposal: #8b5cf6;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --eh-bg: #15181c; --eh-surface: #1e2227; --eh-surface-alt: #252a30; --eh-surface-inset: #2b3035;
+    --eh-hover: #22303f; --eh-line: #343a40; --eh-control-line: #6c757d;
+    --eh-ink: #e6e8eb; --eh-ink-strong: #fff; --eh-ink-muted: #9aa3ad; --eh-ink-faint: #737d87;
+    --eh-accent: #6ea8fe; --eh-brand-fill: #3d8bfd; --eh-on-brand-fill: #fff;
+    --eh-brand-tint: #1b2a3d; --eh-brand-edge: #2f4f78; --eh-brand-ink: #9ec5fe;
+    --eh-success-tint: #0d2a1c; --eh-success-edge: #2f6b4c; --eh-success-ink: #75b798;
+    --eh-warning-tint: #2e2405; --eh-warning-edge: #7a6118; --eh-warning-ink: #ffda6a;
+    --eh-danger-tint: #2c0b0e; --eh-danger-edge: #6e2a30; --eh-danger-ink: #ea868f;
+    --eh-info-tint: #032830; --eh-info-edge: #1f6b7c; --eh-info-ink: #6edff6;
+    --eh-neutral-tint: #2b3035; --eh-neutral-edge: #495057; --eh-neutral-ink: #ced4da;
+    --eh-focus-ring: #fff; --eh-shadow: rgb(0 0 0 / 50%);
+    --eh-elevation-sm: 0 1px 2px rgba(0, 0, 0, .5);
+    --eh-elevation-md: 0 4px 12px rgba(0, 0, 0, .55);
+    --eh-elevation-lg: 0 12px 32px rgba(0, 0, 0, .6);
+  }
+}
+* { box-sizing: border-box; }
+body { margin: 0; overflow-x: clip; background: var(--eh-bg); color: var(--eh-ink);
+  font: 15px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+main { max-width: 1240px; margin: 0 auto; padding: 24px 16px 80px; }
+h1 { font-size: 1.75rem; margin: 0 0 4px; }
+.lede { color: var(--eh-ink-muted); margin: 0 0 16px; max-width: 880px; }
+a { color: var(--eh-accent); }
+button, input, select { font: inherit; color: inherit; }
+:focus-visible { outline: var(--eh-focus-width) solid var(--eh-focus-ring); outline-offset: 2px; }
+code { font-size: .8125rem; }
+.visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+/* Mockup switches (not part of the design). */
+.switches { position: sticky; top: 0; z-index: 40; display: flex; flex-wrap: wrap; gap: 6px 18px; align-items: center;
+  background: var(--eh-surface); border: 1px solid var(--eh-line); border-radius: var(--eh-radius-lg);
+  padding: 8px 12px; box-shadow: var(--eh-elevation-sm); margin-bottom: 16px; }
+.switches .sw { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.switches .sw > span { font-size: .8125rem; color: var(--eh-ink-muted); }
+.switches .eh-seg button { min-height: 1.75rem; padding: 0 .5rem; font-size: .8125rem; }
+
+/* Segmented control. */
+.eh-seg { display: inline-flex; flex-wrap: wrap; gap: 2px; padding: .1875rem; border: 1px solid transparent;
+  border-radius: var(--eh-radius-lg); background: var(--eh-surface-inset); }
+.eh-seg button { display: inline-flex; align-items: center; gap: 6px; border: 0; background: transparent;
+  border-radius: var(--eh-radius-md); min-height: 2rem; padding: 0 .75rem; cursor: pointer; font-size: .875rem;
+  font-weight: 500; color: var(--eh-ink-muted); }
+.eh-seg button { white-space: nowrap; }
+.device.is-phone .eh-bar .eh-seg button { padding: 0 .375rem; }
+.eh-seg button[aria-checked="true"] { background: var(--eh-surface); color: var(--eh-ink); font-weight: 600;
+  box-shadow: var(--eh-elevation-sm); }
+.eh-seg small { font-size: .75rem; font-weight: 600; color: var(--eh-ink-muted); font-variant-numeric: tabular-nums; }
+
+/* Device frame. */
+.device { margin: 0 auto; }
+.device.is-phone { max-width: 375px; }
+.page { background: var(--eh-surface); border: 1px solid var(--eh-line); border-radius: var(--eh-radius-lg); min-width: 0; }
+.device.is-phone .page { border-radius: var(--eh-radius-xl); box-shadow: var(--eh-elevation-lg); }
+.moodlebar { display: flex; align-items: center; gap: 8px; padding: 8px 16px; border-bottom: 1px solid var(--eh-line);
+  font-size: .875rem; color: var(--eh-ink-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.moodlebar b { color: var(--eh-ink); }
+.pagebody { padding: 16px; min-width: 0; }
+.crumbs { font-size: .8125rem; color: var(--eh-ink-muted); margin-bottom: 4px; }
+.pagehead { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 8px 16px; margin-bottom: 16px; }
+.pagehead h2 { font-size: 1.5rem; margin: 0; }
+.tplpick { display: flex; flex-direction: column; gap: 2px; min-width: 0; max-width: 100%; }
+.tplpick label { font-size: .75rem; font-weight: 600; color: var(--eh-ink-muted); }
+.form-select { min-height: 2.25rem; max-width: 100%; padding: 0 2rem 0 .75rem; border: 1px solid var(--eh-control-line);
+  border-radius: var(--eh-radius-md); background: var(--eh-surface); font-size: .875rem; }
+.form-select-sm { min-height: 2rem; font-size: .8125rem; padding: 0 1.5rem 0 .5rem; }
+.proposal { box-shadow: inset 3px 0 0 var(--eh-proposal); }
+.proposaltag { font-size: .75rem; font-weight: 600; color: var(--eh-proposal); }
+
+/* Status label. */
+.eh-status { display: inline-flex; align-items: center; gap: .25rem; padding: .125rem .5rem; white-space: nowrap;
+  border: 1px solid var(--eh-neutral-edge); border-radius: var(--eh-radius-sm); background: var(--eh-neutral-tint);
+  color: var(--eh-neutral-ink); font-size: .75rem; font-weight: 600; line-height: 1.4; }
+.eh-status svg { width: 12px; height: 12px; }
+.eh-status--success { border-color: var(--eh-success-edge); background: var(--eh-success-tint); color: var(--eh-success-ink); }
+.eh-status--warning { border-color: var(--eh-warning-edge); background: var(--eh-warning-tint); color: var(--eh-warning-ink); }
+.eh-status--danger { border-color: var(--eh-danger-edge); background: var(--eh-danger-tint); color: var(--eh-danger-ink); }
+.eh-status--info { border-color: var(--eh-info-edge); background: var(--eh-info-tint); color: var(--eh-info-ink); }
+
+/* Skeleton. */
+.eh-sk-block { display: block; height: .75rem; border-radius: var(--eh-radius-xs); background: var(--eh-surface-inset); }
+.eh-sk-block.big { height: 1.5rem; width: 55%; margin: 6px 0; }
+.eh-sk-block.w40 { width: 40%; } .eh-sk-block.w60 { width: 60%; } .eh-sk-block.w80 { width: 80%; }
+@media (prefers-reduced-motion: no-preference) { .eh-sk { animation: eh-sk-pulse 1300ms ease-in-out infinite; } }
+@keyframes eh-sk-pulse { 0%, 100% { opacity: 1; } 50% { opacity: .45; } }
+
+/* Regions, band. */
+.eh-region { position: relative; }
+.eh-region[aria-busy="true"] .eh-dim { opacity: .55; transition: opacity var(--eh-fast) var(--eh-ease); }
+.eh-progress { position: absolute; top: 0; right: 0; left: 0; z-index: 6; height: 2px; overflow: hidden; border-radius: 2px; }
+.eh-progress::before { content: ""; position: absolute; top: 0; bottom: 0; left: 0; width: 30%; background: var(--eh-brand-fill); }
+@media (prefers-reduced-motion: no-preference) { .eh-progress::before { animation: eh-indet 1100ms var(--eh-ease) infinite; } }
+@keyframes eh-indet { from { left: -30%; } to { left: 100%; } }
+.eh-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; margin-bottom: 8px; }
+.eh-tile { min-width: 0; padding: 12px; border: 1px solid var(--eh-line); border-radius: var(--eh-radius-lg); background: var(--eh-surface); }
+.eh-tile-label { font-size: .75rem; font-weight: 600; color: var(--eh-ink-muted); }
+.eh-tile-value { font-size: 1.5rem; font-weight: 700; line-height: 1.2; font-variant-numeric: tabular-nums; color: var(--eh-ink-strong); }
+.eh-tile-sub { font-size: .75rem; color: var(--eh-ink-muted); }
+.eh-panels { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
+.eh-panel { flex: 1 1 45%; min-width: 17.5rem; padding: 12px; border: 1px solid var(--eh-line); border-radius: var(--eh-radius-lg); }
+.device.is-phone .eh-panel { min-width: 0; flex-basis: 100%; }
+.eh-panel-title { display: flex; justify-content: space-between; gap: 8px; margin-bottom: 8px; font-size: .8125rem; font-weight: 600; }
+.eh-hrow { display: grid; grid-template-columns: minmax(0, 11rem) minmax(0, 1fr) 4.5rem; gap: 8px; align-items: center;
+  margin: 2px 0; padding: 2px 4px; border: 0; border-radius: var(--eh-radius-xs); background: transparent; width: 100%;
+  font-size: .8125rem; text-align: start; text-decoration: none; color: var(--eh-ink); cursor: pointer; }
+.eh-hrow:hover { background: var(--eh-hover); }
+.eh-hrow .lab { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.eh-track { display: block; height: .5rem; overflow: hidden; border-radius: var(--eh-radius-xs); background: var(--eh-surface-inset); }
+.eh-fill { display: block; height: 100%; border-radius: var(--eh-radius-xs); background: var(--eh-brand-fill); }
+.eh-hrow .n { text-align: end; font-variant-numeric: tabular-nums; color: var(--eh-ink-muted); white-space: nowrap; }
+
+/* Filter bar. */
+.eh-bar { --eh-bar-inner: 2rem; position: relative; display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; margin-bottom: 12px; }
+.eh-bar-spacer { flex: 1 1 0; }
+.eh-bar-cluster { display: inline-flex; align-items: center; border-radius: var(--eh-radius-lg); background: var(--eh-surface-inset); }
+.eh-bar-count { padding: 0 .5rem 0 .75rem; font-size: .875rem; font-weight: 600; color: var(--eh-ink-muted);
+  font-variant-numeric: tabular-nums; white-space: nowrap; }
+.eh-capsule { position: relative; display: inline-flex; align-items: center; gap: .125rem; padding: .1875rem;
+  border: 1px solid var(--eh-line); border-radius: var(--eh-radius-lg); background: var(--eh-surface); box-shadow: var(--eh-elevation-sm); }
+.eh-wrap { position: relative; display: inline-flex; }
+.eh-ib { position: relative; display: inline-flex; align-items: center; justify-content: center; gap: 2px;
+  min-width: var(--eh-bar-inner); height: var(--eh-bar-inner); padding: 0 .375rem; border: 0; border-radius: var(--eh-radius-md);
+  background: transparent; color: var(--eh-ink-muted); cursor: pointer; }
+.eh-ib:hover { background: var(--eh-surface-alt); color: var(--eh-ink); }
+.eh-ib[aria-expanded="true"] { background: var(--eh-brand-tint); color: var(--eh-brand-ink); }
+.eh-ib svg { width: 16px; height: 16px; }
+.eh-ib svg.chev { width: 12px; height: 12px; }
+.eh-badge { position: absolute; top: -4px; right: -4px; min-width: 16px; height: 16px; padding: 0 4px; border-radius: 50rem;
+  background: var(--eh-brand-fill); color: var(--eh-on-brand-fill); font-size: .75rem; font-weight: 700; line-height: 16px;
+  text-align: center; font-variant-numeric: tabular-nums; }
+.eh-chips { flex: 1 0 100%; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.eh-chip { display: inline-flex; align-items: center; gap: 6px; height: 28px; max-width: 100%; padding: 0 6px 0 8px;
+  border: 1px solid var(--eh-brand-edge); border-radius: var(--eh-radius-sm); background: var(--eh-brand-tint);
+  color: var(--eh-brand-ink); font-size: .8125rem; font-weight: 500; cursor: pointer; }
+.eh-chip span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.eh-chip svg { width: 12px; height: 12px; flex: none; }
+.eh-clearall { border: 0; background: none; padding: 0 4px; font-size: .8125rem; font-weight: 600; text-decoration: underline; cursor: pointer; }
+
+/* Menu and filter panel. */
+.eh-menu { position: absolute; top: calc(100% + 6px); right: 0; z-index: 20; min-width: 220px; max-width: calc(100vw - 48px);
+  padding: 4px; border: 1px solid var(--eh-line); border-radius: var(--eh-radius-md); background: var(--eh-surface);
+  box-shadow: var(--eh-elevation-md); }
+.device.is-phone .eh-wrap { position: static; }
+.eh-menu-head { padding: 6px 8px 2px; font-size: .75rem; font-weight: 600; color: var(--eh-ink-muted); }
+.eh-menu-sep { height: 1px; margin: 4px 0; background: var(--eh-line); }
+.eh-menu-item { display: flex; align-items: center; gap: 8px; width: 100%; min-height: 32px; padding: 4px 8px; border: 0;
+  border-radius: var(--eh-radius-xs); background: transparent; font-size: .875rem; text-align: start; text-decoration: none;
+  color: var(--eh-ink); cursor: pointer; white-space: nowrap; }
+.eh-menu-item:hover { background: var(--eh-hover); color: var(--eh-brand-ink); }
+.eh-menu-item:focus-visible { outline-offset: -2px; }
+.eh-menu-item[aria-disabled="true"], .eh-menu-item[aria-disabled="true"]:hover { background: transparent; color: var(--eh-ink-faint); cursor: default; }
+.eh-menu-item > svg { width: 16px; height: 16px; flex: none; color: var(--eh-ink-muted); }
+.eh-menu-item .tick { margin-inline-start: auto; color: var(--eh-brand-ink); visibility: hidden; }
+.eh-menu-item[aria-checked="true"] { font-weight: 600; }
+.eh-menu-item[aria-checked="true"] .tick { visibility: visible; }
+.eh-menu-label { flex: 1 1 auto; min-width: 0; }
+.eh-menu-hint { font-size: .75rem; font-weight: 400; color: var(--eh-ink-muted); }
+.eh-box { display: inline-flex; flex: none; align-items: center; justify-content: center; width: 16px; height: 16px;
+  border: 1px solid var(--eh-control-line); border-radius: var(--eh-radius-xs); }
+.eh-box svg { width: 12px; height: 12px; visibility: hidden; color: var(--eh-on-brand-fill); }
+[aria-checked="true"] > .eh-box, [aria-pressed="true"] > .eh-box { border-color: var(--eh-brand-fill); background: var(--eh-brand-fill); }
+[aria-checked="true"] > .eh-box svg, [aria-pressed="true"] > .eh-box svg { visibility: visible; }
+.eh-fpanel { position: absolute; top: calc(2.5rem + 6px); right: 0; z-index: 20; display: flex; flex-direction: column;
+  width: 380px; max-width: 100%; max-height: 70vh; border: 1px solid var(--eh-line); border-radius: var(--eh-radius-lg);
+  background: var(--eh-surface); box-shadow: var(--eh-elevation-md); }
+.device.is-phone .eh-fpanel { position: sticky; inset: auto 0 0 0; width: auto; max-height: 80vh; margin-top: 8px;
+  border-radius: var(--eh-radius-xl) var(--eh-radius-xl) 0 0; box-shadow: var(--eh-elevation-lg); }
+.eh-fpanel-body { flex: 1 1 auto; min-height: 0; overflow: auto; padding: 12px; }
+.eh-fpanel-head { padding: 0 0 6px; font-size: .75rem; font-weight: 600; color: var(--eh-ink-muted); }
+.eh-fpanel-opts { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
+.eh-fpanel-opt { display: inline-flex; align-items: center; gap: 6px; min-height: 28px; padding: 2px 8px; line-height: 1.25;
+  text-align: start; border: 1px solid var(--eh-control-line); border-radius: var(--eh-radius-sm); background: var(--eh-surface);
+  font-size: .8125rem; font-weight: 500; cursor: pointer; }
+.eh-fpanel-opt[aria-checked="true"] { border-color: var(--eh-brand-edge); background: var(--eh-brand-tint); color: var(--eh-brand-ink); }
+.eh-fpanel-opt small, .eh-fpanel-row small { font-size: .75rem; font-weight: 600; color: var(--eh-ink-muted); font-variant-numeric: tabular-nums; }
+.eh-fpanel-find { width: 100%; min-height: 2rem; padding: 0 .5rem; border: 1px solid var(--eh-control-line);
+  border-radius: var(--eh-radius-md); background: var(--eh-surface); font-size: .8125rem; }
+.eh-fpanel-list { display: flex; flex-direction: column; gap: 2px; max-height: 9.5rem; overflow-y: auto; margin: 6px 0 12px;
+  padding: 4px; border: 1px solid var(--eh-line); border-radius: var(--eh-radius-md); }
+.eh-fpanel-row { display: flex; align-items: center; gap: 8px; min-height: 32px; padding: 0 8px; border: 0;
+  border-radius: var(--eh-radius-xs); background: transparent; font-size: .8125rem; text-align: start; cursor: pointer; }
+.eh-fpanel-row:hover { background: var(--eh-hover); color: var(--eh-brand-ink); }
+.eh-fpanel-row[aria-pressed="true"] { font-weight: 600; }
+.eh-fpanel-row small { margin-inline-start: auto; }
+.eh-fpanel-foot { display: flex; flex: none; justify-content: space-between; gap: 8px; padding: 12px; border-top: 1px solid var(--eh-line); }
+.btn { display: inline-flex; align-items: center; gap: 6px; min-height: 2rem; padding: 0 .75rem; border: 1px solid var(--eh-control-line);
+  border-radius: var(--eh-radius-md); background: var(--eh-surface); font-size: .875rem; cursor: pointer; white-space: nowrap; }
+.btn-sm { font-size: .8125rem; padding: 0 .5rem; }
+.btn-primary { border-color: var(--eh-brand-fill); background: var(--eh-brand-fill); color: var(--eh-on-brand-fill); }
+
+/* Grid. */
+.eh-gridframe { position: relative; max-height: 34rem; overflow: auto; overscroll-behavior-x: contain;
+  border: 1px solid var(--eh-line); border-radius: var(--eh-radius-lg); }
+table.eh-grid { margin: 0; table-layout: fixed; border-collapse: separate; border-spacing: 0; font-size: .875rem; }
+.eh-grid th { position: sticky; top: 0; z-index: 2; padding: 0; background: var(--eh-surface-alt); border-bottom: 1px solid var(--eh-line);
+  color: var(--eh-ink-muted); font-size: .8125rem; font-weight: 600; text-align: start; white-space: nowrap; }
+.eh-sortbtn, .eh-plain { display: flex; align-items: center; gap: 4px; width: 100%; padding: 8px 14px 8px 12px; border: 0;
+  background: none; font: inherit; color: inherit; text-align: start; overflow: hidden; }
+.eh-sortbtn { cursor: pointer; }
+.eh-sortbtn:hover, .eh-grid th[aria-sort="ascending"], .eh-grid th[aria-sort="descending"] { color: var(--eh-ink); }
+.eh-sortbtn .arrow { color: var(--eh-brand-ink); font-size: .75rem; }
+.eh-resize { position: absolute; top: 0; right: -4px; z-index: 3; width: 9px; height: 100%; cursor: col-resize; }
+.eh-resize::after { content: ""; position: absolute; top: 25%; bottom: 25%; left: 4px; width: 1px; background: var(--eh-line); }
+.eh-resize:hover::after, .eh-resize:focus-visible::after { top: 0; bottom: 0; left: 3px; width: 3px; background: var(--eh-brand-fill); }
+.eh-grid td, .eh-grid tbody th { padding: 8px 12px; border-bottom: 1px solid var(--eh-line); background: var(--eh-surface);
+  vertical-align: top; font-weight: 400; color: var(--eh-ink); font-size: .875rem; white-space: normal; }
+.eh-grid tbody tr:last-child > * { border-bottom: 0; }
+.eh-grid .c, .eh-grid .sub { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.eh-grid .sub, .eh-card .sub { font-size: .8125rem; color: var(--eh-ink-muted); }
+.eh-grid .eh-fixed { position: sticky; left: 0; z-index: 1; }
+.eh-grid thead th.eh-fixed { z-index: 4; }
+.eh-gridframe.is-scrolled .eh-fixed { box-shadow: 6px 0 8px -6px var(--eh-shadow); }
+.eh-grid tbody tr:hover > * { background: var(--eh-hover); }
+.eh-who { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; min-width: 0; }
+.eh-who > span { min-width: 0; }
+.eh-name { font-weight: 600; color: var(--eh-accent); text-decoration: none; }
+.eh-muted { color: var(--eh-ink-faint); }
+
+/* Cards. */
+.eh-cards { display: grid; gap: 8px; grid-template-columns: repeat(auto-fill, minmax(17.5rem, 1fr)); }
+.device.is-phone .eh-cards { grid-template-columns: minmax(0, 1fr); }
+.eh-card { min-width: 0; padding: 12px; border: 1px solid var(--eh-line); border-radius: var(--eh-radius-lg); background: var(--eh-surface); }
+.eh-card .l1 { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; }
+.eh-card .ln { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; margin-top: 4px; font-size: .8125rem; overflow-wrap: anywhere; }
+.eh-card .k { color: var(--eh-ink-muted); }
+.eh-card dl { display: grid; grid-template-columns: minmax(0, 7rem) minmax(0, 1fr); gap: 4px 8px; margin: 8px 0 0; padding-top: 8px;
+  border-top: 1px solid var(--eh-line); font-size: .8125rem; }
+.eh-card dt { color: var(--eh-ink-muted); }
+.eh-card dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+.eh-more { margin-top: 6px; border: 0; background: none; padding: 0; font-size: .8125rem; font-weight: 600; text-decoration: underline; cursor: pointer; }
+
+/* Pager, empty, core table. */
+.eh-pager { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px; margin-top: 12px;
+  font-size: .8125rem; color: var(--eh-ink-muted); }
+.eh-pages { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 2px; }
+.eh-pages button { min-width: 2rem; min-height: 2rem; padding: 0 .5rem; border: 0; border-radius: var(--eh-radius-md);
+  background: transparent; font-size: .8125rem; color: var(--eh-ink); font-variant-numeric: tabular-nums; cursor: pointer; }
+.eh-pages button:hover { background: var(--eh-hover); }
+.eh-pages button[aria-current="page"] { background: var(--eh-brand-tint); color: var(--eh-brand-ink); font-weight: 700; }
+.eh-pages button[disabled] { color: var(--eh-ink-faint); background: transparent; cursor: default; }
+.eh-empty { padding: 32px 16px; border: 1px dashed var(--eh-line); border-radius: var(--eh-radius-lg); text-align: center; color: var(--eh-ink-muted); }
+.eh-empty b { display: block; color: var(--eh-ink); }
+table.core { width: 100%; border-collapse: collapse; font-size: .875rem; }
+.core th { padding: 8px; border-bottom: 2px solid var(--eh-line); text-align: start; white-space: nowrap; }
+.core th a { text-decoration: none; }
+.core td { padding: 8px; border-top: 1px solid var(--eh-line); vertical-align: top; }
+.core tbody tr:nth-child(odd) { background: var(--eh-surface-alt); }
+.corebar { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; margin-bottom: 8px; font-size: .875rem; }
+.scrollx { overflow-x: auto; }
+
+/* Reading notes. */
+.notes { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; margin-top: 20px; }
+.note { min-width: 0; padding: 12px 14px; border: 1px solid var(--eh-line); border-radius: var(--eh-radius-lg);
+  background: var(--eh-surface); font-size: .875rem; }
+.note h4 { margin: 0 0 6px; font-size: .875rem; }
+.note ul { margin: 0; padding-left: 18px; }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+</style>
+</head>
+<body>
+<main>
+  <h1>Evidence hub as a data report</h1>
+  <p class="lede">Mockup for <code>data-report-study.md</code>. The hub's list on the fleet's data report mould: Report Builder
+  underneath, a band of figures, the filter bar with its panel and menus, a bounded grid or cards, a pager, and core's own table
+  as the fallback. The data is invented. The tile "Expiring in 30 days", the second panel and the "Valid until" facet are new figures (decisions 7 and 12).
+  Press the bar's buttons to open their layers.</p>
+
+  <div class="switches" role="group" aria-label="Mockup switches">
+    <div class="sw"><span id="sw-vp">Viewport</span>
+      <div class="eh-seg" role="radiogroup" aria-labelledby="sw-vp" data-switch="vp">
+        <button type="button" role="radio" data-v="desktop" aria-checked="true">Desktop</button>
+        <button type="button" role="radio" data-v="phone" aria-checked="false">Phone</button>
+      </div></div>
+    <div class="sw"><span id="sw-view">View</span>
+      <div class="eh-seg" role="radiogroup" aria-labelledby="sw-view" data-switch="view">
+        <button type="button" role="radio" data-v="auto" aria-checked="true">Automatic</button>
+        <button type="button" role="radio" data-v="table" aria-checked="false">Table</button>
+        <button type="button" role="radio" data-v="cards" aria-checked="false">Cards</button>
+        <button type="button" role="radio" data-v="core" aria-checked="false">Table view (core)</button>
+      </div></div>
+    <div class="sw"><span id="sw-state">State</span>
+      <div class="eh-seg" role="radiogroup" aria-labelledby="sw-state" data-switch="state">
+        <button type="button" role="radio" data-v="loaded" aria-checked="true">Loaded</button>
+        <button type="button" role="radio" data-v="first" aria-checked="false">First load</button>
+        <button type="button" role="radio" data-v="later" aria-checked="false">Later load</button>
+        <button type="button" role="radio" data-v="empty" aria-checked="false">Empty</button>
+      </div></div>
+    <div class="sw"><span id="sw-reader">Reader</span>
+      <div class="eh-seg" role="radiogroup" aria-labelledby="sw-reader" data-switch="reader">
+        <button type="button" role="radio" data-v="manager" aria-checked="true">Category manager</button>
+        <button type="button" role="radio" data-v="admin" aria-checked="false">Administrator</button>
+      </div></div>
+  </div>
+
+  <div class="device" id="device">
+    <div class="page">
+      <div class="moodlebar"><b>Moodle</b><span>·</span><span>Operations north</span></div>
+      <div class="pagebody" id="pagebody"></div>
+    </div>
+  </div>
+
+  <div class="notes">
+    <div class="note"><h4>What is the same as today</h4><ul>
+      <li>A row is a worker and a competency of one learning plan template.</li>
+      <li>"Needs attention" is the default; a restricted pair shows its status and nothing else.</li>
+      <li>The inspection drawer opens from the row; the worker's name leads to their evidence page.</li>
+      <li>The workers hidden by permissions are counted.</li></ul></div>
+    <div class="note"><h4>What changes</h4><ul>
+      <li>Filters are core's stored filters, set in the panel, shown as chips; the search and the scope are not stored.</li>
+      <li>The reader chooses columns and their widths; the download follows them.</li>
+      <li>The status tiles become a distribution; pressing a line sets the status filter.</li>
+      <li>No checkbox per row: the download is what the list shows, the dossiers are in the More menu (decisions 9 and 10).</li>
+      <li>The matrix is reached from View (decision 11).</li></ul></div>
+    <div class="note"><h4>Open in this mockup</h4><ul>
+      <li>The status labels' tones (decision 15): the Design System has no dark tone, which "Expired" uses today.</li>
+      <li>The counts in the scope's cells come from the status facet.</li></ul></div>
+  </div>
+</main>
+
+<script>
+(function() {
+  'use strict';
+  const S = {vp: 'desktop', view: 'auto', state: 'loaded', reader: 'manager', layer: '', more: {}, scope: 'attention'};
+  const I = {
+    filter: '<svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M1.5 2h13l-5 6.2V14l-3-1.6V8.2z"/></svg>',
+    columns: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x="1.75" y="2.75" width="12.5" height="10.5" rx="1.5"/><path d="M6 3v10M10 3v10"/></svg>',
+    table: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x="1.75" y="2.75" width="12.5" height="10.5" rx="1.5"/><path d="M2 6.5h12M2 10h12"/></svg>',
+    cards: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x="1.75" y="1.75" width="5" height="5" rx="1"/><rect x="9.25" y="1.75" width="5" height="5" rx="1"/><rect x="1.75" y="9.25" width="5" height="5" rx="1"/><rect x="9.25" y="9.25" width="5" height="5" rx="1"/></svg>',
+    auto: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x="1.75" y="3.75" width="8.5" height="8.5" rx="1"/><rect x="11.75" y="5.75" width="2.5" height="6.5" rx=".75"/></svg>',
+    download: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 2v8M4.5 7 8 10.5 11.5 7M2.5 13.5h11"/></svg>',
+    search: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><circle cx="7" cy="7" r="4.25"/><path d="m10.5 10.5 3 3"/></svg>',
+    kebab: '<svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><circle cx="8" cy="3" r="1.4"/><circle cx="8" cy="8" r="1.4"/><circle cx="8" cy="13" r="1.4"/></svg>',
+    chev: '<svg class="chev" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m3 4.5 3 3 3-3"/></svg>',
+    check: '<svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m2.5 6.5 2.5 2.5 4.5-5"/></svg>',
+    cross: '<svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><path d="m3 3 6 6M9 3l-6 6"/></svg>',
+    lock: '<svg viewBox="0 0 12 12" fill="currentColor" aria-hidden="true"><path d="M3.5 5V4a2.5 2.5 0 0 1 5 0v1H9a1 1 0 0 1 1 1v4a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1zm1.2 0h2.6V4a1.3 1.3 0 0 0-2.6 0z"/></svg>',
+    matrix: '<svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M2 2h3v3H2zm4.5 0h3v3h-3zM11 2h3v3h-3zM2 6.5h3v3H2zm4.5 0h3v3h-3zm4.5 0h3v3h-3zM2 11h3v3H2zm4.5 0h3v3h-3zm4.5 0h3v3h-3z"/></svg>',
+    file: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" aria-hidden="true"><path d="M4 1.75h5l3 3v9.5H4z"/><path d="M9 2v3h3"/></svg>',
+    reset: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 8a5 5 0 1 0 1.6-3.7M3 2.5v2.8h2.8"/></svg>'
+  };
+  const STATUS = {
+    expired: ['Expired', 'danger'], critical: ['Due, critical', 'warning'], due: ['Due soon', 'info'],
+    unverified: ['Pending, awaiting verification', ''], missing: ['Pending, no evidence', ''],
+    restricted: ['Restricted', ''], valid: ['Compliant', 'success']
+  };
+  const ROWS = [
+    ['Adriana Lacerda', '104-221', 'NR-10 Basic electrical safety', 'expired', '2026-10-31', 2, 'Regulatory training certificate (NR)', 'SENAI Contagem'],
+    ['Adriana Lacerda', '104-221', 'Occupational health clearance', 'critical', '2026-11-28', 1, 'Occupational health certificate (ASO)', 'Clínica Vida Ocupacional'],
+    ['Bruno Teixeira', '104-377', 'NR-35 Work at height', 'missing', '', 0, '', ''],
+    ['Bruno Teixeira', '104-377', 'NR-10 Basic electrical safety', 'unverified', '2028-03-14', 1, 'Regulatory training certificate (NR)', 'Instituto Tecnoseg'],
+    ['Camila Duarte', '105-012', 'Occupational health clearance', 'restricted', '', null, '', ''],
+    ['Camila Duarte', '105-012', 'NR-33 Confined spaces', 'due', '2027-01-19', 3, 'Regulatory training certificate (NR)', 'SENAI Contagem'],
+    ['Diego Fonseca', '105-448', 'Lockout and tagout, practical', 'expired', '2026-09-02', 1, 'Practical assessment', 'Operations north, maintenance'],
+    ['Eduarda Pimentel', '106-003', 'NR-35 Work at height', 'critical', '2026-12-05', 2, 'Regulatory training certificate (NR)', 'Altura Segura Treinamentos'],
+    ['Fábio Nogueira', '106-190', 'Technical responsibility, substations', 'unverified', '2027-08-30', 1, 'Technical responsibility record (ART/RRT)', 'CREA-MG'],
+    ['Gabriela Moura', '106-254', 'NR-10 Basic electrical safety', 'due', '2027-01-07', 2, 'Regulatory training certificate (NR)', 'Instituto Tecnoseg'],
+    ['Heitor Ramos', '106-871', 'NR-33 Confined spaces', 'missing', '', 0, '', ''],
+    ['Isabela Cunha', '107-020', 'Occupational health clearance', 'due', '2027-01-22', 1, 'Occupational health certificate (ASO)', 'Clínica Vida Ocupacional']
+  ];
+  const COLS = [
+    ['worker', 'Worker', 250, true], ['competency', 'Competency', 250, true], ['status', 'Status', 220, true],
+    ['expiry', 'Valid until', 120, true], ['count', 'Evidence', 96, false], ['type', 'Type of evidence', 240, false],
+    ['issuer', 'Issuer', 200, false]
+  ];
+  const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'}[c]));
+  const narrow = () => S.vp === 'phone';
+  const cardsView = () => S.view === 'cards' || (S.view === 'auto' && narrow());
+  const rows = () => S.reader === 'admin' ? ROWS.map((r) => r[3] === 'restricted'
+      ? [r[0], r[1], r[2], 'due', '2027-02-11', 1, 'Occupational health certificate (ASO)', 'Clínica Vida Ocupacional'] : r) : ROWS;
+  const status = (k) => '<span class="eh-status' + (STATUS[k][1] ? ' eh-status--' + STATUS[k][1] : '') + '">'
+      + (k === 'restricted' ? I.lock : '') + esc(STATUS[k][0]) + '</span>';
+  const dash = '<span class="eh-muted">–</span>';
+  const val = (v) => v === '' || v === null ? dash : esc(v);
+
+  function band() {
+    const sk = S.state === 'first';
+    const tile = (label, value, sub, proposal) => '<div class="eh-tile' + (proposal ? ' proposal' : '') + '">'
+        + '<div class="eh-tile-label">' + label + '</div>'
+        + (sk ? '<span class="eh-sk-block big"></span><span class="eh-sk-block w60"></span>'
+            : '<div class="eh-tile-value">' + value + '</div><div class="eh-tile-sub">' + sub + '</div>') + '</div>';
+    const manager = S.reader === 'manager';
+    const empty = S.state === 'empty';
+    let h = '<section class="eh-region" aria-label="Readiness of the listed workers" aria-busy="' + (S.state === 'first' || S.state === 'later') + '">'
+        + (S.state === 'later' ? '<div class="eh-progress"></div>' : '') + '<div class="eh-dim' + (sk ? ' eh-sk' : '') + '"><div class="eh-tiles">';
+    h += tile('Workers', empty ? '0' : (manager ? '1,204' : '10,000'),
+        manager ? '37 more are not shown: you cannot view their evidence' : 'with an active plan from this template');
+    h += tile('Ready', empty ? '–' : (manager ? '812' : '6,930'), empty ? 'no worker listed' : (manager ? '67% of the workers' : '69% of the workers'));
+    h += tile('Pairs needing attention', empty ? '0' : (manager ? '2,310' : '18,412'), 'of ' + (manager ? '36,120' : '300,000') + ' pairs');
+    h += tile('Expiring in 30 days', empty ? '0' : (manager ? '418' : '3,275'), 'pairs still compliant or due');
+    h += '</div><div class="eh-panels">';
+    const dist = manager
+        ? [['Compliant', 33810, 'success'], ['Due soon', 742], ['Due, critical', 391], ['Expired', 486], ['Pending, awaiting verification', 203], ['Pending, no evidence', 447], ['Restricted', 41]]
+        : [['Compliant', 281588], ['Due soon', 6120], ['Due, critical', 3214], ['Expired', 3987], ['Pending, awaiting verification', 1622], ['Pending, no evidence', 3469]];
+    const max = Math.max(...dist.slice(1).map((d) => d[1]));
+    h += '<div class="eh-panel"><div class="eh-panel-title"><span>Pairs by status</span></div>';
+    h += sk ? '<span class="eh-sk-block w80"></span><br><span class="eh-sk-block w60"></span><br><span class="eh-sk-block w40"></span>'
+        : dist.map((d, i) => '<button type="button" class="eh-hrow" title="Show these pairs"><span class="lab">' + d[0] + '</span><span class="eh-track"><span class="eh-fill" style="width:'
+            + (i === 0 ? 100 : Math.max(2, Math.round(100 * d[1] / max))) + '%' + (i === 0 ? ';opacity:.35' : '') + '"></span></span><span class="n">'
+            + (empty ? 0 : d[1]).toLocaleString('en') + '</span></button>').join('');
+    h += '</div><div class="eh-panel"><div class="eh-panel-title"><span>Competencies with most open pairs</span></div>';
+    const worst = [['NR-35 Work at height', 412], ['Occupational health clearance', 377], ['NR-10 Basic electrical safety', 305], ['NR-33 Confined spaces', 268], ['Lockout and tagout, practical', 190]];
+    h += sk ? '<span class="eh-sk-block w80"></span><br><span class="eh-sk-block w60"></span><br><span class="eh-sk-block w40"></span>'
+        : worst.map((d) => '<button type="button" class="eh-hrow" title="Show these pairs"><span class="lab">' + d[0] + '</span><span class="eh-track"><span class="eh-fill" style="width:'
+            + Math.round(100 * d[1] / worst[0][1]) + '%"></span></span><span class="n">' + (empty ? 0 : (manager ? d[1] : d[1] * 8)).toLocaleString('en') + '</span></button>').join('');
+    return h + '</div></div></div></section>';
+  }
+
+  function menu(name) {
+    const item = (role, checked, icon, label, hint, extra) => '<button type="button" class="eh-menu-item" role="' + role + '"'
+        + (checked === null ? '' : ' aria-checked="' + checked + '"') + (extra || '') + '>' + icon + '<span class="eh-menu-label">' + label
+        + '</span>' + (hint ? '<span class="eh-menu-hint">' + hint + '</span>' : '')
+        + (role === 'menuitemradio' ? '<span class="tick">' + I.check.replace('<svg', '<svg width="12" height="12"') + '</span>' : '') + '</button>';
+    const box = '<span class="eh-box">' + I.check + '</span>';
+    const sep = '<div class="eh-menu-sep" role="separator"></div>';
+    let h = '<div class="eh-menu" role="menu">';
+    if (name === 'columns') {
+      h += item('menuitemcheckbox', true, box, 'Worker', 'Always shown', ' aria-disabled="true"');
+      h += item('menuitemcheckbox', true, box, 'Competency', 'Always shown', ' aria-disabled="true"');
+      [['Status', 1], ['Valid until', 1], ['Evidence', 1], ['Type of evidence', 1], ['Issuer', 1], ['Competency ID number', 0],
+        ['Framework', 0], ['Issue date', 0], ['Expiry date', 0], ['Verification', 0], ['Last change', 0]]
+          .forEach((c) => { h += item('menuitemcheckbox', !!c[1], box, c[0]); });
+      h += sep + '<div class="eh-menu-head">Sets</div>' + item('menuitemcheckbox', false, box, 'Validity')
+          + item('menuitemcheckbox', false, box, 'Deciding evidence');
+      h += sep + item('menuitem', null, I.reset, 'Default columns', '', ' aria-disabled="true"') + item('menuitem', null, I.reset, 'Reset column widths', '', ' aria-disabled="true"');
+    } else if (name === 'view') {
+      h += item('menuitemradio', S.view === 'auto', I.auto, 'Automatic', 'Cards on a narrow screen', ' data-view="auto"');
+      h += item('menuitemradio', S.view === 'table', I.table, 'Table', '', ' data-view="table"');
+      h += item('menuitemradio', S.view === 'cards', I.cards, 'Cards', '', ' data-view="cards"');
+      h += sep + item('menuitem', null, I.matrix, 'Matrix') + item('menuitem', null, I.table, 'Table view', '', ' data-view="core"');
+    } else if (name === 'download') {
+      ['Comma separated values (.csv)', 'Microsoft Excel (.xlsx)', 'OpenDocument (.ods)', 'Javascript Object Notation (.json)',
+        'Portable Document Format (.pdf)'].forEach((f) => { h += item('menuitem', null, I.download, f); });
+    } else {
+      h += item('menuitem', null, I.file, 'Export dossiers of the listed workers', S.reader === 'manager' ? '1,204 workers' : 'At most 500');
+    }
+    return h + '</div>';
+  }
+
+  function fpanel() {
+    const opts = (label, list, chosen) => '<div class="eh-fpanel-head">' + label + '</div><div class="eh-fpanel-opts" role="radiogroup" aria-label="' + label + '">'
+        + list.map((o, i) => '<button type="button" class="eh-fpanel-opt" role="radio" aria-checked="' + (i === chosen) + '">' + o[0]
+            + (o[1] === undefined ? '' : ' <small>' + o[1].toLocaleString('en') + '</small>') + '</button>').join('') + '</div>';
+    const list = (label, find, rowsof, proposal) => '<div class="eh-fpanel-head">' + label + (proposal ? ' <span class="proposaltag">proposed</span>' : '') + '</div>'
+        + '<input type="search" class="eh-fpanel-find" aria-label="' + find + '" placeholder="' + find + '">'
+        + '<div class="eh-fpanel-list" role="group" aria-label="' + label + '">' + rowsof.map((r) => '<button type="button" class="eh-fpanel-row" aria-pressed="' + !!r[2] + '">'
+            + '<span class="eh-box">' + I.check + '</span><span>' + r[0] + '</span>' + (r[1] === undefined ? '' : '<small>' + r[1].toLocaleString('en') + '</small>') + '</button>').join('') + '</div>';
+    let h = '<div class="eh-fpanel" role="dialog" aria-label="Filters"><div class="eh-fpanel-body">';
+    h += opts('Status', [['Any'], ['Expired', 131], ['Due, critical', 104], ['Due soon', 187], ['Pending, awaiting verification', 52], ['Pending, no evidence', 113], ['Restricted', 12]], 0);
+    h += list('Cohort', 'Search 14 cohorts', [['Maintenance north', undefined, 1], ['Maintenance south'], ['Substations crew'], ['Contractors 2026'], ['Line inspection']]);
+    h += list('Competency', 'Search 30 competencies', [['NR-10 Basic electrical safety', 96], ['NR-35 Work at height', 141], ['NR-33 Confined spaces', 88], ['Occupational health clearance', 120]]);
+    h += opts('Type of evidence', [['Any'], ['Regulatory training certificate (NR)', 318], ['Occupational health certificate (ASO)', 97], ['Practical assessment', 44], ['Diploma', 9]], 0);
+    h += opts('Verification', [['Any'], ['Verified', 402], ['Awaiting verification', 52], ['Rejected', 14]], 0);
+    h += opts('Valid until', [['Any'], ['Already expired', 131], ['Within 30 days', 149], ['Within 60 days', 233], ['Within 90 days', 291]], 0);
+    h += opts('Accounts', [['Active only'], ['Include suspended']], 0);
+    return h + '</div><div class="eh-fpanel-foot"><button type="button" class="btn btn-sm">Clear filters</button>'
+        + '<button type="button" class="btn btn-sm btn-primary" data-layer="filters">Show 599</button></div></div>';
+  }
+
+  function bar() {
+    const manager = S.reader === 'manager';
+    const total = S.state === 'empty' ? 0 : 599;
+    const ib = (name, label, icon, chev, badge) => '<span class="eh-wrap"><button type="button" class="eh-ib" data-layer="' + name + '" aria-label="' + label
+        + '" title="' + label + '" aria-expanded="' + (S.layer === name) + '">' + icon + (chev ? I.chev : '') + (badge ? '<span class="eh-badge" aria-hidden="true">' + badge + '</span>' : '')
+        + '</button>' + (S.layer === name && name !== 'filters' ? menu(name) : '') + '</span>';
+    let h = '<div class="eh-bar"><div class="eh-seg" role="radiogroup" aria-label="Pairs shown"' + (narrow() ? ' style="flex:1 0 100%"' : '') + '>';
+    h += '<button type="button" role="radio" data-scope="attention" aria-checked="' + (S.scope === 'attention') + '"' + (narrow() ? ' style="flex:1 1 0;justify-content:center"' : '') + '>Needs attention <small>' + (manager ? '2,310' : '18,412') + '</small></button>';
+    h += '<button type="button" role="radio" data-scope="all" aria-checked="' + (S.scope === 'all') + '"' + (narrow() ? ' style="flex:1 1 0;justify-content:center"' : '') + '>All <small>' + (manager ? '36,120' : '300,000') + '</small></button></div>';
+    h += '<span class="eh-bar-spacer"></span><div class="eh-bar-cluster"><span class="eh-bar-count" aria-live="polite">' + (narrow() ? total : total + ' pairs') + '</span><div class="eh-capsule">';
+    h += ib('filters', 'Filters, 1 in force', I.filter, false, 1) + ib('columns', 'Columns', I.columns, true)
+        + ib('view', 'View', cardsView() ? I.cards : (S.view === 'auto' ? I.auto : I.table), true) + ib('download', 'Download', I.download, true);
+    h += '</div></div><div class="eh-capsule"><button type="button" class="eh-ib" aria-label="Search workers" title="Search workers">' + I.search + '</button>'
+        + ib('more', 'More', I.kebab, false) + '</div>';
+    h += '<div class="eh-chips"><button type="button" class="eh-chip" aria-label="Remove filter Cohort: Maintenance north"><span>Cohort: Maintenance north</span>' + I.cross + '</button>'
+        + '</div>';
+    return h + (S.layer === 'filters' ? fpanel() : '') + '</div>';
+  }
+
+  function grid() {
+    const sk = S.state === 'first';
+    let h = '<div class="eh-gridframe' + (sk ? ' eh-sk' : '') + '" id="gridframe"><table class="eh-grid" style="width:' + COLS.reduce((a, c) => a + c[2], 0) + 'px">'
+        + '<caption class="visually-hidden">Workers and competencies of NR-10 electricians 2027</caption><colgroup>'
+        + COLS.map((c) => '<col style="width:' + c[2] + 'px">').join('') + '</colgroup><thead><tr>';
+    COLS.forEach((c, i) => {
+      const sorted = c[0] === 'expiry';
+      h += '<th scope="col"' + (i === 0 ? ' class="eh-fixed"' : '') + (c[3] ? ' aria-sort="' + (sorted ? 'ascending' : 'none') + '"' : '') + '>'
+          + (c[3] ? '<button type="button" class="eh-sortbtn"><span>' + c[1] + '</span>' + (sorted ? '<span class="arrow" aria-hidden="true">▲</span>' : '') + '</button>'
+              : '<span class="eh-plain">' + c[1] + '</span>')
+          + '<span class="eh-resize" role="separator" tabindex="0" aria-orientation="vertical" aria-label="Resize ' + c[1] + '" aria-valuemin="80" aria-valuemax="800" aria-valuenow="' + c[2] + '"></span></th>';
+    });
+    h += '</tr></thead><tbody>';
+    if (sk) {
+      for (let i = 0; i < 8; i++) {
+        h += '<tr><th scope="row" class="eh-fixed"><span class="eh-sk-block w80"></span></th>' + COLS.slice(1).map((c, j) => '<td><span class="eh-sk-block ' + ['w80', 'w60', 'w40'][j % 3] + '"></span></td>').join('') + '</tr>';
+      }
+    } else {
+      rows().forEach((r) => {
+        h += '<tr><th scope="row" class="eh-fixed"><div class="eh-who"><span><a class="eh-name c" href="#">' + esc(r[0]) + '</a><span class="sub">' + r[1] + '</span></span>'
+            + '<button type="button" class="btn btn-sm" aria-label="Inspect ' + esc(r[0]) + ': ' + esc(r[2]) + '">Inspect</button></div></th>'
+            + '<td title="' + esc(r[2]) + '"><span class="c">' + esc(r[2]) + '</span></td><td>' + status(r[3]) + '</td>'
+            + '<td><span class="c">' + val(r[4]) + '</span></td><td><span class="c">' + val(r[5]) + '</span></td>'
+            + '<td title="' + esc(r[6]) + '"><span class="c">' + val(r[6]) + '</span></td><td title="' + esc(r[7]) + '"><span class="c">' + val(r[7]) + '</span></td></tr>';
+      });
+    }
+    return h + '</tbody></table></div>';
+  }
+
+  function cards() {
+    if (S.state === 'first') {
+      return '<div class="eh-cards eh-sk" role="list">' + '<div class="eh-card"><span class="eh-sk-block w60"></span><br><span class="eh-sk-block w80"></span><br><span class="eh-sk-block w40"></span></div>'.repeat(4) + '</div>';
+    }
+    return '<div class="eh-cards" role="list">' + rows().map((r, i) => {
+      const extra = '<dl><dt>Evidence</dt><dd>' + val(r[5]) + '</dd><dt>Issuer</dt><dd>' + val(r[7]) + '</dd></dl>';
+      return '<article class="eh-card" role="listitem"><div class="l1"><span><a class="eh-name" href="#">' + esc(r[0]) + '</a> <span class="sub">' + r[1] + '</span></span>'
+          + '<button type="button" class="btn btn-sm" aria-label="Inspect ' + esc(r[0]) + ': ' + esc(r[2]) + '">Inspect</button></div>'
+          + '<div class="ln"><span>' + esc(r[2]) + '</span>' + status(r[3]) + '</div>'
+          + '<div class="ln"><span class="k">Valid until</span><span>' + val(r[4]) + '</span></div>'
+          + '<div class="ln"><span class="k">Type of evidence</span><span>' + val(r[6]) + '</span></div>'
+          + (narrow() ? (S.more[i] ? extra : '') + '<button type="button" class="eh-more" data-more="' + i + '" aria-expanded="' + !!S.more[i] + '">' + (S.more[i] ? 'Less' : 'More') + '</button>' : extra)
+          + '</article>';
+    }).join('') + '</div>';
+  }
+
+  function pager() {
+    if (S.state === 'empty' || S.state === 'first') {
+      return '';
+    }
+    if (narrow()) {
+      return '<nav class="eh-pager" aria-label="Pages"><button type="button" class="btn btn-sm" disabled>Previous</button><span>Page 1 of 12</span><button type="button" class="btn btn-sm">Next</button></nav>';
+    }
+    return '<nav class="eh-pager" aria-label="Pages"><span>1-50 of 599</span><span class="eh-pages"><button type="button" disabled>Previous</button>'
+        + '<button type="button" aria-current="page">1</button><button type="button">2</button><button type="button">3</button><span>…</span><button type="button">12</button><button type="button">Next</button></span>'
+        + '<label>Rows per page <select class="form-select form-select-sm"><option>30</option><option selected>50</option><option>100</option></select></label></nav>';
+  }
+
+  function core() {
+    let h = '<div class="corebar"><a href="#" data-view="auto">Back to the report</a><button type="button" class="btn btn-sm">' + I.filter.replace('<svg', '<svg width="14" height="14"') + ' Filters (1)</button></div>'
+        + '<div class="scrollx"><table class="core"><thead><tr>' + COLS.map((c) => '<th>' + (c[3] ? '<a href="#">' + c[1] + '</a>' : c[1]) + '</th>').join('') + '</tr></thead><tbody>';
+    rows().forEach((r) => {
+      h += '<tr><td><a href="#">' + esc(r[0]) + '</a><br><small>' + r[1] + '</small></td><td>' + esc(r[2]) + '</td><td>' + esc(STATUS[r[3]][0]) + '</td><td>' + esc(r[4]) + '</td><td>'
+          + (r[5] === null ? '' : r[5]) + '</td><td>' + esc(r[6]) + '</td><td>' + esc(r[7]) + '</td></tr>';
+    });
+    return h + '</tbody></table></div><div class="eh-pager"><span>Page 1 of 12</span><label>Download table data as <select class="form-select form-select-sm">'
+        + '<option>Comma separated values (.csv)</option></select></label><button type="button" class="btn btn-sm">Download</button></div>';
+  }
+
+  function render() {
+    document.getElementById('device').className = 'device' + (narrow() ? ' is-phone' : '');
+    let h = '<div class="crumbs">Operations north › Evidence hub</div><div class="pagehead"><h2>Evidence hub</h2>'
+        + '<div class="tplpick"><label for="tpl">Learning plan template</label><select id="tpl" class="form-select"><option>NR-10 electricians 2027</option>'
+        + '<option>Substation operators</option><option>Line inspection crew</option></select></div></div>';
+    if (S.view === 'core') {
+      h += core();
+    } else {
+      h += band() + bar();
+      h += '<div class="eh-region" aria-busy="' + (S.state === 'first' || S.state === 'later') + '">' + (S.state === 'later' ? '<div class="eh-progress"></div>' : '')
+          + '<span class="visually-hidden" role="status">' + (S.state === 'first' || S.state === 'later' ? 'Loading the pairs' : '') + '</span><div class="eh-dim">';
+      if (S.state === 'empty') {
+        h += '<div class="eh-empty"><b>No pair matches</b>Clear a filter or the search to see more.</div>';
+      } else {
+        h += cardsView() ? cards() : grid();
+      }
+      h += '</div>' + pager() + '</div>';
+    }
+    document.getElementById('pagebody').innerHTML = h;
+    const frame = document.getElementById('gridframe');
+    if (frame) {
+      frame.addEventListener('scroll', () => frame.classList.toggle('is-scrolled', frame.scrollLeft > 0));
+    }
+  }
+
+  document.addEventListener('click', (e) => {
+    const sw = e.target.closest('[data-switch] button');
+    const t = e.target.closest('[data-layer], [data-view], [data-scope], [data-more]');
+    if (sw) {
+      const group = sw.parentElement;
+      S[group.dataset.switch] = sw.dataset.v;
+      group.querySelectorAll('button').forEach((b) => b.setAttribute('aria-checked', b === sw));
+      S.layer = '';
+    } else if (t && t.dataset.layer) {
+      S.layer = S.layer === t.dataset.layer ? '' : t.dataset.layer;
+    } else if (t && t.dataset.view) {
+      e.preventDefault();
+      S.view = t.dataset.view;
+      S.layer = '';
+      document.querySelectorAll('[data-switch="view"] button').forEach((b) => b.setAttribute('aria-checked', b.dataset.v === S.view));
+    } else if (t && t.dataset.scope) {
+      S.scope = t.dataset.scope;
+    } else if (t && t.dataset.more) {
+      S.more[t.dataset.more] = !S.more[t.dataset.more];
+    } else if (S.layer && !e.target.closest('.eh-menu, .eh-fpanel')) {
+      S.layer = '';
+    } else {
+      return;
+    }
+    render();
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && S.layer) {
+      S.layer = '';
+      render();
+    }
+  });
+  render();
+}());
+</script>
+</body>
+</html>
