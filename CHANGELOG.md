@@ -16,6 +16,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   base set, the custom-report datasource and the new report.
   The report refuses a guest account and a report built with a `download` parameter, and its identity columns are
   the hub's own: the user table's fields the reader may see, never a custom profile field named in `showuseridentity`.
+- Version 2026100515: the pairs report read headlessly, for the hub's coming React view. Three AJAX web services,
+  each behind the hub's own door (the context and the template both checked, guests refused, `view` required):
+  `local_evidencehub_report_rows` (a page of pairs in two statements on the pair's two-part key, the columns, the
+  filters with their counts grouped in SQL, the presets, the reader's grid, and whether the reader may select rows
+  for the dossier export, `candecide` and each row's `selectable`: the export's own rule, `exportdossier`), `local_evidencehub_report_summary`
+  (workers, ready workers and the rate, pairs, pairs needing attention, pairs expiring in 30 days, the pairs per
+  status, the five competencies with most open pairs, and the workers hidden by permissions; cached in the new
+  application caches `reportsummary` and `reportgeneration`, unless searched) and `local_evidencehub_set_report_preference`. The report gains a column catalogue
+  (the reader's choice, in the new user preference `local_evidencehub_report`, declared and exported by the
+  privacy provider), the presets "validity" and "evidence", the filters competency, verification and "valid until"
+  (expired, or within 30, 60 or 90 days), page sizes 30, 50 and 100, and three request parameters that can only
+  narrow it: the scope (needing attention or all), a search by the worker's name, and whether suspended accounts
+  are listed. The hub's page is unchanged.
 
 ### Changed
 

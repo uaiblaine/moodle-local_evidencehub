@@ -28,7 +28,10 @@ use core_competency\plan;
  * page), the page context, the viewer's scope, a signature of the template's competencies, and the
  * generation: a random value in the cache hubgeneration, replaced whenever the
  * base set or a status may have changed ({@see self::bump_generation()}). Never a time to live: a lost
- * generation (a cache purge) just starts a new one.
+ * generation (a cache purge) just starts a new one. The pairs report's summary has a cache and a generation of
+ * its own (reportsummary, reportgeneration), because it reads more than these counts do: the expiry, and through
+ * the stored filters the deciding evidence's type and verification. Whatever replaces the generation replaces the
+ * report's too, and {@see self::bump_report_generation()} replaces the report's alone.
  *
  * @package    local_evidencehub
  * @copyright  2026 Anderson Blaine
@@ -54,12 +57,38 @@ final class hub_kpis {
     }
 
     /**
-     * Retire every cached KPI: a status row was written or deleted, or the base set changed.
+     * Retire every cached KPI and report summary: a status row was written or deleted, or the base set changed.
      *
      * @return void
      */
     public static function bump_generation(): void {
         \cache::make('local_evidencehub', 'hubgeneration')->set('generation', self::new_generation());
+        self::bump_report_generation();
+    }
+
+    /**
+     * The current generation of the pairs report's summary, starting one when the cache holds none.
+     *
+     * @return string
+     */
+    public static function report_generation(): string {
+        $cache = \cache::make('local_evidencehub', 'reportgeneration');
+        $generation = $cache->get('generation');
+        if ($generation === false) {
+            $generation = self::new_generation();
+            $cache->set('generation', $generation);
+        }
+        return $generation;
+    }
+
+    /**
+     * Retire every cached report summary alone: something the summary reads changed that the KPIs do not count
+     * (a status row's expiry, deciding evidence or evidence count, or an evidence's details).
+     *
+     * @return void
+     */
+    public static function bump_report_generation(): void {
+        \cache::make('local_evidencehub', 'reportgeneration')->set('generation', self::new_generation());
     }
 
     /**
@@ -146,8 +175,20 @@ final class hub_kpis {
      * @return array Effective code => pairs, every code present.
      */
     public static function distribution(hub_filter $filter, hub_scope $scope, \context $context): array {
-        global $DB;
         [$basesql, $params] = hub_query::base_sql($filter, $scope, $context);
+        return self::distribution_of($basesql, $params);
+    }
+
+    /**
+     * Pairs per effective status of any set of pairs: the statement of {@see self::distribution()}, over the
+     * hub's base set or the pairs report's rows ({@see reportengine::summary()}).
+     *
+     * @param string $basesql A SELECT of one row per pair with the column estatus (its effective code).
+     * @param array $params Its parameters.
+     * @return array Effective code => pairs, every code present.
+     */
+    public static function distribution_of(string $basesql, array $params): array {
+        global $DB;
         $sql = "SELECT b.estatus, COUNT(1) AS pairs
                   FROM ($basesql) b
               GROUP BY b.estatus";
@@ -170,8 +211,20 @@ final class hub_kpis {
      * @return array [workers, ready].
      */
     public static function readiness(hub_filter $filter, hub_scope $scope, \context $context): array {
-        global $DB;
         [$basesql, $params] = hub_query::base_sql($filter, $scope, $context);
+        return self::readiness_of($basesql, $params);
+    }
+
+    /**
+     * Workers, and how many of them have every pair compliant, due or critical, of any set of pairs: the
+     * statement of {@see self::readiness()}, over the hub's base set or the pairs report's rows.
+     *
+     * @param string $basesql A SELECT of one row per pair with the columns userid and estatus.
+     * @param array $params Its parameters; none may be named hubready*.
+     * @return array [workers, ready].
+     */
+    public static function readiness_of(string $basesql, array $params): array {
+        global $DB;
         [$readysql, $readyparams] = $DB->get_in_or_equal(self::READY, SQL_PARAMS_NAMED, 'hubready');
         $sql = "SELECT COUNT(1) AS workers, SUM(CASE WHEN x.notready = 0 THEN 1 ELSE 0 END) AS ready
                   FROM (SELECT b.userid, SUM(CASE WHEN b.estatus $readysql THEN 0 ELSE 1 END) AS notready
@@ -194,8 +247,20 @@ final class hub_kpis {
      * @return int
      */
     public static function hidden(hub_filter $filter, hub_scope $scope): int {
+        return self::hidden_workers($filter->templateid, $scope);
+    }
+
+    /**
+     * The template's workers the viewer may not see: {@see self::hidden()}'s statement, which takes the
+     * template alone, so no criterion a reader chose can reach it.
+     *
+     * @param int $templateid The template.
+     * @param hub_scope $scope The viewer's capability cuts.
+     * @return int
+     */
+    public static function hidden_workers(int $templateid, hub_scope $scope): int {
         global $DB;
-        $params = ['hubtemplateid' => $filter->templateid, 'hubactive' => plan::STATUS_ACTIVE] + $scope->viewparams;
+        $params = ['hubtemplateid' => $templateid, 'hubactive' => plan::STATUS_ACTIVE] + $scope->viewparams;
         $sql = "SELECT COUNT(DISTINCT p.userid)
                   FROM {" . plan::TABLE . "} p
                   JOIN {user} u ON u.id = p.userid AND u.deleted = 0
@@ -218,5 +283,65 @@ final class hub_kpis {
             ['templateid' => $templateid]
         );
         return $record->competencies . ':' . $record->lastid;
+    }
+
+    /**
+     * The cache key of the pairs report's summary for a reader: what decides its figures, and the generation.
+     *
+     * The summary ignores the scope and the status filter ({@see reportengine::summary()}), so neither is in the
+     * key and a reader who picks a status reuses the figures. Every other stored filter value is, as a hash, and
+     * so are the suspended flag and today, which moves the "expiring" window. The report generation retires it.
+     * A search is never cached.
+     *
+     * @param \context $context The hub context.
+     * @param int $templateid The template.
+     * @param hub_scope $scope The reader's capability cuts.
+     * @param array $filtervalues The reader's stored filter values.
+     * @param bool $suspended Whether suspended accounts are listed.
+     * @param int $today Today, YYYYMMDD.
+     * @return string
+     */
+    public static function report_summary_key(
+        \context $context,
+        int $templateid,
+        hub_scope $scope,
+        array $filtervalues,
+        bool $suspended,
+        int $today
+    ): string {
+        $values = array_filter(
+            $filtervalues,
+            static fn(string $name): bool => !str_starts_with($name, reportengine::STATUS_FILTER . '_'),
+            ARRAY_FILTER_USE_KEY
+        );
+        ksort($values);
+        return sha1(json_encode([
+            'report',
+            $context->id,
+            $templateid,
+            $scope->key(),
+            sha1(json_encode($values)),
+            (int) $suspended,
+            $today,
+            self::template_signature($templateid),
+            self::report_generation(),
+        ]));
+    }
+
+    /**
+     * Figures from the reportsummary cache under a key, computed and stored when it holds none.
+     *
+     * @param string $key A key from {@see self::report_summary_key()}.
+     * @param callable $compute Returns the figures: an array of scalars and arrays.
+     * @return array The figures.
+     */
+    public static function remember(string $key, callable $compute): array {
+        $cache = \cache::make('local_evidencehub', 'reportsummary');
+        $figures = $cache->get($key);
+        if ($figures === false) {
+            $figures = $compute();
+            $cache->set($key, $figures);
+        }
+        return $figures;
     }
 }

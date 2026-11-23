@@ -568,20 +568,129 @@ final class status_repository_test extends \advanced_testcase {
     public function test_a_rewrite_with_the_same_status_keeps_the_kpis(): void {
         $this->linked();
         $before = hub_kpis::generation();
+        $beforereport = hub_kpis::report_generation();
         $this->recompute();
         $inserted = hub_kpis::generation();
+        $insertedreport = hub_kpis::report_generation();
         $this->assertNotSame($before, $inserted, 'A new row left the KPIs standing.');
+        $this->assertNotSame($beforereport, $insertedreport, 'A new row left the report summary standing.');
 
         $this->freeze('2026-06-16 12:00');
         $this->recompute();
         $this->assertSame(status::STATUS_VALID, (int) $this->row()->status);
         $this->assertSame($inserted, hub_kpis::generation(), 'A rewrite with the same status retired the KPIs.');
+        $this->assertSame(
+            $insertedreport,
+            hub_kpis::report_generation(),
+            'A rewrite with the same values retired the report summary.'
+        );
 
         // The control: a change of status retires them.
         $this->freeze('2028-01-02 12:00');
         $this->recompute();
         $this->assertSame(status::STATUS_EXPIRED, (int) $this->row()->status);
         $this->assertNotSame($inserted, hub_kpis::generation());
+        $this->assertNotSame($insertedreport, hub_kpis::report_generation());
+    }
+
+    /**
+     * Both generations, after a pair has a stored row.
+     *
+     * @return array [the KPIs' generation, the report summary's].
+     */
+    private function generations(): array {
+        return [hub_kpis::generation(), hub_kpis::report_generation()];
+    }
+
+    /**
+     * A new effective expiry with the same status, deciding evidence and count retires the report summary and
+     * leaves the KPIs: the summary's "expiring" figure and "valid until" filter read the day.
+     *
+     * @return void
+     */
+    public function test_a_new_expiry_retires_the_report_generation_alone(): void {
+        global $DB;
+        $meta = $this->linked(['expirydate' => 20280101]);
+        $this->recompute();
+        [$kpis, $report] = $this->generations();
+
+        $DB->set_field(details::TABLE, 'expirydate', 20290101, ['id' => $meta->id]);
+        $this->recompute();
+        $this->assertSame([status::STATUS_VALID, 20290101], [(int) $this->row()->status, (int) $this->row()->effectiveexpiry]);
+        $this->assertSame($kpis, hub_kpis::generation(), 'A new expiry retired the KPIs.');
+        $this->assertNotSame($report, hub_kpis::report_generation(), 'A new expiry left the report summary standing.');
+    }
+
+    /**
+     * A different deciding evidence with the same status, expiry and count retires the report summary alone: its
+     * type and verification, read through the stored filters, are the evidence's.
+     *
+     * @return void
+     */
+    public function test_a_new_deciding_evidence_retires_the_report_generation_alone(): void {
+        global $DB;
+        $first = $this->linked(['issuedate' => 20260201]);
+        $second = $this->linked(['issuedate' => 20260201]);
+        $this->recompute();
+        // The tie on expiry and issue goes to the highest details id.
+        $this->assertSame((int) $second->id, (int) $this->row()->metaid);
+        [$kpis, $report] = $this->generations();
+
+        $DB->set_field(details::TABLE, 'issuedate', 20260101, ['id' => $second->id]);
+        $this->recompute();
+        $this->assertSame((int) $first->id, (int) $this->row()->metaid);
+        $this->assertSame(2, (int) $this->row()->evidencecount);
+        $this->assertSame($kpis, hub_kpis::generation(), 'A new deciding evidence retired the KPIs.');
+        $this->assertNotSame($report, hub_kpis::report_generation(), 'A new deciding evidence left the summary standing.');
+    }
+
+    /**
+     * A new evidence count with the same status, expiry and deciding evidence retires the report summary alone.
+     *
+     * @return void
+     */
+    public function test_a_new_evidence_count_retires_the_report_generation_alone(): void {
+        $first = $this->linked(['expirydate' => 20280101]);
+        $this->recompute();
+        $this->assertSame(1, (int) $this->row()->evidencecount);
+        [$kpis, $report] = $this->generations();
+
+        // An earlier expiry: the first evidence still decides.
+        $this->linked(['expirydate' => 20270101]);
+        $this->recompute();
+        $this->assertSame([(int) $first->id, 2], [(int) $this->row()->metaid, (int) $this->row()->evidencecount]);
+        $this->assertSame($kpis, hub_kpis::generation(), 'A new count retired the KPIs.');
+        $this->assertNotSame($report, hub_kpis::report_generation(), 'A new count left the report summary standing.');
+    }
+
+    /**
+     * Details that change without the status row changing (the deciding evidence's type) retire the report
+     * summary through the details' event, and the KPIs stay.
+     *
+     * @return void
+     */
+    public function test_a_details_change_retires_the_report_summary(): void {
+        $meta = $this->linked(['typeid' => $this->type_id('nrcertificate')]);
+        $this->recompute();
+        $row = $this->row();
+        [$kpis, $report] = $this->generations();
+
+        $ue = new \core_competency\user_evidence((int) $meta->userevidenceid);
+        details::save($ue, $this->details_data([
+            'typeid' => $this->type_id('diploma'),
+            'issuedate' => 20260101,
+            'expirydate' => 20280101,
+        ]));
+        $after = $this->row();
+        $this->assertSame(
+            [(int) $row->status, (int) $row->metaid, (int) $row->effectiveexpiry, (int) $row->evidencecount,
+                (int) $row->issensitive],
+            [(int) $after->status, (int) $after->metaid, (int) $after->effectiveexpiry, (int) $after->evidencecount,
+                (int) $after->issensitive],
+            'The precondition: the row did not change.'
+        );
+        $this->assertSame($kpis, hub_kpis::generation());
+        $this->assertNotSame($report, hub_kpis::report_generation(), 'A change of type left the report summary standing.');
     }
 
     /**

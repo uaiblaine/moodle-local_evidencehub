@@ -126,6 +126,10 @@ final class observer {
      */
     public static function details_changed(\core\event\base $event): void {
         status_repository::recompute_for_userevidence((int) $event->other['userevidenceid']);
+        // The deciding evidence's type or verification may change without the status row changing, and the
+        // report summary's stored filters read both. Events fire for an edit, never for the weekly reconcile,
+        // which calls the repository directly.
+        hub_kpis::bump_report_generation();
     }
 
     /**

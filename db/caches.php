@@ -42,4 +42,19 @@ $definitions = [
         'simplekeys' => true,
         'simpledata' => true,
     ],
+    // The pairs report's summary of one reader's stored filters, keyed by a hash that holds today and the report
+    // generation. The ttl only bounds how long a dead key lives: correctness never depends on it.
+    'reportsummary' => [
+        'mode' => cache_store::MODE_APPLICATION,
+        'simplekeys' => true,
+        'simpledata' => true,
+        'ttl' => 86400,
+    ],
+    // One value: the current generation of the report summary. It moves with the KPIs' generation and also when
+    // a status row's expiry, deciding evidence or evidence count changes, or an evidence's details do.
+    'reportgeneration' => [
+        'mode' => cache_store::MODE_APPLICATION,
+        'simplekeys' => true,
+        'simpledata' => true,
+    ],
 ];
