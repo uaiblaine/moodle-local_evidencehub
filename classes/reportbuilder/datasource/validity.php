@@ -22,6 +22,7 @@ use core_reportbuilder\local\entities\user;
 use core_reportbuilder\local\helpers\database;
 use local_evidencehub\local\details;
 use local_evidencehub\local\hub_scope;
+use local_evidencehub\local\pairset;
 use local_evidencehub\local\status_repository;
 use local_evidencehub\reportbuilder\local\entities\evidence_details;
 use local_evidencehub\reportbuilder\local\entities\validity as validity_entity;
@@ -34,7 +35,7 @@ use local_evidencehub\reportbuilder\local\entities\validity as validity_entity;
  * creator, a chosen user or each recipient): only workers whose user context grants that user
  * moodle/competency:userevidenceview, and a pair decided by a sensitive evidence reads "Restricted"
  * unless the user is the worker or holds local/evidencehub:viewsensitive in the worker's user context
- * ({@see \local_evidencehub\local\hub_query::base_sql()}).
+ * ({@see \local_evidencehub\local\pairset}, the rule {@see \local_evidencehub\local\hub_query::base_sql()} reads).
  *
  * @package    local_evidencehub
  * @copyright  2026 Anderson Blaine
@@ -62,21 +63,6 @@ class validity extends datasource {
     }
 
     /**
-     * A capability fragment of the hub's scope with report builder's parameter names.
-     *
-     * @param string $sql The fragment, to append to a user id.
-     * @param array $params Its named parameters.
-     * @return array [sql, params].
-     */
-    private static function fragment(string $sql, array $params): array {
-        $names = [];
-        foreach (array_keys($params) as $name) {
-            $names[$name] = database::generate_param_name();
-        }
-        return database::sql_replace_parameters($sql, $params, fn(string $name): string => $names[$name]);
-    }
-
-    /**
      * Join the status rows to their deciding evidence, the worker and the competency, for the current user.
      *
      * @return void
@@ -89,23 +75,19 @@ class validity extends datasource {
         $t = database::generate_alias();
         $r = database::generate_alias();
         $this->set_main_table(status_repository::TABLE, $s);
+        $names = pairset::report_names();
 
         // Only the workers whose user context grants the user userevidenceview, as in the hub.
-        [$viewsql, $viewparams] = self::fragment($scope->viewsql, $scope->viewparams);
-        $this->add_base_condition_sql("{$s}.userid {$viewsql}", $viewparams);
+        [$viewsql, $viewparams] = pairset::visible("{$s}.userid", $scope, $names);
+        $this->add_base_condition_sql($viewsql, $viewparams);
 
         // The deciding evidence and its type, for the details entity.
         $this->add_join("LEFT JOIN {" . details::TABLE . "} {$m} ON {$m}.id = {$s}.metaid");
         $this->add_join("LEFT JOIN {local_evidencehub_type} {$t} ON {$t}.id = {$m}.typeid");
-        // The row itself again, joined only when it is restricted for the user: the same stored flag and
-        // fragments as the hub, with their parameters once in the statement however many columns read it.
-        [$sensitivesql, $sensitiveparams] = self::fragment($scope->sensitivesql, $scope->sensitiveparams);
-        $viewer = database::generate_param_name();
-        $this->add_join(
-            "LEFT JOIN {" . status_repository::TABLE . "} {$r} ON {$r}.id = {$s}.id AND {$r}.issensitive = 1
-                       AND {$s}.userid <> :{$viewer} AND NOT ({$s}.userid {$sensitivesql})",
-            $sensitiveparams + [$viewer => $scope->viewerid]
-        );
+        // The row itself again, joined only when it is restricted for the user: the hub's rule, with its
+        // parameters once in the statement however many columns read it.
+        [$restrictedjoin, $restrictedparams] = pairset::restricted_join($r, $s, "{$s}.userid", $scope, $names);
+        $this->add_join($restrictedjoin, $restrictedparams);
         $restricted = "{$r}.id IS NOT NULL";
 
         $this->add_entity((new validity_entity($restricted))->set_table_alias(status_repository::TABLE, $s));

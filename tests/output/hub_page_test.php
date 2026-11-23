@@ -230,4 +230,41 @@ final class hub_page_test extends \advanced_testcase {
         $this->expectExceptionMessage(get_string('errorhubtemplate', 'local_evidencehub'));
         $this->run_page(['contextid' => $catcontext->id, 'templateid' => $templateid]);
     }
+
+    /**
+     * With view=table the page renders core's table of the template's pairs and a link back to the reader's
+     * list; the list's tabs lead there, and the table view is never stored as the reader's last view.
+     *
+     * @return void
+     */
+    public function test_the_table_view(): void {
+        global $PAGE;
+        [$c1] = $this->competencies(1);
+        $templateid = $this->template([$c1]);
+        $this->worker($templateid, ['firstname' => 'Ana', 'lastname' => 'Souza']);
+        $system = \context_system::instance();
+        $manager = $this->viewer([
+            'local/evidencehub:view',
+            'moodle/competency:templateview',
+            'moodle/competency:userevidenceview',
+        ]);
+        $this->setUser($manager);
+        $filter = hub_filter::from_values(['templateid' => $templateid, 'search' => 'Ana'], $system);
+        $export = (new hub_page($system, $filter, hub_scope::for_user()))->export_for_template($PAGE->get_renderer('core'));
+        $table = end($export['tabs']);
+        $this->assertSame(get_string('hubtableview', 'local_evidencehub'), $table['label']);
+        $this->assertStringContainsString('view=table', $table['url']);
+        $this->assertStringContainsString('templateid=' . $templateid, $table['url']);
+        $filter->with(['view' => hub_filter::VIEW_MATRIX])->save_preference();
+
+        $html = $this->run_page(['contextid' => $system->id, 'templateid' => $templateid, 'view' => 'table']);
+        $this->assertStringContainsString('data-region="core_reportbuilder/report"', $html);
+        $this->assertStringContainsString('Ana Souza', $html);
+        $this->assertStringContainsString(get_string('hubbacktolist', 'local_evidencehub'), $html);
+        $this->assertStringNotContainsString('data-region="local-evidencehub-hub"', $html);
+        // The link back is the reader's stored list of this template, on its list view.
+        $this->assertMatchesRegularExpression('~href="[^"]*search=Ana[^"]*view=list[^"]*"~', $html);
+        // A request naming a filter would have stored the list view over the matrix: the table view stores nothing.
+        $this->assertSame(hub_filter::VIEW_MATRIX, hub_filter::from_preference($system)->view);
+    }
 }

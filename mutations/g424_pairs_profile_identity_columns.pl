@@ -1,0 +1,1 @@
+s/foreach \(hub_query::identity_fields_in\(\$this->get_context\(\)\) as \$field\) \{\n\s*\$this->add_column\(\$userentity->get_identity_column\(\$field\)\);\n\s*\}/foreach (\$userentity->get_identity_columns(\$this->get_context()) as \$column) {\n            \$this->add_column(\$column);\n        }/;

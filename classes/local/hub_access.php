@@ -31,6 +31,26 @@ use core_competency\template;
  */
 final class hub_access {
     /**
+     * Whether the hub opens in a context: the system or a course category.
+     *
+     * @param \context $context The page context.
+     * @return bool
+     */
+    public static function opens_in(\context $context): bool {
+        return in_array((int) $context->contextlevel, [CONTEXT_SYSTEM, CONTEXT_COURSECAT], true);
+    }
+
+    /**
+     * Whether the current user may open the hub in a context: {@see self::require_view()}'s rule, without throwing.
+     *
+     * @param \context $context The page context.
+     * @return bool
+     */
+    public static function can_view(\context $context): bool {
+        return self::opens_in($context) && has_capability('local/evidencehub:view', $context);
+    }
+
+    /**
      * Refuse a context the hub does not open in, and a viewer without local/evidencehub:view there.
      *
      * @param \context $context The page context.
@@ -39,7 +59,7 @@ final class hub_access {
      * @throws \required_capability_exception Without local/evidencehub:view in the context.
      */
     public static function require_view(\context $context): void {
-        if (!in_array((int) $context->contextlevel, [CONTEXT_SYSTEM, CONTEXT_COURSECAT], true)) {
+        if (!self::opens_in($context)) {
             throw new \moodle_exception('errorhubcontext', 'local_evidencehub');
         }
         require_capability('local/evidencehub:view', $context);
@@ -86,11 +106,22 @@ final class hub_access {
      * @throws \moodle_exception When the template is not offered there.
      */
     public static function require_template(int $templateid, \context $context): \stdClass {
-        $templates = self::templates($context);
-        if (!isset($templates[$templateid])) {
+        $template = self::offered_template($templateid, $context);
+        if ($template === null) {
             throw new \moodle_exception('errorhubtemplate', 'local_evidencehub');
         }
-        return $templates[$templateid];
+        return $template;
+    }
+
+    /**
+     * A template the hub offers in the context, or null: {@see self::require_template()}'s rule, without throwing.
+     *
+     * @param int $templateid The template.
+     * @param \context $context The page context.
+     * @return \stdClass|null The template record, as {@see self::templates()} lists it.
+     */
+    public static function offered_template(int $templateid, \context $context): ?\stdClass {
+        return self::templates($context)[$templateid] ?? null;
     }
 
     /**

@@ -6,6 +6,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+### Added
+
+- The hub's pairs of a template as core's system report, `hub_pairs`: the hub's own rows, values, restriction
+  and default order (restricted and missing first, then the earliest day), with filters by status ("missing"
+  included), cohort, type of evidence and the worker's name. `index.php?view=table` renders it with a link back to
+  the list, and the hub's tabs gain a "Table view" link to it; the hub's list, matrix, download and dossier export
+  are unchanged. The pair set and its restricted rule are now written once (`local\pairset`), read by the hub's
+  base set, the custom-report datasource and the new report.
+  The report refuses a guest account and a report built with a `download` parameter, and its identity columns are
+  the hub's own: the user table's fields the reader may see, never a custom profile field named in `showuseridentity`.
+
 ### Changed
 
 - Version 2026100512: the code comments were audited against Moodle's guidance and the code they describe: 30

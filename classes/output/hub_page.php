@@ -26,6 +26,7 @@ use local_evidencehub\local\hub_kpis;
 use local_evidencehub\local\hub_query;
 use local_evidencehub\local\hub_scope;
 use local_evidencehub\local\status;
+use local_evidencehub\reportbuilder\local\systemreports\hub_pairs;
 
 /**
  * The evidence hub of a context: the filters, the KPI bar, the tabs and one page of the list or the matrix.
@@ -209,7 +210,8 @@ class hub_page implements renderable, templatable {
     }
 
     /**
-     * The tabs between the list and the matrix: the same filter, on its first page.
+     * The tabs between the list and the matrix, the same filter on its first page; then core's table of the
+     * template's pairs, which reads the template alone ({@see hub_pairs}).
      *
      * @param hub_filter $filter The filter.
      * @return array List of [label, url, active].
@@ -226,6 +228,15 @@ class hub_page implements renderable, templatable {
                 'active' => $filter->view === $view,
             ];
         }
+        $tabs[] = [
+            'label' => get_string('hubtableview', 'local_evidencehub'),
+            'url' => (new \moodle_url('/local/evidencehub/index.php', [
+                'contextid' => $this->context->id,
+                'templateid' => $filter->templateid,
+                'view' => hub_pairs::VIEW,
+            ]))->out(false),
+            'active' => false,
+        ];
         return $tabs;
     }
 

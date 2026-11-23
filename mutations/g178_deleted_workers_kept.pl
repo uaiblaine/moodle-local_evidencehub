@@ -1,1 +1,1 @@
-s/ AND bu\.deleted = 0//;
+s/ AND \{\$user\}\.deleted = 0"/"/;
