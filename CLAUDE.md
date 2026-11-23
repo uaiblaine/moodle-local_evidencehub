@@ -174,6 +174,9 @@ tests/generator/  writes rows directly (create_status() stays direct for the tas
   (a rewrite that changes neither keeps it) and the plan, cohort and user events in
   `db/events.php` replace the generation; core fires no event for a template's competencies, so
   the key reads `hub_kpis::template_signature()` (the one statement a cached call sends).
+  The pairs report's summary has its own cache and generation (`reportsummary`, `reportgeneration`): the same
+  events replace it, and so does a status row's change of expiry, deciding evidence or count and the details'
+  events; its cache holds codes and ids, never a label or a name.
 - **The hub's cohort check includes the page context itself**, unlike `cohort_get_cohort()`, whose
   callers are courses (`hub_access::cohorts()` says why).
 - **`archive_writer::get_file_writer()` takes a file NAME**: a path makes ZipStream write the ZIP

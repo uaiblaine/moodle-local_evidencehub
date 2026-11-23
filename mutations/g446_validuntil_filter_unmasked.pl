@@ -1,0 +1,1 @@
+s/return \$this->value\("\{\$this->get_table_alias\('local_evidencehub_status'\)\}\.effectiveexpiry", '0'\);/return "COALESCE({\$this->get_table_alias('local_evidencehub_status')}.effectiveexpiry, 0)";/;

@@ -51,7 +51,9 @@ final class status_repository {
      * validity_status_changed: internal observers run at once, even inside a transaction, so they
      * must never see a change that may still roll back. The KPIs are retired only when the row
      * appears, goes, or changes a column they count (status, issensitive): the weekly reconcile
-     * rewrites every row, and retiring them for each would empty every node's cached counts.
+     * rewrites every row, and retiring them for each would empty every node's cached counts. The pairs report's
+     * summary reads more (the effective expiry, the deciding evidence, the evidence count), so its own
+     * generation also moves when one of those changes; an identical rewrite moves neither.
      *
      * @param int $userid The worker.
      * @param int $competencyid The competency.
@@ -64,9 +66,12 @@ final class status_repository {
             throw new \moodle_exception('errorstatuslocked', 'local_evidencehub');
         }
         try {
-            [$result, $row, $from, $counted] = self::write($userid, $competencyid);
+            [$result, $row, $from, $counted, $reportchanged] = self::write($userid, $competencyid);
             if ($counted) {
+                // Replaces the pairs report's generation too.
                 hub_kpis::bump_generation();
+            } else if ($reportchanged) {
+                hub_kpis::bump_report_generation();
             }
             if ($row !== null && $from !== (int) $row->status) {
                 validity_status_changed::create_from_status($row, $from)->trigger();
@@ -291,7 +296,7 @@ final class status_repository {
      * @param int $userid The worker.
      * @param int $competencyid The competency.
      * @return array [validity or null, the stored row or null, the previous status or null, whether the
-     *     hub's KPIs may count the pair otherwise now].
+     *     hub's KPIs may count the pair otherwise now, whether the report summary's figures may differ now].
      * @throws \Throwable Whatever failed; the transaction is rolled back first.
      */
     private static function write(int $userid, int $competencyid): array {
@@ -315,7 +320,7 @@ final class status_repository {
      * @param int $userid The worker.
      * @param int $competencyid The competency.
      * @return array [validity or null, the stored row or null, the previous status or null, whether the
-     *     hub's KPIs may count the pair otherwise now].
+     *     hub's KPIs may count the pair otherwise now, whether the report summary's figures may differ now].
      */
     private static function write_in(int $userid, int $competencyid): array {
         global $DB;
@@ -334,7 +339,7 @@ final class status_repository {
             if ($existing) {
                 $DB->delete_records(self::TABLE, ['id' => $existing->id]);
             }
-            return [null, null, $from, $existing !== false];
+            return [null, null, $from, $existing !== false, $existing !== false];
         }
 
         $row = (object) [
@@ -351,6 +356,11 @@ final class status_repository {
         $changed = $from !== $result->status;
         // A new row is always a change ($from is null), so issensitive is read only from a stored row.
         $counted = $changed || (int) $existing->issensitive !== $row->issensitive;
+        // What the report summary reads beyond the KPIs' columns; a new row has no stored values to compare.
+        $reportchanged = $counted
+            || self::nullable_int($existing->effectiveexpiry) !== self::nullable_int($row->effectiveexpiry)
+            || self::nullable_int($existing->metaid) !== self::nullable_int($row->metaid)
+            || (int) $existing->evidencecount !== (int) $row->evidencecount;
         if ($existing) {
             $row->id = (int) $existing->id;
             // When the status value last changed, not when the row was last computed.
@@ -365,7 +375,17 @@ final class status_repository {
         if ($changed) {
             self::log($row, $policy, $result);
         }
-        return [$result, $row, $from, $counted];
+        return [$result, $row, $from, $counted, $reportchanged];
+    }
+
+    /**
+     * A stored or computed integer that may be null, for comparing the two.
+     *
+     * @param mixed $value The value.
+     * @return int|null
+     */
+    private static function nullable_int(mixed $value): ?int {
+        return $value === null ? null : (int) $value;
     }
 
     /**

@@ -20,6 +20,10 @@
  * The readiness function serves gate systems that call it with a token; the hub's pages do not use
  * it, hence no AJAX. The pre-built service is disabled until an administrator enables it.
  *
+ * The three report functions serve the hub's own page through AJAX: the pairs report's rows, its
+ * summary, and the reader's grid. Each checks the hub context and the template itself
+ * (local\reportengine::locate()).
+ *
  * @package    local_evidencehub
  * @copyright  2026 Anderson Blaine
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
@@ -35,6 +39,28 @@ $functions = [
         'type' => 'read',
         'ajax' => false,
         'capabilities' => 'local/evidencehub:view, moodle/competency:userevidenceview',
+    ],
+    'local_evidencehub_report_rows' => [
+        'classname' => \local_evidencehub\external\report_rows::class,
+        'description' => 'A page of the evidence hub\'s pairs of a learning plan template, as the reader may see them, '
+            . 'with the columns, the filters and their counts.',
+        'type' => 'read',
+        'ajax' => true,
+        'capabilities' => 'local/evidencehub:view',
+    ],
+    'local_evidencehub_report_summary' => [
+        'classname' => \local_evidencehub\external\report_summary::class,
+        'description' => 'The figures of the evidence hub\'s pairs of a learning plan template, as the reader may see them.',
+        'type' => 'read',
+        'ajax' => true,
+        'capabilities' => 'local/evidencehub:view',
+    ],
+    'local_evidencehub_set_report_preference' => [
+        'classname' => \local_evidencehub\external\set_report_preference::class,
+        'description' => 'Store the reader\'s columns, widths and suspended accounts choice of the evidence hub\'s pairs.',
+        'type' => 'write',
+        'ajax' => true,
+        'capabilities' => 'local/evidencehub:view',
     ],
 ];
 

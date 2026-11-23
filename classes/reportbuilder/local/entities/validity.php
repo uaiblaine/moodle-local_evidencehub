@@ -24,6 +24,7 @@ use core_reportbuilder\local\report\filter;
 use local_evidencehub\local\meta;
 use local_evidencehub\local\status;
 use local_evidencehub\reportbuilder\local\filters\reader_select;
+use local_evidencehub\reportbuilder\local\filters\validuntil;
 
 /**
  * The materialised validity of a (worker, competency) pair: one local_evidencehub_status row.
@@ -108,6 +109,25 @@ class validity extends base {
         $s = $this->get_table_alias('local_evidencehub_status');
         $status = $this->pairs ? "COALESCE({$s}.status, " . status::EFFECTIVE_MISSING . ")" : "{$s}.status";
         return $this->masked($status, (string) status::EFFECTIVE_RESTRICTED);
+    }
+
+    /**
+     * The effective status as SQL, for a reader of the pair set that needs it beside the columns: the row's
+     * status code whatever columns the reader chose ({@see \local_evidencehub\reportbuilder\local\systemreports\hub_pairs}).
+     *
+     * @return string SQL; no parameters.
+     */
+    public function effective_status_sql(): string {
+        return $this->status_sql();
+    }
+
+    /**
+     * The effective expiry as the "valid until" filter reads it: masked, 0 for none, as its column reads it.
+     *
+     * @return string SQL; no parameters.
+     */
+    private function expiry_sql(): string {
+        return $this->value("{$this->get_table_alias('local_evidencehub_status')}.effectiveexpiry", '0');
     }
 
     /**
@@ -218,7 +238,7 @@ class validity extends base {
     #[\Override]
     protected function get_available_filters(): array {
         $pairs = $this->pairs;
-        return [
+        $filters = [
             (new filter(
                 // Core's select caches its options per filter name for the process, and this name's options
                 // differ between the datasource and the pair set.
@@ -239,5 +259,18 @@ class validity extends base {
                 return $options;
             }),
         ];
+        if ($pairs) {
+            // Over the pair set only: a missing pair, which only the pair set has, reads 0 and matches no choice.
+            $filters[] = (new filter(
+                validuntil::class,
+                'validuntil',
+                new lang_string('effectiveexpiry', 'local_evidencehub'),
+                $this->get_entity_name(),
+                $this->expiry_sql()
+            ))
+                ->set_limited_operators([select::ANY_VALUE, select::EQUAL_TO])
+                ->set_options_callback(static fn(): array => validuntil::choices());
+        }
+        return $filters;
     }
 }

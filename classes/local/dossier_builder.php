@@ -67,6 +67,17 @@ final class dossier_builder {
     }
 
     /**
+     * Whether the current user may export dossiers in a hub context: {@see self::require_export()}'s rule, without
+     * throwing, for a page or a service that only says whether the action is offered.
+     *
+     * @param \context $context The hub's context.
+     * @return bool
+     */
+    public static function can_export(\context $context): bool {
+        return hub_access::can_view($context) && has_capability('local/evidencehub:exportdossier', $context);
+    }
+
+    /**
      * Read and check, as the current user, what the dossiers of some workers will hold.
      *
      * A worker who is gone, has no active plan from the template any more, or whose evidence the user

@@ -1,0 +1,1 @@
+s/(status_repository::recompute_for_userevidence\(\(int\) \$event->other\['userevidenceid'\]\);\n)\s*\/\/ The deciding.*?\n\s*\/\/ report summary's stored.*?\n\s*\/\/ which calls.*?\n\s*hub_kpis::bump_report_generation\(\);\n/$1/s;

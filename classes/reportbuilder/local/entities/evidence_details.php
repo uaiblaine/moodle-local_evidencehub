@@ -94,6 +94,17 @@ class evidence_details extends base {
     }
 
     /**
+     * A number column's value: masked, and over the pair set never NULL, so it sorts the same on every database.
+     *
+     * @param string $expression The SQL expression.
+     * @param int $empty The value of a missing pair and, masked, of a restricted one: one no row stores.
+     * @return string
+     */
+    private function number(string $expression, int $empty): string {
+        return $this->pairs ? "COALESCE(" . $this->masked($expression) . ", {$empty})" : $this->masked($expression);
+    }
+
+    /**
      * 1 for a restricted row, else 0.
      *
      * @return string SQL.
@@ -142,7 +153,7 @@ class evidence_details extends base {
         foreach (['issuedate', 'expirydate'] as $name) {
             $columns[] = (new column($name, new lang_string($name, 'local_evidencehub'), $entity))
                 ->set_type(column::TYPE_INTEGER)
-                ->add_field($this->masked("{$m}.{$name}"), $name)
+                ->add_field($this->number("{$m}.{$name}", 0), $name)
                 ->add_field($this->restricted_flag(), 'restricted')
                 ->set_is_sortable(true)
                 ->add_callback($this->pairs ? [validity::class, 'format_pair_day'] : [validity::class, 'format_day']);
@@ -150,14 +161,15 @@ class evidence_details extends base {
 
         $columns[] = (new column('verifystatus', new lang_string('verification', 'local_evidencehub'), $entity))
             ->set_type(column::TYPE_INTEGER)
-            ->add_field($this->masked("{$m}.verifystatus"), 'verifystatus')
+            ->add_field($this->number("{$m}.verifystatus", -1), 'verifystatus')
             ->add_field($this->restricted_flag(), 'restricted')
             ->set_is_sortable(true)
             ->add_callback(static function ($value, \stdClass $row) use ($restrictedtext): string {
                 if (!empty($row->restricted)) {
                     return $restrictedtext;
                 }
-                return $value === null ? '' : meta::verify_label((int) $value);
+                // Over the pair set a pair without a deciding evidence reads -1.
+                return $value === null || (int) $value < 0 ? '' : meta::verify_label((int) $value);
             });
 
         return $columns;

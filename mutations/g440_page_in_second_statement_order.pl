@@ -1,0 +1,1 @@
+s/\$this->rawdata = \[\];\n\s*foreach \(\$keys as \[\$userid, \$competencyid\]\) \{\n\s*if \(isset\(\$rows\[\$userid \. ':' \. \$competencyid\]\)\) \{\n\s*\$this->rawdata\[\] = \$rows\[\$userid \. ':' \. \$competencyid\];\n\s*\}\n\s*\}/\$this->rawdata = array_values(\$rows);/;
