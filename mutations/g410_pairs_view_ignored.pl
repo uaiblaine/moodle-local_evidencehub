@@ -1,1 +1,1 @@
-s/return hub_access::can_view\(\$context\)\n\s*&& api::is_enabled\(\)/return api::is_enabled()/;
+s/return isloggedin\(\)\n\s*&& !isguestuser\(\)\n\s*&& hub_access::can_view\(\$context\)\n\s*&& api::is_enabled\(\)/return isloggedin() && !isguestuser() && api::is_enabled()/;

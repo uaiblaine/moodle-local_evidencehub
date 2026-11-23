@@ -29,6 +29,7 @@ use core_reportbuilder\system_report_factory;
 use core_user\fields;
 use local_evidencehub\local\details;
 use local_evidencehub\local\hub_access;
+use local_evidencehub\local\hub_query;
 use local_evidencehub\local\hub_scope;
 use local_evidencehub\local\pairset;
 use local_evidencehub\local\status_repository;
@@ -66,7 +67,7 @@ class hub_pairs extends system_report {
      *
      * @param \context $context The hub's context: the system or a course category.
      * @param int $templateid The plan template, the report's item.
-     * @param array $parameters Report parameters; none are read yet.
+     * @param array $parameters Report parameters; a non-empty 'download' makes the report refuse.
      * @return self
      * @throws \core_reportbuilder\exception\report_access_exception When {@see self::may_view()} refuses.
      */
@@ -93,21 +94,29 @@ class hub_pairs extends system_report {
      */
     #[\Override]
     protected function can_view(): bool {
+        // Core's dynamic table builds the report with the caller's parameters and downloads when one of them
+        // is 'download', a path that never asks can_be_downloaded(); the hub's own download fires an audit event.
+        if ($this->get_parameter('download', '', PARAM_RAW) !== '') {
+            return false;
+        }
         return self::may_view($this->get_context(), $this->templateid());
     }
 
     /**
      * Whether the current user may view the pairs of a template in a context, without building the report.
      *
-     * The hub's own rules, as its page applies them: a hub context with local/evidencehub:view there,
-     * competencies enabled, and the template offered in that context ({@see hub_access}).
+     * The hub's own rules, as its page applies them: a signed-in user who is not a guest (core reaches the
+     * report without the page), a hub context with local/evidencehub:view there, competencies enabled, and
+     * the template offered in that context ({@see hub_access}).
      *
      * @param \context $context The hub's context.
      * @param int $templateid The plan template.
      * @return bool
      */
     public static function may_view(\context $context, int $templateid): bool {
-        return hub_access::can_view($context)
+        return isloggedin()
+            && !isguestuser()
+            && hub_access::can_view($context)
             && api::is_enabled()
             && hub_access::offered_template($templateid, $context) !== null;
     }
@@ -191,9 +200,10 @@ class hub_pairs extends system_report {
      */
     private function add_report_columns(user $userentity, string $p, string $tc, string $c): void {
         $this->add_column($this->worker_column($userentity));
-        // Core's helper returns none outside moodle/site:viewuseridentity: absence, not a blanked cell.
-        foreach ($userentity->get_identity_columns($this->get_context()) as $column) {
-            $this->add_column($column);
+        // The list is empty outside moodle/site:viewuseridentity: absence, not a blanked cell.
+        // Only the user table's fields, as the hub's list shows them: no custom profile field column.
+        foreach (hub_query::identity_fields_in($this->get_context()) as $field) {
+            $this->add_column($userentity->get_identity_column($field));
         }
         $this->add_column($this->competency_column($c));
         $this->add_column_from_entity('validity:status');

@@ -14,6 +14,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   the list, and the hub's tabs gain a "Table view" link to it; the hub's list, matrix, download and dossier export
   are unchanged. The pair set and its restricted rule are now written once (`local\pairset`), read by the hub's
   base set, the custom-report datasource and the new report.
+  The report refuses a guest account and a report built with a `download` parameter, and its identity columns are
+  the hub's own: the user table's fields the reader may see, never a custom profile field named in `showuseridentity`.
 
 ### Changed
 

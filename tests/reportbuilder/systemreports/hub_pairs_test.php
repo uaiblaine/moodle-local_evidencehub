@@ -487,4 +487,229 @@ final class hub_pairs_test extends core_reportbuilder_testcase {
         // The control: the other template's worker is in its own report.
         $this->assertSame([$this->pair($elsewhere, $c1)], array_keys($this->rows($this->report($other))));
     }
+
+    /**
+     * A guest account is refused even when a role override gives it the hub's capabilities, and so is a
+     * visitor who is not logged in; the control: a real user holding the same capabilities is accepted.
+     *
+     * @return void
+     */
+    public function test_a_guest_is_refused(): void {
+        global $DB;
+        [$c1] = $this->competencies(1);
+        $templateid = $this->template([$c1]);
+        $system = \context_system::instance();
+        $capabilities = ['local/evidencehub:view', 'moodle/competency:templateview'];
+        $guestrole = (int) $DB->get_field('role', 'id', ['shortname' => 'guest'], MUST_EXIST);
+        foreach ($capabilities as $capability) {
+            assign_capability($capability, CAP_ALLOW, $guestrole, $system->id, true);
+        }
+        accesslib_clear_all_caches_for_unit_testing();
+
+        $this->setUser($this->viewer($capabilities));
+        $this->assertTrue(hub_pairs::may_view($system, $templateid));
+        $this->assertInstanceOf(hub_pairs::class, $this->report($templateid));
+
+        $this->setGuestUser();
+        // The override is in force: only the guest clause stands between the guest and the report.
+        $this->assertTrue(isguestuser());
+        $this->assertTrue(has_capability('local/evidencehub:view', $system));
+        $this->assertFalse(hub_pairs::may_view($system, $templateid));
+        try {
+            $this->report($templateid);
+            $this->fail('The guest was given the report.');
+        } catch (report_access_exception $e) {
+            $this->assertSame('errorreportview', $e->errorcode);
+        }
+
+        $this->setUser(0);
+        $this->assertFalse(hub_pairs::may_view($system, $templateid));
+    }
+
+    /**
+     * A report built with a download parameter is refused, as core's dynamic table builds it; the same call
+     * without the parameter builds.
+     *
+     * @return void
+     */
+    public function test_a_download_parameter_is_refused(): void {
+        $templateid = $this->template($this->competencies(1));
+        $system = \context_system::instance();
+
+        manager::reset_caches();
+        $report = hub_pairs::for_template($system, $templateid);
+        $this->assertInstanceOf(hub_pairs::class, $report);
+        manager::reset_caches();
+        $this->assertInstanceOf(hub_pairs::class, hub_pairs::for_template($system, $templateid, ['other' => 'x']));
+
+        manager::reset_caches();
+        try {
+            hub_pairs::for_template($system, $templateid, ['download' => 'csv']);
+            $this->fail('A download report was built.');
+        } catch (report_access_exception $e) {
+            $this->assertSame('errorreportview', $e->errorcode);
+        }
+
+        // The path core's table takes: the report is rebuilt from its persistent with the caller's parameters.
+        manager::reset_caches();
+        try {
+            system_report_table::create((int) $report->get_report_persistent()->get('id'), ['download' => 'csv']);
+            $this->fail('A download table was built.');
+        } catch (report_access_exception $e) {
+            $this->assertSame('errorreportview', $e->errorcode);
+        }
+    }
+
+    /**
+     * The identity columns are the hub's own: the user table's fields the reader may see, never a custom
+     * profile field named in showuseridentity; a reader without moodle/site:viewuseridentity sees none.
+     *
+     * @return void
+     */
+    public function test_identity_columns_are_the_hubs_own(): void {
+        $this->getDataGenerator()->create_custom_profile_field(['datatype' => 'text', 'shortname' => 'cpf', 'name' => 'CPF']);
+        set_config('showuseridentity', 'email,profile_field_cpf');
+        $templateid = $this->template($this->competencies(1));
+        $profile = fn(hub_pairs $report): array => array_filter(
+            array_keys($report->get_active_columns()),
+            fn(string $identifier): bool => str_starts_with($identifier, 'user:profilefield')
+        );
+
+        $reader = $this->viewer(array_merge(self::READER, ['moodle/site:viewuseridentity']));
+        $this->setUser($reader);
+        // The control: core's own helper would add the profile field's column for this reader.
+        $core = array_map(
+            fn($column): string => $column->get_unique_identifier(),
+            (new \core_reportbuilder\local\entities\user())->initialise()->get_identity_columns(\context_system::instance())
+        );
+        $this->assertContains('user:profilefield_cpf', $core);
+        $report = $this->report($templateid);
+        $this->assertArrayHasKey('user:email', $report->get_active_columns());
+        $this->assertSame([], $profile($report));
+
+        $this->setUser($this->viewer(self::READER));
+        $report = $this->report($templateid);
+        $this->assertArrayNotHasKey('user:email', $report->get_active_columns());
+        $this->assertSame([], $profile($report));
+    }
+
+    /**
+     * Each sortable column of a restricted pair sorts by its masked value, whose real one would put the pair
+     * last; a reader holding viewsensitive sees it where its real value puts it.
+     *
+     * @return void
+     */
+    public function test_every_sort_key_of_a_restricted_pair_is_masked(): void {
+        global $DB;
+        [$c1, $c2, $c3] = $this->competencies(3);
+        $templateid = $this->template([$c1, $c2, $c3]);
+        $worker = $this->worker($templateid);
+        $generator = $this->getDataGenerator()->get_plugin_generator('local_evidencehub');
+        // Type names and issuers that sort in the order of the pairs; the restricted pair's sort last.
+        $names = ['nrcertificate' => 'Alpha', 'diploma' => 'Beta', 'aso' => 'Zulu'];
+        $pairs = [
+            [$c1, 'nrcertificate', status::STATUS_VALID, 20260601, 1],
+            [$c2, 'diploma', status::STATUS_DUE, 20270101, 2],
+            [$c3, 'aso', status::STATUS_EXPIRED, 20990101, 5],
+        ];
+        foreach ($pairs as [$competencyid, $shortname, $code, $expiry, $count]) {
+            $DB->set_field('local_evidencehub_type', 'name', $names[$shortname], ['shortname' => $shortname]);
+            $typeid = (int) $DB->get_field('local_evidencehub_type', 'id', ['shortname' => $shortname]);
+            $meta = $generator->create_meta([
+                'userid' => $worker->id,
+                'typeid' => $typeid,
+                'issuer' => $names[$shortname] . ' issuer',
+            ]);
+            $generator->create_status([
+                'userid' => $worker->id,
+                'competencyid' => $competencyid,
+                'status' => $code,
+                'effectiveexpiry' => $expiry,
+                'evidencecount' => $count,
+                'metaid' => $meta->id,
+            ]);
+        }
+        [$first, $second, $restricted] = [$this->pair($worker, $c1), $this->pair($worker, $c2), $this->pair($worker, $c3)];
+        $keys = [
+            'validity:status',
+            'validity:effectiveexpiry',
+            'validity:evidencecount',
+            'evidence_details:type',
+            'evidence_details:issuer',
+        ];
+
+        $readers = [
+            // The masked key (-1, 0, 0, '', '') sorts the restricted pair first.
+            'masked' => [$this->viewer(self::READER), [$restricted, $first, $second]],
+            // The real key sorts it last.
+            'real' => [
+                $this->viewer(array_merge(self::READER, ['local/evidencehub:viewsensitive'])),
+                [$first, $second, $restricted],
+            ],
+        ];
+        foreach ($readers as $name => [$user, $ascending]) {
+            $this->setUser($user);
+            $report = $this->report($templateid);
+            foreach ($keys as $key) {
+                $this->assertSame($ascending, array_keys($this->rows($report, $key, SORT_ASC)), "$name ascending by $key");
+                $this->assertSame(
+                    array_reverse($ascending),
+                    array_keys($this->rows($report, $key, SORT_DESC)),
+                    "$name descending by $key"
+                );
+            }
+        }
+    }
+
+    /**
+     * The status filter reads the effective status: a forged real status of a restricted pair finds nothing,
+     * restricted finds it, and missing lists the missing pairs only.
+     *
+     * @return void
+     */
+    public function test_the_status_filter_cannot_be_forged(): void {
+        [$c1, $c2, $c3] = $this->competencies(3);
+        $templateid = $this->template([$c1, $c2, $c3]);
+        $worker = $this->worker($templateid);
+        $this->status_row((int) $worker->id, $c1, status::STATUS_VALID, 20300101, 'aso');
+        $this->status_row((int) $worker->id, $c2, status::STATUS_EXPIRED, 20250101, 'nrcertificate');
+        $this->setUser($this->viewer(self::READER));
+        $report = $this->report($templateid);
+
+        $this->select($report, 'validity:status', status::STATUS_VALID);
+        $this->assertSame([], array_keys($this->rows($report)));
+        $this->select($report, 'validity:status', status::EFFECTIVE_RESTRICTED);
+        $this->assertSame([$this->pair($worker, $c1)], array_keys($this->rows($report)));
+        $this->select($report, 'validity:status', status::EFFECTIVE_MISSING);
+        $this->assertSame([$this->pair($worker, $c3)], array_keys($this->rows($report)));
+    }
+
+    /**
+     * A cohort the hub does not offer the reader is not an option and, forged as the filter's value, filters
+     * nothing; the control: made visible, it is offered and narrows.
+     *
+     * @return void
+     */
+    public function test_a_hidden_cohort_is_not_offered_and_filters_nothing(): void {
+        global $DB;
+        [$c1] = $this->competencies(1);
+        $templateid = $this->template([$c1]);
+        $ana = $this->worker($templateid);
+        $bia = $this->worker($templateid);
+        $cohort = $this->getDataGenerator()->create_cohort(['visible' => 0]);
+        cohort_add_member($cohort->id, $bia->id);
+        $this->setUser($this->viewer(self::READER));
+        $both = [$this->pair($ana, $c1), $this->pair($bia, $c1)];
+
+        $report = $this->report($templateid);
+        $this->assertArrayNotHasKey((int) $cohort->id, $report->get_filter('user:cohort')->get_options());
+        $this->select($report, 'user:cohort', (int) $cohort->id);
+        $this->assertEqualsCanonicalizing($both, array_keys($this->rows($report)));
+
+        $DB->set_field('cohort', 'visible', 1, ['id' => $cohort->id]);
+        $report = $this->report($templateid);
+        $this->assertArrayHasKey((int) $cohort->id, $report->get_filter('user:cohort')->get_options());
+        $this->select($report, 'user:cohort', (int) $cohort->id);
+        $this->assertSame([$this->pair($bia, $c1)], array_keys($this->rows($report)));
+    }
 }

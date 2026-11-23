@@ -292,6 +292,18 @@ final class hub_query {
      * @return array Field names, e.g. email, idnumber.
      */
     public function identity_fields(): array {
-        return \core_user\fields::get_identity_fields($this->context, false);
+        return self::identity_fields_in($this->context);
+    }
+
+    /**
+     * The identity fields a context shows to the current user, in core's order, custom profile fields left out.
+     *
+     * The one list the hub's grid, its download and its report share, so none shows a column another hides.
+     *
+     * @param \context $context The page context.
+     * @return array Field names of the user table, e.g. email, idnumber.
+     */
+    public static function identity_fields_in(\context $context): array {
+        return \core_user\fields::get_identity_fields($context, false);
     }
 }
