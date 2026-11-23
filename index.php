@@ -36,6 +36,7 @@ use local_evidencehub\local\hub_filter;
 use local_evidencehub\local\hub_kpis;
 use local_evidencehub\local\hub_query;
 use local_evidencehub\local\hub_scope;
+use local_evidencehub\reportbuilder\local\systemreports\hub_pairs;
 
 $contextid = optional_param('contextid', context_system::instance()->id, PARAM_INT);
 $context = context::instance_by_id($contextid);
@@ -67,6 +68,31 @@ if (!\core_competency\api::is_enabled()) {
     echo $OUTPUT->notification(get_string('competenciesarenotenabled', 'core_competency'));
     echo $OUTPUT->footer();
     die();
+}
+
+// Core's table of the pairs is another rendering of the same rows, not one of the filter's views: it is read
+// beside the filter, so it is never stored as the reader's last view.
+$tabletemplateid = optional_param('templateid', 0, PARAM_INT);
+if (optional_param('view', '', PARAM_ALPHA) === hub_pairs::VIEW && $tabletemplateid > 0) {
+    hub_access::require_template($tabletemplateid, $context);
+    $report = hub_pairs::for_template($context, $tabletemplateid);
+    $PAGE->set_url(new moodle_url('/local/evidencehub/index.php', [
+        'contextid' => $context->id,
+        'templateid' => $tabletemplateid,
+        'view' => hub_pairs::VIEW,
+    ]));
+    // Back to the reader's own list of this template when that is the one stored, else to its default view.
+    $stored = hub_filter::from_preference($context);
+    $backparams = $stored !== null && $stored->templateid === $tabletemplateid
+        ? $stored->with(['view' => hub_filter::VIEW_LIST, 'page' => 0])->to_params()
+        : ['templateid' => $tabletemplateid];
+    $backurl = new moodle_url('/local/evidencehub/index.php', ['contextid' => $context->id] + $backparams);
+    echo $OUTPUT->header();
+    echo $OUTPUT->heading($title);
+    echo $OUTPUT->container($OUTPUT->action_link($backurl, get_string('hubbacktolist', 'local_evidencehub')), 'mb-3');
+    echo $report->output();
+    echo $OUTPUT->footer();
+    return;
 }
 
 // A request naming no filter restores the last one stored; one naming a filter replaces it once the grid rendered.

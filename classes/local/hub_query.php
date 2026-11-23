@@ -64,10 +64,9 @@ final class hub_query {
      * the search. Columns: userid, competencyid, estatus (effective code), eexpiry (the sort value of
      * the effective expiry: 0 for none, a restricted pair or a missing one).
      *
-     * The restriction is worked out once, in the innermost table, so each capability fragment's
-     * placeholders appear once per statement. It reads the status row's issensitive (the deciding
-     * evidence's type, stored by {@see status_repository}) rather than joining meta and type for every
-     * pair, which roughly doubles the base set's cost.
+     * The pair set's joins, conditions and restricted rule are {@see pairset}'s. The restriction is worked
+     * out once, in the innermost table, so each capability fragment's placeholders appear once per
+     * statement.
      *
      * The search reads the worker's first and last name, and the ID number only when it is among the
      * identity fields the viewer is shown in the page context: a search must not find a worker by a
@@ -80,11 +79,10 @@ final class hub_query {
      */
     public static function base_sql(hub_filter $filter, hub_scope $scope, \context $context): array {
         global $DB;
-        $params = [
-            'hubtemplateid' => $filter->templateid,
-            'hubactive' => plan::STATUS_ACTIVE,
-            'hubviewerid' => $scope->viewerid,
-        ] + $scope->viewparams + $scope->sensitiveparams;
+        $names = pairset::names_as_given();
+        [$pairs, $params] = pairset::where('bp', $filter->templateid, $scope, $names);
+        [$restricted, $restrictedparams] = pairset::restricted('bs', 'bp.userid', $scope, $names);
+        $params += $restrictedparams;
         $where = '';
         if (!$filter->suspended) {
             $where .= ' AND bu.suspended = 0';
@@ -112,15 +110,10 @@ final class hub_query {
                             ELSE COALESCE(r.status, " . status::EFFECTIVE_MISSING . ") END AS estatus,
                        CASE WHEN r.restricted = 1 THEN 0 ELSE COALESCE(r.effectiveexpiry, 0) END AS eexpiry
                   FROM (SELECT bp.userid, btc.competencyid, bs.status, bs.effectiveexpiry,
-                               CASE WHEN bs.issensitive = 1 AND bp.userid <> :hubviewerid
-                                         AND NOT (bp.userid {$scope->sensitivesql}) THEN 1 ELSE 0 END AS restricted
+                               CASE WHEN {$restricted} THEN 1 ELSE 0 END AS restricted
                           FROM {" . plan::TABLE . "} bp
-                          JOIN {user} bu ON bu.id = bp.userid AND bu.deleted = 0
-                          JOIN {competency_templatecomp} btc ON btc.templateid = bp.templateid
-                     LEFT JOIN {" . status_repository::TABLE . "} bs
-                               ON bs.userid = bp.userid AND bs.competencyid = btc.competencyid
-                         WHERE bp.templateid = :hubtemplateid AND bp.status = :hubactive
-                               AND bp.userid {$scope->viewsql}{$where}) r";
+                               " . implode("\n", pairset::joins('bp', 'bu', 'btc', 'bs')) . "
+                         WHERE {$pairs}{$where}) r";
         return [$sql, $params];
     }
 

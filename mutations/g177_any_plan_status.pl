@@ -1,1 +1,1 @@
-s/ AND bp\.status = :hubactive/ AND :hubactive > 0/;
+s/ AND \{\$plan\}\.status = :hubactive"/ AND :hubactive > 0"/;

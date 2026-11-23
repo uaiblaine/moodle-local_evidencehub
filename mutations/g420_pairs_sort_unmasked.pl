@@ -1,0 +1,1 @@
+s/return \$this->pairs \? \$this->masked\("COALESCE\(\{\$expression\}, \{\$empty\}\)", \$empty\) : \$this->masked\(\$expression\);/return \$this->pairs ? "COALESCE({\$expression}, {\$empty})" : \$this->masked(\$expression);/;

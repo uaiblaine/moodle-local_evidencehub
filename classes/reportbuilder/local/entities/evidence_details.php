@@ -30,6 +30,10 @@ use local_evidencehub\local\meta;
  * user the report is built for, its type, issuer, dates and verification read "Restricted", in SQL,
  * so neither a filter nor a sort can pick a restricted pair out by any of them.
  *
+ * Over the hub's pair set ({@see \local_evidencehub\reportbuilder\local\systemreports\hub_pairs}) a restricted
+ * pair's cells are left empty, as the hub's grid leaves them, and the type and issuer sort on a value
+ * rather than NULL, so the order is the same on every database.
+ *
  * @package    local_evidencehub
  * @copyright  2026 Anderson Blaine
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
@@ -39,10 +43,13 @@ class evidence_details extends base {
      * The entity, given the condition under which a row is restricted.
      *
      * @param string $restricted SQL true for a row whose deciding evidence the user may not see.
+     * @param bool $pairs Whether the tables are LEFT joined to the hub's pair set.
      */
     public function __construct(
         /** @var string SQL true for a restricted row. */
         private readonly string $restricted,
+        /** @var bool Whether the tables are LEFT joined to the pair set. */
+        private readonly bool $pairs = false,
     ) {
     }
 
@@ -77,6 +84,16 @@ class evidence_details extends base {
     }
 
     /**
+     * A text column's value: masked, and over the pair set never NULL, so it sorts the same on every database.
+     *
+     * @param string $expression The SQL expression.
+     * @return string
+     */
+    private function text(string $expression): string {
+        return $this->pairs ? "COALESCE(" . $this->masked($expression) . ", '')" : $this->masked($expression);
+    }
+
+    /**
      * 1 for a restricted row, else 0.
      *
      * @return string SQL.
@@ -96,26 +113,28 @@ class evidence_details extends base {
         $t = $this->get_table_alias('local_evidencehub_type');
         $entity = $this->get_entity_name();
         $columns = [];
+        // Over the pair set the status cell says "Restricted"; the others stay empty, as in the hub's grid.
+        $restrictedtext = $this->pairs ? '' : get_string('validityrestricted', 'local_evidencehub');
 
         $columns[] = (new column('type', new lang_string('type', 'local_evidencehub'), $entity))
-            ->add_field($this->masked("{$t}.name"), 'name')
+            ->add_field($this->text("{$t}.name"), 'name')
             ->add_field($this->restricted_flag(), 'restricted')
             ->set_is_sortable(true)
-            ->add_callback(static function ($value, \stdClass $row): string {
+            ->add_callback(static function ($value, \stdClass $row) use ($restrictedtext): string {
                 if (!empty($row->restricted)) {
-                    return get_string('validityrestricted', 'local_evidencehub');
+                    return $restrictedtext;
                 }
                 $context = \context_system::instance();
                 return $value === null ? '' : format_string($value, true, ['context' => $context, 'escape' => false]);
             });
 
         $columns[] = (new column('issuer', new lang_string('issuer', 'local_evidencehub'), $entity))
-            ->add_field($this->masked("{$m}.issuer"), 'issuer')
+            ->add_field($this->text("{$m}.issuer"), 'issuer')
             ->add_field($this->restricted_flag(), 'restricted')
             ->set_is_sortable(true)
-            ->add_callback(static function ($value, \stdClass $row): string {
+            ->add_callback(static function ($value, \stdClass $row) use ($restrictedtext): string {
                 if (!empty($row->restricted)) {
-                    return get_string('validityrestricted', 'local_evidencehub');
+                    return $restrictedtext;
                 }
                 return s((string) $value);
             });
@@ -126,7 +145,7 @@ class evidence_details extends base {
                 ->add_field($this->masked("{$m}.{$name}"), $name)
                 ->add_field($this->restricted_flag(), 'restricted')
                 ->set_is_sortable(true)
-                ->add_callback([validity::class, 'format_day']);
+                ->add_callback($this->pairs ? [validity::class, 'format_pair_day'] : [validity::class, 'format_day']);
         }
 
         $columns[] = (new column('verifystatus', new lang_string('verification', 'local_evidencehub'), $entity))
@@ -134,9 +153,9 @@ class evidence_details extends base {
             ->add_field($this->masked("{$m}.verifystatus"), 'verifystatus')
             ->add_field($this->restricted_flag(), 'restricted')
             ->set_is_sortable(true)
-            ->add_callback(static function ($value, \stdClass $row): string {
+            ->add_callback(static function ($value, \stdClass $row) use ($restrictedtext): string {
                 if (!empty($row->restricted)) {
-                    return get_string('validityrestricted', 'local_evidencehub');
+                    return $restrictedtext;
                 }
                 return $value === null ? '' : meta::verify_label((int) $value);
             });

@@ -1,1 +1,1 @@
-s/CASE WHEN bs\.issensitive = 1 AND/CASE WHEN bs.issensitive = 2 AND/;
+s/"\{\$status\}\.issensitive = 1 AND/"{\$status}.issensitive = 2 AND/;

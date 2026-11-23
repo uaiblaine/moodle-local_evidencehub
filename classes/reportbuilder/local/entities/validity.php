@@ -23,6 +23,7 @@ use core_reportbuilder\local\report\column;
 use core_reportbuilder\local\report\filter;
 use local_evidencehub\local\meta;
 use local_evidencehub\local\status;
+use local_evidencehub\reportbuilder\local\filters\reader_select;
 
 /**
  * The materialised validity of a (worker, competency) pair: one local_evidencehub_status row.
@@ -31,6 +32,11 @@ use local_evidencehub\local\status;
  * reads "Restricted" when that evidence is restricted for the user the report is built for, in SQL,
  * so filters and sorting see the restricted value too. The datasource works the restriction out per
  * worker ({@see \local_evidencehub\reportbuilder\datasource\validity}) and hands the condition in.
+ *
+ * Over the hub's pair set ({@see \local_evidencehub\reportbuilder\local\systemreports\hub_pairs}) the row
+ * is LEFT joined, so the entity reads the effective status there: no row is "missing", in the column, its
+ * sort and its filter, every sort key is a value rather than NULL, and a restricted pair's other cells are
+ * left empty as the hub's grid leaves them.
  *
  * @package    local_evidencehub
  * @copyright  2026 Anderson Blaine
@@ -41,10 +47,13 @@ class validity extends base {
      * The entity, given the condition under which a row is restricted.
      *
      * @param string $restricted SQL true for a row whose deciding evidence the user may not see.
+     * @param bool $pairs Whether the table is LEFT joined to the hub's pair set, which reads the effective status.
      */
     public function __construct(
         /** @var string SQL true for a restricted row. */
         private readonly string $restricted,
+        /** @var bool Whether the table is LEFT joined to the pair set. */
+        private readonly bool $pairs = false,
     ) {
     }
 
@@ -80,6 +89,37 @@ class validity extends base {
     }
 
     /**
+     * A column's value: masked, and over the pair set never NULL, so it sorts the same on every database.
+     *
+     * @param string $expression The SQL expression.
+     * @param string $empty The SQL of the value of a missing pair and, masked, of a restricted one.
+     * @return string
+     */
+    private function value(string $expression, string $empty): string {
+        return $this->pairs ? $this->masked("COALESCE({$expression}, {$empty})", $empty) : $this->masked($expression);
+    }
+
+    /**
+     * The effective status: restricted, the stored status, or over the pair set "missing" for no row.
+     *
+     * @return string SQL.
+     */
+    private function status_sql(): string {
+        $s = $this->get_table_alias('local_evidencehub_status');
+        $status = $this->pairs ? "COALESCE({$s}.status, " . status::EFFECTIVE_MISSING . ")" : "{$s}.status";
+        return $this->masked($status, (string) status::EFFECTIVE_RESTRICTED);
+    }
+
+    /**
+     * What a restricted cell reads: "Restricted", or nothing over the pair set, whose status cell says it.
+     *
+     * @return string
+     */
+    private function restricted_text(): string {
+        return $this->pairs ? '' : get_string('validityrestricted', 'local_evidencehub');
+    }
+
+    /**
      * 1 for a restricted row, else 0.
      *
      * @return string SQL.
@@ -101,39 +141,40 @@ class validity extends base {
 
         $columns[] = (new column('status', new lang_string('status', 'local_evidencehub'), $entity))
             ->set_type(column::TYPE_INTEGER)
-            ->add_field($this->masked("{$s}.status", (string) status::EFFECTIVE_RESTRICTED), 'status')
+            ->add_field($this->status_sql(), 'status')
             ->set_is_sortable(true)
             ->add_callback(static fn($value): string => $value === null ? '' : status::effective_label((int) $value));
 
         $columns[] = (new column('effectiveexpiry', new lang_string('effectiveexpiry', 'local_evidencehub'), $entity))
             ->set_type(column::TYPE_INTEGER)
-            ->add_field($this->masked("{$s}.effectiveexpiry"), 'effectiveexpiry')
+            ->add_field($this->value("{$s}.effectiveexpiry", '0'), 'effectiveexpiry')
             ->add_field($this->restricted_flag(), 'restricted')
             ->set_is_sortable(true)
-            ->add_callback([self::class, 'format_day']);
+            ->add_callback($this->pairs ? [self::class, 'format_pair_day'] : [self::class, 'format_day']);
 
+        $restrictedtext = $this->restricted_text();
         $columns[] = (new column('evidencecount', new lang_string('evidencecount', 'local_evidencehub'), $entity))
             ->set_type(column::TYPE_INTEGER)
-            ->add_field($this->masked("{$s}.evidencecount"), 'evidencecount')
+            ->add_field($this->value("{$s}.evidencecount", '0'), 'evidencecount')
             ->add_field($this->restricted_flag(), 'restricted')
             ->set_is_sortable(true)
-            ->add_callback(static function ($value, \stdClass $row): string {
+            ->add_callback(static function ($value, \stdClass $row) use ($restrictedtext): string {
                 if (!empty($row->restricted)) {
-                    return get_string('validityrestricted', 'local_evidencehub');
+                    return $restrictedtext;
                 }
                 return $value === null ? '' : (string) $value;
             });
 
         $columns[] = (new column('timechanged', new lang_string('timechanged', 'local_evidencehub'), $entity))
             ->set_type(column::TYPE_TIMESTAMP)
-            ->add_field($this->masked("{$s}.timechanged"), 'timechanged')
+            ->add_field($this->value("{$s}.timechanged", '0'), 'timechanged')
             ->add_field($this->restricted_flag(), 'restricted')
             ->set_is_sortable(true)
-            ->add_callback(static function ($value, \stdClass $row): string {
+            ->add_callback(static function ($value, \stdClass $row) use ($restrictedtext): string {
                 if (!empty($row->restricted)) {
-                    return get_string('validityrestricted', 'local_evidencehub');
+                    return $restrictedtext;
                 }
-                return $value === null ? '' : userdate((int) $value);
+                return empty($value) ? '' : userdate((int) $value);
             });
 
         return $columns;
@@ -156,25 +197,41 @@ class validity extends base {
     }
 
     /**
+     * A pair's effective expiry as ISO text, or nothing for a restricted pair or one without a day.
+     *
+     * @param mixed $value The YYYYMMDD day, 0 for none.
+     * @param \stdClass $row The column's fields, with restricted.
+     * @return string
+     */
+    public static function format_pair_day($value, \stdClass $row): string {
+        if (!empty($row->restricted) || empty($value)) {
+            return '';
+        }
+        return (string) meta::iso_date((int) $value);
+    }
+
+    /**
      * The filters.
      *
      * @return array
      */
     #[\Override]
     protected function get_available_filters(): array {
-        $s = $this->get_table_alias('local_evidencehub_status');
+        $pairs = $this->pairs;
         return [
             (new filter(
-                select::class,
+                // Core's select caches its options per filter name for the process, and this name's options
+                // differ between the datasource and the pair set.
+                $pairs ? reader_select::class : select::class,
                 'status',
                 new lang_string('status', 'local_evidencehub'),
                 $this->get_entity_name(),
-                $this->masked("{$s}.status", (string) status::EFFECTIVE_RESTRICTED)
-            ))->set_options_callback(static function (): array {
+                $this->status_sql()
+            ))->set_options_callback(static function () use ($pairs): array {
                 $options = [];
                 foreach (status::effective_codes() as $code) {
-                    // No row stores "missing".
-                    if ($code === status::EFFECTIVE_MISSING) {
+                    // No row stores "missing": only the pair set has it.
+                    if ($code === status::EFFECTIVE_MISSING && !$pairs) {
                         continue;
                     }
                     $options[$code] = status::effective_label($code);
