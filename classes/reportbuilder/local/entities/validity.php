@@ -21,6 +21,7 @@ use core_reportbuilder\local\entities\base;
 use core_reportbuilder\local\filters\select;
 use core_reportbuilder\local\report\column;
 use core_reportbuilder\local\report\filter;
+use local_evidencehub\local\hub_query;
 use local_evidencehub\local\meta;
 use local_evidencehub\local\status;
 use local_evidencehub\reportbuilder\local\filters\reader_select;
@@ -128,6 +129,23 @@ class validity extends base {
      */
     private function expiry_sql(): string {
         return $this->value("{$this->get_table_alias('local_evidencehub_status')}.effectiveexpiry", '0');
+    }
+
+    /**
+     * The "valid until" sort key over the pair set: what the hub's pair set sorts by
+     * ({@see \local_evidencehub\local\hub_query::base_sql()}, its eexpiry). A restricted pair and a missing one read 0,
+     * the most urgent; a pair with a status and no effective expiry reads {@see hub_query::NO_EXPIRY}, after every
+     * day; any other pair its day. The column's value and the "valid until" filter keep reading 0 for a pair with
+     * no day ({@see self::expiry_sql()}), so no window matches it.
+     *
+     * @return string SQL; no parameters.
+     */
+    public function expiry_sort_sql(): string {
+        $s = $this->get_table_alias('local_evidencehub_status');
+        return $this->masked(
+            "CASE WHEN {$s}.status IS NULL THEN 0 ELSE COALESCE({$s}.effectiveexpiry, " . hub_query::NO_EXPIRY . ") END",
+            '0'
+        );
     }
 
     /**

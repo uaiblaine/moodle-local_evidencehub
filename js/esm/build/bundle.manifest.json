@@ -17,18 +17,18 @@
         "src/datareport/sizing.ts": "41e63e71529afbb29e0e0b653ce913c3265b682c",
         "src/datareport/str.ts": "b034719c58c17facf0b8f05aa48418b510c6856e",
         "src/datareport/types.ts": "c7d574eb806aa18659146bed775f768705fd484b",
-        "src/hub/Band.tsx": "9c7ec74d4ca62e91ba72de12e4559d8ee533566b",
-        "src/hub/Bar.tsx": "366179d9cf527eed21472a8b4b836ee8a398f5ff",
+        "src/hub/Band.tsx": "f7215496dbc2afcf2af61e7f77407db0b4b64094",
+        "src/hub/Bar.tsx": "9df8acf1c84d9b154aca49e6d7bd7a5bb29eb2d8",
         "src/hub/Cards.tsx": "ee0fb1c9ff9a7b38284bed1caf8e4d3ca9edd9e9",
         "src/hub/Dock.tsx": "04ef31630ef8c44cc20512ffadecf8af81eb2d37",
         "src/hub/Grid.tsx": "9193cd1ddd02556d2a9b288391a6206c62230ee1",
-        "src/hub/HubView.tsx": "ee45a98054330a0c8e2394278e6e53d9814fa2e1",
+        "src/hub/HubView.tsx": "eae78d8ec8fa53a38ed033b3efb59b937f68a44c",
         "src/hub/amd.ts": "eafa9fc0834d82f03dbe7c5e070d74bf5cbed732",
         "src/hub/cells.tsx": "16bc2b8b639b9069c9645c0bee481871fa73cb6c",
-        "src/hub/export.ts": "040a239d8296438cca8d6b004714428f84477869",
+        "src/hub/export.ts": "73dc7435a175bf3bb24c8829aa345db617adb528",
         "src/hub/filters.ts": "b25c79d9d07659d306398f7046f6841a4b3c24ac",
         "src/hub/repository.ts": "645db5c2ea2796f2fe8607a1bbf9f79083a32e1a",
-        "src/hub/types.ts": "6ef93c4af168a608f72f933cebf4edd22225fe79",
+        "src/hub/types.ts": "938dc97a731f0a37e866a2eeaae8e6db91f5f2fd",
         "src/views.tsx": "031ffaff374cd04705bbb1a176aae5119ecb5f40"
     }
 }

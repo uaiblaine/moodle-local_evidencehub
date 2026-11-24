@@ -38,6 +38,9 @@ final class dossier_export {
     /** @var string The file area of the prepared ZIPs, in the requester's user context, itemid the export id. */
     public const string FILEAREA = 'export';
 
+    /** @var int The most pairs one export may post; the selection of one page of the list names at most 100. */
+    public const int MAX_PAIRS = 1000;
+
     /**
      * Refuse anything but a POST: an export, a revocation or a policy removal changes state, so a link must
      * never trigger it.
@@ -52,7 +55,28 @@ final class dossier_export {
     }
 
     /**
-     * The workers the hub's form posted: the matrix's workers[], or the workers of the list's pairs[].
+     * The posted "userid:competencyid" pairs, as keys: the rows a reader selected in the hub's list.
+     *
+     * @param array $raw The posted values.
+     * @return array "userid:competencyid" => true.
+     * @throws \moodle_exception On a value of another shape or more than MAX_PAIRS pairs.
+     */
+    public static function parse_pairs(array $raw): array {
+        if (count($raw) > self::MAX_PAIRS) {
+            throw new \moodle_exception('errorhubpairs', 'local_evidencehub');
+        }
+        $pairs = [];
+        foreach ($raw as $value) {
+            if (!is_string($value) || !preg_match('/^([1-9]\d*):([1-9]\d*)$/', $value, $matches)) {
+                throw new \moodle_exception('errorhubpairs', 'local_evidencehub');
+            }
+            $pairs[(int) $matches[1] . ':' . (int) $matches[2]] = true;
+        }
+        return $pairs;
+    }
+
+    /**
+     * The workers the hub posted: the matrix's workers[], or the workers of the list's pairs[].
      *
      * @return array User ids, without repeats.
      * @throws \moodle_exception On a malformed value, or more workers than one export may name.
@@ -60,7 +84,7 @@ final class dossier_export {
     public static function posted_workers(): array {
         $workers = optional_param_array('workers', [], PARAM_INT);
         $pairs = optional_param_array('pairs', [], PARAM_RAW_TRIMMED);
-        foreach (array_keys($pairs ? hub_download::parse_pairs($pairs) : []) as $pair) {
+        foreach (array_keys($pairs ? self::parse_pairs($pairs) : []) as $pair) {
             $workers[] = (int) explode(':', $pair)[0];
         }
         $workers = array_values(array_unique(array_filter(array_map('intval', $workers), fn(int $id): bool => $id > 0)));
@@ -71,19 +95,23 @@ final class dossier_export {
     }
 
     /**
-     * The posted workers that belong to the filter's set as the viewer sees it in the hub, by id.
+     * The posted workers that belong to the template's pair set as this reader may view it, by id.
      *
-     * A worker outside the set (another template, a worker the viewer may not read, outside the cohort or
-     * the search) is dropped: the post only narrows the set, it never widens it.
+     * The reader selected rows they were shown; the server's job is that they may see those workers. So the cut is
+     * the pair set of the template for the reader ({@see hub_query::base_sql()}: an active plan from the template,
+     * userevidenceview over the worker) with suspended accounts as the reader's preference lists them
+     * ({@see reportpreference}), and nothing else: no status, cohort or search, which only chose what was on screen.
+     * A worker outside it (another template's, one the reader may not read, a suspended one the reader does not
+     * list) is dropped: the post only narrows the set, it never widens it.
      *
      * @param \context $context The hub's context.
-     * @param hub_filter $filter The validated filter.
-     * @param hub_scope $scope The viewer's capability cuts.
+     * @param int $templateid The template, offered in the context.
+     * @param hub_scope $scope The reader's capability cuts.
      * @param array $userids The posted workers.
      * @return array User ids, ascending.
-     * @throws \moodle_exception When none is left, or more than one export may name.
+     * @throws \moodle_exception When none is left, or more than one export may name, or the template is not offered.
      */
-    public static function selection(\context $context, hub_filter $filter, hub_scope $scope, array $userids): array {
+    public static function selection(\context $context, int $templateid, hub_scope $scope, array $userids): array {
         global $DB;
         $userids = array_values(array_unique(array_filter(array_map('intval', $userids), fn(int $id): bool => $id > 0)));
         if (!$userids) {
@@ -93,6 +121,10 @@ final class dossier_export {
         if (count($userids) > $max) {
             throw new \moodle_exception('errordossiertoomany', 'local_evidencehub', '', $max);
         }
+        $filter = hub_filter::from_values(
+            ['templateid' => $templateid, 'suspended' => reportpreference::read($scope->viewerid)['suspended']],
+            $context
+        );
         [$basesql, $params] = hub_query::base_sql($filter, $scope, $context);
         [$userin, $userparams] = $DB->get_in_or_equal($userids, SQL_PARAMS_NAMED, 'dsel');
         $sql = "SELECT DISTINCT b.userid

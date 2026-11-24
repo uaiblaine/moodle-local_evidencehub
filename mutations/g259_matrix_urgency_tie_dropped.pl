@@ -1,1 +1,1 @@
-s/COALESCE\(u\.firstname, ''\), w\.userid",/COALESCE(u.firstname, '')",/;
+s/COALESCE\(u\.firstname, ''\), w\.userid\";/COALESCE(u.firstname, '')\";/;

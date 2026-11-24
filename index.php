@@ -27,25 +27,25 @@
 
 require_once(__DIR__ . '/../../config.php');
 
-use local_evidencehub\event\hub_downloaded;
 use local_evidencehub\local\dossier_builder;
 use local_evidencehub\local\dossier_export;
 use local_evidencehub\local\hub_access;
-use local_evidencehub\local\hub_download;
-use local_evidencehub\local\hub_filter;
-use local_evidencehub\local\hub_kpis;
-use local_evidencehub\local\hub_query;
 use local_evidencehub\local\hub_scope;
+use local_evidencehub\local\report_download;
+use local_evidencehub\local\reportengine;
+use local_evidencehub\output\hub_choose_page;
+use local_evidencehub\output\hub_matrix_page;
 use local_evidencehub\output\hub_report_view;
 use local_evidencehub\reportbuilder\local\systemreports\hub_pairs;
 
 $contextid = optional_param('contextid', context_system::instance()->id, PARAM_INT);
-$context = context::instance_by_id($contextid);
 
+// Before the context is looked up: a visitor not logged in must not tell an existing id from a missing one.
 require_login(null, false);
 if (isguestuser()) {
     throw new require_login_exception('Guests are not allowed here.');
 }
+$context = context::instance_by_id($contextid);
 hub_access::require_view($context);
 
 $title = get_string('hubpage', 'local_evidencehub');
@@ -71,48 +71,26 @@ if (!\core_competency\api::is_enabled()) {
     die();
 }
 
-// Core's table of the pairs is another rendering of the same rows, not one of the filter's views: it is read
-// beside the filter, so it is never stored as the reader's last view.
-$tabletemplateid = optional_param('templateid', 0, PARAM_INT);
-if (optional_param('view', '', PARAM_ALPHA) === hub_pairs::VIEW && $tabletemplateid > 0) {
-    hub_access::require_template($tabletemplateid, $context);
-    $report = hub_pairs::for_template($context, $tabletemplateid);
-    $PAGE->set_url(new moodle_url('/local/evidencehub/index.php', [
-        'contextid' => $context->id,
-        'templateid' => $tabletemplateid,
-        'view' => hub_pairs::VIEW,
-    ]));
-    // Back to the reader's own list of this template when that is the one stored, else to its default view.
-    $stored = hub_filter::from_preference($context);
-    $backparams = $stored !== null && $stored->templateid === $tabletemplateid
-        ? $stored->with(['view' => hub_filter::VIEW_LIST, 'page' => 0])->to_params()
-        : ['templateid' => $tabletemplateid];
-    $backurl = new moodle_url('/local/evidencehub/index.php', ['contextid' => $context->id] + $backparams);
-    echo $OUTPUT->header();
-    echo $OUTPUT->heading($title);
-    echo $OUTPUT->container($OUTPUT->action_link($backurl, get_string('hubbacktolist', 'local_evidencehub')), 'mb-3');
-    echo $report->output();
-    echo $OUTPUT->footer();
-    return;
-}
+$templateid = optional_param('templateid', 0, PARAM_INT);
+$view = optional_param('view', '', PARAM_ALPHA);
 
-// A request naming no filter restores the last one stored; one naming a filter replaces it once the grid rendered.
-$fromrequest = hub_filter::has_request_params();
-$filter = $fromrequest ? hub_filter::from_request($context) : hub_filter::from_preference($context);
-$scope = hub_scope::for_user();
-
-// The list's form posts its download format too: the dossiers' button wins.
-if (optional_param('action', '', PARAM_ALPHA) === 'exportdossiers' && $filter !== null) {
+// The dossiers of the workers selected in the list (pairs[]) or in the matrix (workers[]). The selection only names
+// workers: the server keeps those of the template's pair set this reader may view, and nothing else
+// (dossier_export::selection()), then returns to the page the post came from.
+if (optional_param('action', '', PARAM_ALPHA) === 'exportdossiers') {
     dossier_export::require_post();
     require_sesskey();
     dossier_builder::require_export($context);
-    $returnurl = (new \local_evidencehub\output\hub_page($context, $filter, $scope))->url($filter);
+    hub_access::require_template($templateid, $context);
+    $returnurl = $view === hub_matrix_page::VIEW
+        ? hub_matrix_page::url($context, $templateid, reportengine::scope(optional_param('scope', '', PARAM_ALPHA)))
+        : hub_report_view::url($context, $templateid);
     try {
-        $userids = dossier_export::selection($context, $filter, $scope, dossier_export::posted_workers());
+        $userids = dossier_export::selection($context, $templateid, hub_scope::for_user(), dossier_export::posted_workers());
     } catch (moodle_exception $e) {
         redirect($returnurl, $e->getMessage(), null, \core\output\notification::NOTIFY_ERROR);
     }
-    $plan = dossier_export::start($context, $filter->templateid, $userids);
+    $plan = dossier_export::start($context, $templateid, $userids);
     if ($plan === null) {
         redirect(
             $returnurl,
@@ -121,61 +99,83 @@ if (optional_param('action', '', PARAM_ALPHA) === 'exportdossiers' && $filter !=
             \core\output\notification::NOTIFY_SUCCESS
         );
     }
-    dossier_export::stream($context, $filter->templateid, $plan);
+    dossier_export::stream($context, $templateid, $plan);
     die();
 }
 
+// The list's download: a link of the bar's Download menu, a GET with the sesskey as core's own download link. The
+// file is the pairs report's own table under the criteria in force, the only door to it, and the one that logs it.
 $format = optional_param('download', '', PARAM_ALPHANUMEXT);
-if ($format !== '' && $filter !== null) {
+if ($format !== '') {
     require_sesskey();
-    if (!array_key_exists($format, \core\plugininfo\dataformat::get_enabled_plugins())) {
-        throw new moodle_exception('invalidparameter', 'debug');
-    }
-    $posted = optional_param_array('pairs', [], PARAM_RAW_TRIMMED);
-    $pairs = $posted ? hub_download::parse_pairs($posted) : null;
-    $download = new hub_download($context, new hub_query($context, $scope));
-    $rows = $download->count($filter, $pairs, hub_kpis::get($filter, $scope, $context));
-    hub_downloaded::create_from_download($context, $filter->templateid, $rows)->trigger();
-    \core\dataformat::download_data(
-        clean_filename(get_string('hubdownloadname', 'local_evidencehub', $filter->templateid)),
-        $format,
-        $download->columns(),
-        $download->rows($filter, $pairs)
-    );
+    hub_access::require_template($templateid, $context);
+    report_download::open($context, $templateid, $format, [
+        'scope' => optional_param('scope', '', PARAM_ALPHA),
+        'search' => optional_param('search', '', PARAM_TEXT),
+        'sort' => optional_param('sort', '', PARAM_ALPHANUMEXT),
+        'direction' => optional_param('dir', '', PARAM_ALPHA),
+    ])->send();
     die();
 }
 
-// The list of a template is the data report (stage E3): the template the request names, else the reader's last one
-// in this context while it is still offered. The matrix keeps its own page and filter; with no template either,
-// the page asks for one.
-if (optional_param('view', '', PARAM_ALPHA) !== hub_filter::VIEW_MATRIX) {
-    $listtemplateid = $tabletemplateid > 0 ? $tabletemplateid : hub_report_view::last_template($context);
-    if ($listtemplateid > 0) {
-        hub_access::require_template($listtemplateid, $context);
-        $report = hub_pairs::for_template($context, $listtemplateid);
-        $PAGE->set_url(hub_report_view::url($context, $listtemplateid));
-        // Until header() runs, $OUTPUT is core's bootstrap renderer: the shell is exported after it.
-        echo $OUTPUT->header();
-        echo $OUTPUT->render_from_template(
-            'local_evidencehub/hub_report_view',
-            (new hub_report_view($context, $report))->export_for_template($OUTPUT)
-        );
-        echo $OUTPUT->footer();
-        return;
-    }
-    $filter = null;
+// Core's table of the pairs: another rendering of the list's rows, with core's own filter form.
+if ($view === hub_pairs::VIEW && $templateid > 0) {
+    hub_access::require_template($templateid, $context);
+    $report = hub_pairs::for_template($context, $templateid);
+    $PAGE->set_url(new moodle_url('/local/evidencehub/index.php', [
+        'contextid' => $context->id,
+        'templateid' => $templateid,
+        'view' => hub_pairs::VIEW,
+    ]));
+    echo $OUTPUT->header();
+    echo $OUTPUT->heading($title);
+    echo $OUTPUT->container(
+        $OUTPUT->action_link(hub_report_view::url($context, $templateid), get_string('hubbacktolist', 'local_evidencehub')),
+        'mb-3'
+    );
+    echo $report->output();
+    echo $OUTPUT->footer();
+    return;
 }
 
-$page = new \local_evidencehub\output\hub_page($context, $filter, $scope);
-$PAGE->set_url($page->url($filter));
-$PAGE->requires->js_call_amd('local_evidencehub/hub_page', 'init');
+// The matrix: the workers of the list's rows under the reader's stored filters and the scope, server-rendered.
+if ($view === hub_matrix_page::VIEW && $templateid > 0) {
+    hub_access::require_template($templateid, $context);
+    $scope = reportengine::scope(optional_param('scope', '', PARAM_ALPHA));
+    $report = hub_pairs::for_template($context, $templateid, ['scope' => $scope]);
+    $page = new hub_matrix_page(
+        $context,
+        $report,
+        $scope,
+        optional_param('page', 0, PARAM_INT),
+        optional_param('perpage', 0, PARAM_INT)
+    );
+    $PAGE->set_url($page->page_url());
+    $PAGE->requires->js_call_amd('local_evidencehub/hub_page', 'init');
+    // Until header() runs, $OUTPUT is core's bootstrap renderer: the page is exported after it.
+    echo $OUTPUT->header();
+    echo $OUTPUT->render_from_template('local_evidencehub/hub_matrix', $page->export_for_template($OUTPUT));
+    echo $OUTPUT->footer();
+    return;
+}
 
-// Until header() runs, $OUTPUT is core's bootstrap renderer: every export comes after it.
+// The list of a template is the data report: the template the request names, else the reader's last one in this
+// context while it is still offered; with neither, the page asks for one.
+$listtemplateid = $templateid > 0 ? $templateid : hub_report_view::last_template($context);
+if ($listtemplateid > 0) {
+    hub_access::require_template($listtemplateid, $context);
+    $report = hub_pairs::for_template($context, $listtemplateid);
+    $PAGE->set_url(hub_report_view::url($context, $listtemplateid));
+    // Until header() runs, $OUTPUT is core's bootstrap renderer: the shell is exported after it.
+    echo $OUTPUT->header();
+    echo $OUTPUT->render_from_template(
+        'local_evidencehub/hub_report_view',
+        (new hub_report_view($context, $report))->export_for_template($OUTPUT)
+    );
+    echo $OUTPUT->footer();
+    return;
+}
+
 echo $OUTPUT->header();
-echo $OUTPUT->heading($title);
-echo $OUTPUT->render_from_template('local_evidencehub/hub_page', $page->export_for_template($OUTPUT));
-// Only a filter that validated and rendered is stored; a download never stores one.
-if ($fromrequest && $filter !== null) {
-    $filter->save_preference();
-}
+echo $OUTPUT->render_from_template('local_evidencehub/hub_choose', (new hub_choose_page($context))->export_for_template($OUTPUT));
 echo $OUTPUT->footer();

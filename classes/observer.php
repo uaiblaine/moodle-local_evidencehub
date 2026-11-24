@@ -25,6 +25,7 @@ use local_evidencehub\local\meta;
 use local_evidencehub\local\hub_kpis;
 use local_evidencehub\local\policy;
 use local_evidencehub\local\status_repository;
+use local_evidencehub\privacy\provider;
 
 /**
  * Keeps the details in step with core's evidence when it changes outside this plugin, decides
@@ -185,7 +186,8 @@ final class observer {
     }
 
     /**
-     * A user was deleted: their statuses go.
+     * A user was deleted: their statuses and their stored filter values of the plugin's reports go; the privacy finder
+     * reads their user context, which is gone by now.
      *
      * @param \core\event\user_deleted $event The event.
      * @return void
@@ -194,6 +196,7 @@ final class observer {
         global $DB;
         $DB->delete_records(status_repository::TABLE, ['userid' => (int) $event->objectid]);
         hub_kpis::bump_generation();
+        provider::delete_stored_filters((int) $event->objectid);
     }
 
     /**

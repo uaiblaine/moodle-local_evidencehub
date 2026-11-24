@@ -21,7 +21,7 @@
  * and two panels: the pairs by status and the competencies with most open pairs. Each line of a panel is a
  * button that sets the report's status or competency filter, its number written as text beside its bar.
  * There is no compact band: every figure is already over the reader's own workers. A figure with no value
- * reads "–".
+ * reads "–". A status counting no pair is left out of the distribution unless it is the status filter in force.
  *
  * Every number is the server's (reportengine::summary()), over the report's own rows under every criterion
  * but the scope and the status filter.
@@ -45,6 +45,8 @@ type BandProps = {
     error: boolean,
     /** Whether a line of a panel can set its filter: the rows' answer, which carries the filters, has come. */
     canfilter: boolean,
+    /** The status code the stored status filter holds, as a string; '' when none is in force. */
+    chosenstatus: string,
     onStatus: (status: number) => void,
     onCompetency: (competencyid: number) => void,
     onRetry: () => void,
@@ -121,7 +123,8 @@ const BandSkeleton = (): ReactElement => (
  * @param {object} props See BandProps.
  * @returns {object} The band's region.
  */
-export const Band = ({labels, summary, loading, error, canfilter, onStatus, onCompetency, onRetry}: BandProps): ReactElement => {
+export const Band = (props: BandProps): ReactElement => {
+    const {labels, summary, loading, error, canfilter, chosenstatus, onStatus, onCompetency, onRetry} = props;
     let body: ReactElement;
     if (summary === null && error) {
         body = (
@@ -139,7 +142,8 @@ export const Band = ({labels, summary, loading, error, canfilter, onStatus, onCo
         );
     } else {
         const rate = summary.rate ?? null;
-        const statusmost = Math.max(1, ...summary.distribution.map((entry) => entry.count));
+        const distribution = summary.distribution.filter((entry) => entry.count > 0 || String(entry.status) === chosenstatus);
+        const statusmost = Math.max(1, ...distribution.map((entry) => entry.count));
         const worstmost = Math.max(1, ...summary.worst.map((entry) => entry.count));
         body = (
             <div className="local-evidencehub-rview-dim">
@@ -171,7 +175,7 @@ export const Band = ({labels, summary, loading, error, canfilter, onStatus, onCo
                     <div className="local-evidencehub-rview-panel">
                         <div className="local-evidencehub-rview-panel-title"><span>{labels.bystatus}</span></div>
                         <ul className="local-evidencehub-rview-hlist">
-                            {summary.distribution.map((entry) => (
+                            {distribution.map((entry) => (
                                 <BarRow
                                     key={entry.status}
                                     label={entry.label}

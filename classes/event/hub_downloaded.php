@@ -19,7 +19,7 @@ namespace local_evidencehub\event;
 use core\event\base;
 
 /**
- * The hub's grid of a plan template was downloaded.
+ * The hub's list of a plan template was downloaded, from index.php's download branch (local\report_download).
  *
  * @property-read array $other {
  *      - int templateid: the plan template.

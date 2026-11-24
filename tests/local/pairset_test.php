@@ -133,7 +133,7 @@ final class pairset_test extends core_reportbuilder_testcase {
         $this->setUser($reader);
 
         $hub = array_keys(array_filter(
-            $this->all_pages(\context_system::instance(), $this->filter($templateid)),
+            $this->base_pairs(\context_system::instance(), $this->filter($templateid)),
             fn(int $code): bool => $code === status::EFFECTIVE_RESTRICTED
         ));
         $this->assertSame([$restricted], $hub);

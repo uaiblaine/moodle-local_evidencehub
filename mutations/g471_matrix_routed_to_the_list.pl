@@ -1,1 +1,1 @@
-s/if \(optional_param\('view', '', PARAM_ALPHA\) !== hub_filter::VIEW_MATRIX\) \{/if (true) {/;
+s/if \(\$view === hub_matrix_page::VIEW && \$templateid > 0\) \{/if (false) {/;

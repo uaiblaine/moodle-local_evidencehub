@@ -40,6 +40,9 @@ Feature: Readiness dossiers
     And I click on "[data-region='worker']" "css_element" in the "Bia Lima" "table_row"
     And I press "Export dossiers"
     Then I should see "The dossiers of 2 workers are being prepared"
+    # The export returns to the matrix it was posted from.
+    And I should see "Readiness matrix"
+    And I should see "Ana Souza" in the ".local-evidencehub-matrix" "css_element"
     And I run all adhoc tasks
     And I reload the page
     And I open the notification popover

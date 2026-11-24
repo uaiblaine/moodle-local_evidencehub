@@ -20,7 +20,7 @@ use local_evidencehub\tests\hub_scenario;
 use PHPUnit\Framework\Attributes\CoversClass;
 
 /**
- * The hub's filter: every field validated, the request and the stored preference read alike.
+ * The pair set's cuts: every field validated, a template or a cohort only from the context's offer.
  *
  * @package    local_evidencehub
  * @category   test
@@ -43,58 +43,29 @@ final class hub_filter_test extends \advanced_testcase {
         $this->templateid = $this->template($this->competencies(1));
     }
 
-    #[\Override]
-    protected function tearDown(): void {
-        $_GET = [];
-        parent::tearDown();
-    }
-
     /**
-     * Values outside an allowlist fall back to the default; the search is cleaned, trimmed and capped.
+     * The search is cleaned, trimmed and capped; any key the filter does not hold is ignored, so a caller's old
+     * key (a status, a sort, a page) cannot reach the pair set.
      *
      * @return void
      */
     public function test_every_field_is_validated(): void {
         $filter = hub_filter::from_values([
             'templateid' => (string) $this->templateid,
-            'statuses' => [5, 99, '2', -1, 5, 0],
+            'statuses' => [5, 99],
             'search' => '  <b>Ana</b> ' . str_repeat('x', 200),
+            'suspended' => '1',
             'sort' => 'password',
-            'dir' => 'sideways',
-            'page' => -3,
-            'perpage' => 7,
-            'view' => 'password',
         ], \context_system::instance());
         $this->assertSame($this->templateid, $filter->templateid);
-        // Known codes only, in display order, once each.
-        $this->assertSame(
-            [status::EFFECTIVE_MISSING, status::STATUS_EXPIRED, status::STATUS_VALID, status::EFFECTIVE_RESTRICTED],
-            $filter->statuses
-        );
+        $this->assertSame(0, $filter->cohortid);
+        $this->assertTrue($filter->suspended);
         $this->assertStringStartsWith('Ana x', $filter->search);
         $this->assertSame(hub_filter::SEARCH_MAXLENGTH, \core_text::strlen($filter->search));
-        $this->assertSame([hub_filter::SORT_EXPIRY, 'asc', 0, hub_filter::DEFAULT_PERPAGE, hub_filter::VIEW_LIST], [
-            $filter->sort,
-            $filter->dir,
-            $filter->page,
-            $filter->perpage,
-            $filter->view,
-        ]);
+        $this->assertSame(['templateid', 'cohortid', 'search', 'suspended'], array_keys(get_object_vars($filter)));
 
-        $filter = hub_filter::from_values([
-            'templateid' => $this->templateid,
-            'sort' => 'worker',
-            'dir' => 'desc',
-            'page' => 2,
-            'perpage' => 100,
-            'view' => 'matrix',
-        ], \context_system::instance());
-        $this->assertSame(
-            ['worker', 'desc', 2, 100, hub_filter::VIEW_MATRIX],
-            [$filter->sort, $filter->dir, $filter->page, $filter->perpage, $filter->view]
-        );
-        $this->assertSame(hub_filter::needs_attention(), $filter->statuses);
-        $this->assertNotContains(status::STATUS_VALID, $filter->statuses);
+        // The control: no suspended value reads as active accounts only.
+        $this->assertFalse(hub_filter::from_values(['templateid' => $this->templateid], \context_system::instance())->suspended);
     }
 
     /**
@@ -115,128 +86,5 @@ final class hub_filter_test extends \advanced_testcase {
         $cohort = $this->getDataGenerator()->create_cohort(['contextid' => \context_coursecat::instance($other->id)->id]);
         $this->expectExceptionMessage(get_string('errorhubcohort', 'local_evidencehub'));
         hub_filter::from_values(['templateid' => $this->templateid, 'cohortid' => $cohort->id], \context_system::instance());
-    }
-
-    /**
-     * The request names a filter by any of its parameters; statusfilter without statuses means all.
-     *
-     * @return void
-     */
-    public function test_the_request(): void {
-        $system = \context_system::instance();
-        $this->assertFalse(hub_filter::has_request_params());
-        $_GET = ['contextid' => $system->id, 'templateid' => $this->templateid];
-        $this->assertTrue(hub_filter::has_request_params());
-        $this->assertSame(hub_filter::needs_attention(), hub_filter::from_request($system)->statuses);
-
-        $_GET['statusfilter'] = 1;
-        $this->assertSame([], hub_filter::from_request($system)->statuses);
-        $_GET['statuses'] = [status::STATUS_DUE];
-        $this->assertSame([status::STATUS_DUE], hub_filter::from_request($system)->statuses);
-
-        $_GET = ['contextid' => $system->id, 'search' => 'x'];
-        $this->assertTrue(hub_filter::has_request_params());
-        $this->assertNull(hub_filter::from_request($system));
-    }
-
-    /**
-     * The stored filter comes back as it was saved, without its page; one whose template is no
-     * longer offered comes back as nothing.
-     *
-     * @return void
-     */
-    public function test_the_preference_round_trip(): void {
-        $system = \context_system::instance();
-        $cohort = $this->getDataGenerator()->create_cohort();
-        $filter = hub_filter::from_values([
-            'templateid' => $this->templateid,
-            'cohortid' => $cohort->id,
-            'statuses' => [status::STATUS_EXPIRED],
-            'search' => 'Ana',
-            'suspended' => 1,
-            'sort' => 'competency',
-            'dir' => 'desc',
-            'page' => 3,
-            'perpage' => 25,
-            'view' => 'matrix',
-        ], $system);
-        $this->assertNull(hub_filter::from_preference($system));
-        $filter->save_preference();
-
-        $stored = json_decode(get_user_preferences(hub_filter::PREFERENCE), true);
-        $this->assertSame($filter->to_values(), $stored);
-        $this->assertArrayNotHasKey('page', $stored);
-        $this->assertSame(hub_filter::VIEW_MATRIX, $stored['view']);
-        $this->assertEquals($filter->with(['page' => 0]), hub_filter::from_preference($system));
-
-        $category = $this->getDataGenerator()->create_category();
-        $this->assertNull(hub_filter::from_preference(\context_coursecat::instance($category->id)));
-        set_user_preference(hub_filter::PREFERENCE, 'not json');
-        $this->assertNull(hub_filter::from_preference($system));
-    }
-
-    /**
-     * The request parameters name the filter back.
-     *
-     * @return void
-     */
-    public function test_the_params_name_the_filter_back(): void {
-        $system = \context_system::instance();
-        $filter = hub_filter::from_values(
-            ['templateid' => $this->templateid, 'statuses' => [], 'page' => 2, 'view' => 'matrix'],
-            $system
-        );
-        $_GET = array_map(fn($value) => is_array($value) ? $value : (string) $value, $filter->to_params());
-        $this->assertEquals($filter, hub_filter::from_request($system));
-    }
-
-    /**
-     * Only from_values() builds a filter, and a copy changes the view only, validated again.
-     *
-     * The private constructor keeps a caller from setting a template or cohort that was never
-     * validated; with() refuses those keys at run time.
-     *
-     * @return void
-     */
-    public function test_with_changes_only_the_view(): void {
-        $this->assertTrue((new \ReflectionMethod(hub_filter::class, '__construct'))->isPrivate());
-        $system = \context_system::instance();
-        $filter = hub_filter::from_values(['templateid' => $this->templateid], $system);
-
-        $copy = $filter->with([
-            'statuses' => [99, status::STATUS_DUE],
-            'sort' => 'password',
-            'dir' => 'up',
-            'page' => -1,
-            'perpage' => 7,
-            'view' => 'grid',
-        ]);
-        $defaults = [[status::STATUS_DUE], hub_filter::SORT_EXPIRY, 'asc', 0, hub_filter::DEFAULT_PERPAGE, hub_filter::VIEW_LIST];
-        $this->assertSame($defaults, [
-            $copy->statuses,
-            $copy->sort,
-            $copy->dir,
-            $copy->page,
-            $copy->perpage,
-            $copy->view,
-        ]);
-        // The control: allowed values pass, and what was not named stays.
-        $copy = $filter->with(['sort' => 'worker', 'page' => 2, 'view' => hub_filter::VIEW_MATRIX]);
-        $this->assertSame(['worker', 2, hub_filter::VIEW_MATRIX, $filter->statuses, $filter->templateid], [
-            $copy->sort,
-            $copy->page,
-            $copy->view,
-            $copy->statuses,
-            $copy->templateid,
-        ]);
-
-        foreach (['templateid', 'cohortid', 'search', 'suspended'] as $key) {
-            try {
-                $filter->with([$key => 1]);
-                $this->fail('A copy changed ' . $key . '.');
-            } catch (\coding_exception $e) {
-                $this->assertStringContainsString($key, $e->getMessage());
-            }
-        }
     }
 }

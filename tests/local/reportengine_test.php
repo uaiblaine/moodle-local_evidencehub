@@ -886,6 +886,62 @@ final class reportengine_test extends core_reportbuilder_testcase {
     }
 
     /**
+     * A reader whose reach over workers changes is never served the figures cached under the old reach: a role with
+     * userevidenceview assigned in one more worker's user context fires no event that replaces the generation, so
+     * the scope's key is what separates the two. The total, the facets and the summary are each read again. The
+     * control: with no change of role the second read is the first, served from the cache.
+     *
+     * Changes that must make it fail: the userevidenceview fragment and its parameters left out of the scope's key.
+     *
+     * @return void
+     */
+    public function test_cached_figures_follow_the_readers_reach_over_workers(): void {
+        $generator = $this->getDataGenerator();
+        $role = $generator->create_role();
+        assign_capability('moodle/competency:userevidenceview', CAP_ALLOW, $role, \context_system::instance()->id, true);
+        set_role_contextlevels($role, [CONTEXT_USER]);
+        $viewer = $this->viewer(['local/evidencehub:view', 'moodle/competency:templateview']);
+        role_assign($role, $viewer->id, \context_user::instance($this->id('ana'))->id);
+        accesslib_clear_all_caches_for_unit_testing();
+        $status = fn(array $answer): array => $this->counts($answer, 'validity:status');
+
+        hub_kpis::bump_generation();
+        $generation = hub_kpis::report_generation();
+        $this->setUser($viewer);
+        $rows = [];
+        $summary = [];
+        $cold = $this->statements(function () use (&$rows, &$summary): void {
+            $rows = $this->rows(['facets' => true]);
+            $summary = reportengine::summary($this->report(), []);
+        });
+        $this->assertSame(3, $rows['total']);
+        $this->assertArrayNotHasKey((string) status::EFFECTIVE_RESTRICTED, $status($rows));
+        $this->assertSame([1, 3], [$summary['workers'], $summary['pairs']]);
+
+        // The control: the same reach again is the same figures, from the cache.
+        $again = [];
+        $repeat = $this->statements(function () use (&$again): void {
+            $again = [$this->rows(['facets' => true]), reportengine::summary($this->report(), [])];
+        });
+        $this->assertLessThan($cold, $repeat);
+        $this->assertSame([$rows['total'], $rows['filters']], [$again[0]['total'], $again[0]['filters']]);
+        $this->assertSame($summary, $again[1]);
+
+        // The same reader, now holding the role over Bia too, with no event: counted afresh.
+        $this->setAdminUser();
+        role_assign($role, $viewer->id, \context_user::instance($this->id('bia'))->id);
+        accesslib_clear_all_caches_for_unit_testing();
+        $this->setUser($viewer);
+        $this->assertSame($generation, hub_kpis::report_generation());
+        $wider = $this->rows(['facets' => true]);
+        $this->assertSame(6, $wider['total']);
+        $this->assertSame(1, $status($wider)[(string) status::EFFECTIVE_RESTRICTED]);
+        $widersummary = reportengine::summary($this->report(), []);
+        $this->assertSame([2, 6], [$widersummary['workers'], $widersummary['pairs']]);
+        $this->assertSame($generation, hub_kpis::report_generation());
+    }
+
+    /**
      * The cached total and facets follow every criterion that cuts the rows: the scope and the status filter (which
      * the summary's key leaves out) are both in the key. The page, its size and the sort are not criteria.
      *

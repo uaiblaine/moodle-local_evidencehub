@@ -22,7 +22,6 @@ use core\output\single_select;
 use core\output\templatable;
 use local_evidencehub\local\dossier_builder;
 use local_evidencehub\local\hub_access;
-use local_evidencehub\local\hub_filter;
 use local_evidencehub\local\reportengine;
 use local_evidencehub\local\reportpreference;
 use local_evidencehub\reportbuilder\local\systemreports\hub_pairs;
@@ -117,15 +116,31 @@ class hub_report_view implements renderable, templatable {
             'perpage' => reportengine::DEFAULT_PERPAGE,
             'perpages' => reportengine::PERPAGES,
             'searchmin' => reportengine::SEARCH_MIN,
-            'matrixurl' => (new \moodle_url('/local/evidencehub/index.php', [
+            'matrixurl' => hub_matrix_page::url($this->context, $templateid)->out(false),
+            'tableurl' => $this->table_url()->out(false),
+            'downloadurl' => (new \moodle_url('/local/evidencehub/index.php', [
                 'contextid' => $this->context->id,
                 'templateid' => $templateid,
-                'view' => hub_filter::VIEW_MATRIX,
+                'sesskey' => sesskey(),
             ]))->out(false),
-            'tableurl' => $this->table_url()->out(false),
+            'formats' => self::formats(),
             'exportform' => $exportform,
             'labels' => self::labels(),
         ];
+    }
+
+    /**
+     * The download formats the site has enabled, for the bar's Download menu (D114): each a link to index.php's
+     * download branch, which accepts these only ({@see \local_evidencehub\local\report_download::require_format()}).
+     *
+     * @return array Each: value (the dataformat's name), label (its plain name).
+     */
+    public static function formats(): array {
+        $formats = [];
+        foreach (array_keys(\core\plugininfo\dataformat::get_enabled_plugins()) as $name) {
+            $formats[] = ['value' => (string) $name, 'label' => get_string('dataformat', 'dataformat_' . $name)];
+        }
+        return $formats;
     }
 
     /**
@@ -173,6 +188,7 @@ class hub_report_view implements renderable, templatable {
             'count_one' => get_string('reportviewcount_one', 'local_evidencehub'),
             'defaultcolumns' => get_string('reportviewdefaultcolumns', 'local_evidencehub'),
             'dock' => get_string('reportviewdock', 'local_evidencehub'),
+            'download' => get_string('hubdownload', 'local_evidencehub'),
             'empty' => get_string('reportviewempty', 'local_evidencehub'),
             'expiring' => get_string('reportviewexpiring', 'local_evidencehub'),
             'expiringsub' => get_string('reportviewexpiringsub', 'local_evidencehub'),
@@ -242,24 +258,30 @@ class hub_report_view implements renderable, templatable {
     }
 
     /**
-     * The template picker beside the heading: core's single select, a GET form to this page with the context.
+     * The template picker beside a hub page's heading: core's single select, a GET form to index.php with the context.
+     *
+     * The list's shell, the matrix and the page that asks for a template draw the same one; a page may keep its own
+     * parameters in the form (the matrix keeps its view and scope), which a change submits with the template.
      *
      * @param renderer_base $output The renderer.
+     * @param \context $context The hub context, whose offer it lists.
+     * @param int $templateid The template selected, 0 for none.
+     * @param array $params More parameters the form carries, name => value.
      * @return string Its HTML, rendered by core.
      */
-    private function template_picker(renderer_base $output): string {
+    public static function picker(renderer_base $output, \context $context, int $templateid, array $params = []): string {
         $choices = [];
-        foreach (hub_access::templates($this->context) as $template) {
+        foreach (hub_access::templates($context) as $template) {
             $templatecontext = \context::instance_by_id($template->contextid);
             // Core's single select prints the option text with a triple stash: the escaped spelling.
             $name = format_string($template->shortname, true, ['context' => $templatecontext]);
             $choices[$template->id] = $name . ' (' . s($templatecontext->get_context_name(false, false, false)) . ')';
         }
         $select = new single_select(
-            new \moodle_url('/local/evidencehub/index.php', ['contextid' => $this->context->id]),
+            new \moodle_url('/local/evidencehub/index.php', ['contextid' => $context->id] + $params),
             'templateid',
             $choices,
-            $this->report->template_id(),
+            $templateid > 0 ? $templateid : '',
             ['' => get_string('hubchoosetemplate', 'local_evidencehub')],
             'local-evidencehub-templatepicker'
         );
@@ -283,7 +305,7 @@ class hub_report_view implements renderable, templatable {
 
         return [
             'title' => get_string('hubpage', 'local_evidencehub'),
-            'picker' => $this->template_picker($output),
+            'picker' => self::picker($output, $this->context, $this->report->template_id()),
             'locked' => (int) $this->context->contextlevel === CONTEXT_COURSECAT,
             'contextname' => $this->context->get_context_name(false, false, false),
             'props' => json_encode($this->props(), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_UNESCAPED_UNICODE),

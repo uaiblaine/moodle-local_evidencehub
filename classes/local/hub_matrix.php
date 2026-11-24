@@ -16,111 +16,121 @@
 
 namespace local_evidencehub\local;
 
+use local_evidencehub\reportbuilder\local\systemreports\hub_pairs;
+
 /**
  * The hub's readiness matrix: a page of workers, one row each, by the template's competencies.
  *
- * Read in two statements over the list's base set ({@see hub_query::base_sql()}), so the matrix and
- * the list never disagree on a pair: {@see self::workers()} groups the base set by worker, keeps the
- * workers with at least one pair in the filter's statuses, sorts them and keeps one page;
- * {@see self::cells()} reads every pair of that page's workers, with their names. Each statement has
- * a method of its own returning its SQL, so a test can run it alone.
+ * Its rows are the workers the pairs report lists at least one pair of under the reader's stored filters, the scope
+ * and the suspended choice ({@see reportengine::workers_sql()}, the matching set): the matrix never applies a copy of
+ * the list's criteria. Each listed worker shows every competency of the template, from the hub's pair set
+ * ({@see hub_query::base_sql()}), so a worker kept by one matching pair shows them all, masked for a restricted pair
+ * as the list masks it. Three statements: the matching set's count, one page of its workers by urgency
+ * ({@see self::workers()}), and every pair of that page's workers ({@see self::cells()}). Each has a method of its
+ * own returning its SQL, so a test can run it alone.
  *
  * @package    local_evidencehub
  * @copyright  2026 Anderson Blaine
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 final class hub_matrix {
-    /** @var int The urgency of a worker with no pair other than compliant: after every date. */
-    public const int URGENCY_NONE = 99999999;
+    /** @var int The urgency of a worker with no pair other than compliant, or none with a day: after every date. */
+    public const int URGENCY_NONE = hub_query::NO_EXPIRY;
 
     /**
-     * The matrix of a page context, for a viewer.
+     * The matrix of a template for a reader.
      *
-     * @param \context $context The page context; it decides the identity fields shown.
-     * @param hub_scope $scope The viewer's capability cuts.
+     * @param \context $context The hub context; it decides the identity fields shown.
+     * @param hub_scope $scope The reader's capability cuts.
+     * @param hub_filter $filter The template, and whether suspended workers are in the pair set: as the report reads them.
+     * @param array $matching The matching set: [SQL of one column, userid; its parameters], from
+     *     {@see reportengine::workers_sql()}.
      */
     public function __construct(
-        /** @var \context The page context. */
+        /** @var \context The hub context. */
         private readonly \context $context,
-        /** @var hub_scope The viewer's capability cuts. */
+        /** @var hub_scope The reader's capability cuts. */
         private readonly hub_scope $scope,
+        /** @var hub_filter The template and the suspended flag. */
+        private readonly hub_filter $filter,
+        /** @var array The matching set's SQL and parameters. */
+        private readonly array $matching,
     ) {
     }
 
     /**
-     * The status filter as a HAVING over the base set's alias b: a worker stays with one pair in the
-     * filter's statuses, and shows every pair.
+     * The matrix of a pairs report: its workers are the report's, its cells the pair set as the report reads it (the
+     * template, and suspended accounts as the report lists them).
      *
-     * @param hub_filter $filter The filter.
-     * @return array [sql (empty or a HAVING clause), params].
+     * @param hub_pairs $report The report, built for the reader with the scope the matrix applies.
+     * @return self
      */
-    private static function status_having(hub_filter $filter): array {
-        global $DB;
-        if (!$filter->statuses) {
-            return ['', []];
+    public static function for_report(hub_pairs $report): self {
+        $filter = hub_filter::from_values(
+            ['templateid' => $report->template_id(), 'suspended' => $report->includes_suspended()],
+            $report->get_context()
+        );
+        return new self($report->get_context(), $report->scope(), $filter, reportengine::workers_sql($report));
+    }
+
+    /**
+     * The union of parameter arrays that must not share a name.
+     *
+     * PHP's array union keeps the left value of a repeated key, so two statements' parameters that collided would run
+     * one of them with the other's value and no error.
+     *
+     * @param array ...$sets The parameter arrays, each under names of its own.
+     * @return array Every parameter.
+     * @throws \coding_exception When two arrays share a name.
+     */
+    public static function union_params(array ...$sets): array {
+        $union = [];
+        foreach ($sets as $set) {
+            $shared = array_intersect_key($union, $set);
+            if ($shared !== []) {
+                throw new \coding_exception('Statement parameters share a name: ' . implode(', ', array_keys($shared)));
+            }
+            $union += $set;
         }
-        [$insql, $params] = $DB->get_in_or_equal($filter->statuses, SQL_PARAMS_NAMED, 'hubmst');
-        return ["HAVING SUM(CASE WHEN b.estatus $insql THEN 1 ELSE 0 END) > 0", $params];
+        return $union;
     }
 
     /**
-     * The ORDER BY of the filter's sort over w (the grouped workers) and u (user): by name, or by
-     * urgency then name; every sort ends in the user id, so paging is stable.
+     * Step 1's statement: the matching workers, the most urgent first, unpaged.
      *
-     * The matrix sorts by worker only: the list's other sorts (competency, status) read as the
-     * default, most urgent first, since one row holds every competency and status of a worker.
+     * A worker's urgency is their lowest "valid until" sort key among their pairs not compliant: 0 (first) for a
+     * missing or restricted pair, as the list sorts them, {@see hub_query::NO_EXPIRY} for one valid with no end, and
+     * {@see self::URGENCY_NONE} when every pair is compliant. Ties go by name, then by the user id, so paging is stable.
      *
-     * @param hub_filter $filter The filter.
-     * @return string
-     */
-    private static function order_by(hub_filter $filter): string {
-        $dir = $filter->dir === 'desc' ? 'DESC' : 'ASC';
-        // COALESCE keeps PostgreSQL from walking the lastname index under LIMIT, as in the list.
-        $name = "COALESCE(u.lastname, '') $dir, COALESCE(u.firstname, '') $dir";
-        return match ($filter->sort) {
-            hub_filter::SORT_WORKER => "$name, w.userid",
-            default => "w.urgency $dir, COALESCE(u.lastname, ''), COALESCE(u.firstname, ''), w.userid",
-        };
-    }
-
-    /**
-     * Step 1's statement: the filter's workers in its order, unpaged.
-     *
-     * A worker's urgency is their lowest effective expiry among their pairs not compliant: 0 (first)
-     * for a missing or restricted pair, as the list sorts them; {@see self::URGENCY_NONE} when every
-     * pair is compliant.
-     *
-     * @param hub_filter $filter The filter.
-     * @param hub_scope $scope The viewer's capability cuts.
-     * @param \context $context The page context.
      * @return array [sql, params]; the rows are userid and urgency.
      */
-    public static function workers_sql(hub_filter $filter, hub_scope $scope, \context $context): array {
-        [$basesql, $params] = hub_query::base_sql($filter, $scope, $context);
-        [$having, $statusparams] = self::status_having($filter);
+    public function workers_sql(): array {
+        [$basesql, $params] = hub_query::base_sql($this->filter, $this->scope, $this->context);
+        [$matchingsql, $matchingparams] = $this->matching;
         $sql = "SELECT w.userid, w.urgency
                   FROM (SELECT b.userid,
                                COALESCE(MIN(CASE WHEN b.estatus <> " . status::STATUS_VALID . " THEN b.eexpiry END),
                                         " . self::URGENCY_NONE . ") AS urgency
                           FROM ($basesql) b
-                      GROUP BY b.userid
-                               $having) w
+                         WHERE b.userid IN ($matchingsql)
+                      GROUP BY b.userid) w
                   JOIN {user} u ON u.id = w.userid
-              ORDER BY " . self::order_by($filter);
-        return [$sql, $params + $statusparams];
+              ORDER BY w.urgency, COALESCE(u.lastname, ''), COALESCE(u.firstname, ''), w.userid";
+        return [$sql, self::union_params($params, $matchingparams)];
     }
 
     /**
-     * Step 1: the user ids of one page of workers, in the filter's order.
+     * Step 1: the user ids of one page of workers.
      *
-     * @param hub_filter $filter The filter.
+     * @param int $page The page, from 0.
+     * @param int $perpage Workers per page.
      * @return array List of user ids.
      */
-    public function workers(hub_filter $filter): array {
+    public function workers(int $page, int $perpage): array {
         global $DB;
-        [$sql, $params] = self::workers_sql($filter, $this->scope, $this->context);
+        [$sql, $params] = $this->workers_sql();
         $userids = [];
-        $rs = $DB->get_recordset_sql($sql, $params, $filter->page * $filter->perpage, $filter->perpage);
+        $rs = $DB->get_recordset_sql($sql, $params, $page * $perpage, $perpage);
         foreach ($rs as $record) {
             $userids[] = (int) $record->userid;
         }
@@ -132,39 +142,35 @@ final class hub_matrix {
      * Step 2's statement: every pair of some workers, with their names and identity fields.
      *
      * @param array $userids The workers, from step 1; not empty.
-     * @param hub_filter $filter The filter; its statuses do not apply (a row shows every pair).
-     * @param hub_scope $scope The viewer's capability cuts.
-     * @param \context $context The page context.
      * @return array [sql, params]; the rows are userid, competencyid, estatus, eexpiry and the user fields.
      */
-    public static function cells_sql(array $userids, hub_filter $filter, hub_scope $scope, \context $context): array {
+    public function cells_sql(array $userids): array {
         global $DB;
-        [$basesql, $params] = hub_query::base_sql($filter, $scope, $context);
+        [$basesql, $params] = hub_query::base_sql($this->filter, $this->scope, $this->context);
         [$userin, $userparams] = $DB->get_in_or_equal($userids, SQL_PARAMS_NAMED, 'hubmu');
-        $fields = \core_user\fields::for_identity($context, false)->with_name()->get_sql('u', true);
+        $fields = \core_user\fields::for_identity($this->context, false)->with_name()->get_sql('u', true);
         $sql = "SELECT b.userid, b.competencyid, b.estatus, b.eexpiry{$fields->selects}
                   FROM ($basesql) b
                   JOIN {user} u ON u.id = b.userid
                        {$fields->joins}
                  WHERE b.userid $userin";
-        return [$sql, $params + $userparams + $fields->params];
+        return [$sql, self::union_params($params, $userparams, $fields->params)];
     }
 
     /**
-     * Step 2: every pair of the page's workers, from the same base set as the list.
+     * Step 2: every pair of the page's workers, from the hub's pair set.
      *
      * @param array $userids Step 1's user ids.
-     * @param hub_filter $filter The filter.
      * @return array workers: user id => record with the name and identity fields; cells:
      *     "userid:competencyid" => record with userid, competencyid, estatus and eexpiry as ints.
      */
-    public function cells(array $userids, hub_filter $filter): array {
+    public function cells(array $userids): array {
         global $DB;
         $matrix = ['workers' => [], 'cells' => []];
         if (!$userids) {
             return $matrix;
         }
-        [$sql, $params] = self::cells_sql($userids, $filter, $this->scope, $this->context);
+        [$sql, $params] = $this->cells_sql($userids);
         $rs = $DB->get_recordset_sql($sql, $params);
         foreach ($rs as $record) {
             $userid = (int) $record->userid;
@@ -186,41 +192,25 @@ final class hub_matrix {
     }
 
     /**
-     * The count statement: how many workers the filter's statuses keep.
+     * The count statement: how many workers the matrix lists, the matching set's.
      *
-     * @param hub_filter $filter The filter.
-     * @param hub_scope $scope The viewer's capability cuts.
-     * @param \context $context The page context.
+     * Counted on every load, over the report's own SQL: the report's cached total counts pairs, not workers.
+     *
      * @return array [sql, params].
      */
-    public static function count_sql(hub_filter $filter, hub_scope $scope, \context $context): array {
-        [$basesql, $params] = hub_query::base_sql($filter, $scope, $context);
-        [$having, $statusparams] = self::status_having($filter);
-        $sql = "SELECT COUNT(1)
-                  FROM (SELECT b.userid
-                          FROM ($basesql) b
-                      GROUP BY b.userid
-                               $having) w";
-        return [$sql, $params + $statusparams];
+    public function count_sql(): array {
+        [$matchingsql, $matchingparams] = $this->matching;
+        return ["SELECT COUNT(1) FROM ($matchingsql) m", $matchingparams];
     }
 
     /**
-     * How many workers the pager counts.
+     * How many workers the matrix lists.
      *
-     * With no status chip every worker of the base set is a row, which the KPIs counted already
-     * (readiness' workers, cached); a chip narrows the rows, and one count statement over the same
-     * worker filter counts them.
-     *
-     * @param hub_filter $filter The filter.
-     * @param array $kpis The filter's KPIs, from hub_kpis::get().
      * @return int
      */
-    public function worker_count(hub_filter $filter, array $kpis): int {
+    public function worker_count(): int {
         global $DB;
-        if (!$filter->statuses) {
-            return (int) $kpis['workers'];
-        }
-        [$sql, $params] = self::count_sql($filter, $this->scope, $this->context);
+        [$sql, $params] = $this->count_sql();
         return (int) $DB->count_records_sql($sql, $params);
     }
 

@@ -82,11 +82,13 @@ db/services.php   local_evidencehub_get_readiness (classes/external/get_readines
 evidence.php      the worker's evidence page (renderable output/evidence_page, amd/src/evidence_page)
 policies.php      framework list / one framework's policies (output/policy_frameworks,
                   output/framework_policies, amd/src/policies); settings.php adds its admin entry
-index.php         the hub (output/hub_page, amd/src/hub_page); entries: settings.php (system) and
-                  lib.php's category More menu; db/caches.php hubkpis + hubgeneration
+index.php         the hub: the list (output/hub_report_view, the pairs report in React), the choice of a
+                  template (output/hub_choose_page); entries: settings.php (system) and lib.php's category
+                  More menu; db/caches.php hubgeneration, reportgeneration, reportsummary
                   drawer: amd/src/drawer (core/modal subclass, templates/drawer), body from lib.php's
                   output_fragment_pair (output/pair_drawer, templates/pair_drawer)
-                  view=matrix: output/hub_matrix_page, templates/hub_matrix (a partial of hub_page)
+                  view=matrix: output/hub_matrix_page, templates/hub_matrix, amd/src/hub_page
+                  download=<format>: local/report_download (the report's table, the hub_downloaded event)
                   action=exportdossiers: local/dossier_export (selection, stream or task)
 verify.php        the public verification page of a dossier (output/verify_page); gated by verifydossier
                   (dossier::can_verify(), the guest role for a visitor not logged in), as tool_certificate
@@ -98,9 +100,9 @@ classes/local/    status, meta, audit, export: stored constants and their labels
                   validity_calculator: the rule, pure (candidate, validity value objects)
                   status_repository: THE writer of local_evidencehub_status (recompute, scopes)
                   hub_access (context, templates, cohorts), hub_scope (the two capability
-                  fragments), hub_filter, hub_query (base_sql, page_keys, page_details, rows),
-                  hub_kpis (one statement per method, cached by generation), hub_download,
-                  hub_matrix (workers_sql, cells_sql, count_sql: the matrix over base_sql)
+                  fragments), hub_filter (the pair set's cuts), hub_query (base_sql), hub_kpis (the report's
+                  cache keys and generations), report_download, hub_matrix (the report's workers, cells
+                  over base_sql)
                   dossier (codes, masked name, readiness, list, revoke), dossier_config (settings),
                   dossier_builder (prepare as the requester, build into any archive_writer),
                   dossier_plan (value object), dossier_pdf (TCPDF page; barcode() is the test seam),
@@ -162,25 +164,24 @@ tests/generator/  writes rows directly (create_status() stays direct for the tas
   details beside it.
 - **Row access always also needs core's `moodle/competency:userevidenceview` in the worker's user
   context**, filtered in SQL (`api::filter_users_with_capability_on_user_context_sql`).
-- **The hub grid is two queries, not a report builder system report** (S0: one statement took
-  0.5–0.8 s on MariaDB over 300k pairs; the two-step deferred join stays under 300 ms).
+- **A page of the hub's list is two statements**, over the pairs report's SQL (`headless_table`; S0: one
+  statement took 0.5–0.8 s on MariaDB over 300k pairs; the two-step deferred join stays under 300 ms).
 - **The status row carries its deciding evidence's type flag** (`local_evidencehub_status.issensitive`,
   written by `status_repository` on every write): the hub's base set reads it instead of joining meta
   and type for every pair. Any future change to a type's `issensitive` must recompute that type's
   pairs (no type management UI exists yet).
-- **The hub reads the effective status, never the stored one** (`hub_query::base_sql()`): restricted
-  (-1) and missing (0) are computed per viewer; grid, filters, sort, KPIs and download all read it.
+- **The hub reads the effective status, never the stored one** (`hub_query::base_sql()`, the report's entities):
+  restricted (-1) and missing (0) are computed per viewer; rows, filters, sort, figures and download all read it.
   The restriction is worked out once in the innermost table, because each capability fragment's
   placeholders may appear once per statement.
-- **The matrix and the list read the same base set** (`hub_matrix` wraps `hub_query::base_sql()`), so
-  they never disagree on a pair; the matrix's status filter is a `HAVING` (a worker stays with one
-  pair in the chosen statuses and shows them all), and its pager reuses the KPIs' worker count when
-  no chip narrows the rows. The view (`list`/`matrix`) is part of the validated filter.
+- **The matrix reads the list's criteria from the report** (`reportengine::workers_sql()`: the workers of the
+  report's rows under the stored filters, the scope and the suspended choice) and every cell from
+  `hub_query::base_sql()`, so a worker kept by one pair shows them all; its pager counts its own workers.
 - **The matrix renders without layout shift**: the server renders every cell, the table has a fixed
   layout with explicit widths (the column count is an inline custom property), and cells use text
   or core's pix icons only. `tests/behat/matrix.feature` measures it on a bulk seed (generator entity
   `matrix seeds`, 200 x 25).
-- **The KPI cache has no TTL**: a status row inserted, deleted or changed in status or issensitive
+- **The report's cached figures have no TTL**: a status row inserted, deleted or changed in status or issensitive
   (a rewrite that changes neither keeps it) and the plan, cohort and user events in
   `db/events.php` replace the generation; core fires no event for a template's competencies, so
   the key reads `hub_kpis::template_signature()` (the one statement a cached call sends).
@@ -253,6 +254,14 @@ tests/generator/  writes rows directly (create_status() stays direct for the tas
   `local_evidencehub/<name>` with `<name>` + `<name>_desc` strings, and the identifier select loads its
   choices lazily (a closure, `identifier_choices(...)`: core's configselect takes an array callable for the
   choices themselves), so loading settings.php never queries `user_info_field`.
+- **The list's rows reach core's own routes without the hub's event or file.** The `hub_downloaded` event records a
+  file written by `index.php?download=`; core's table routes (`core_table_get_dynamic_table_content` with a client page
+  size, `core_reportbuilder_retrieve_system_report` on the mobile service) return the list's rows, masked and under the
+  same `can_view()`, with no event and no file, as for every core system report.
+- **The download's event fires before the first byte**, so a send that fails after it leaves an entry without a file,
+  and its row count is a separate statement from the file's read.
+- **Deleting a hub's category leaves the report persistent and its readers' stored filters as orphans** (core cascades
+  nothing); they stay reachable to the Privacy API through each reader's user context.
 
 ## Testing notes
 

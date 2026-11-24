@@ -16,7 +16,10 @@
 
 namespace local_evidencehub\local;
 
-use local_evidencehub\output\hub_page;
+use core_reportbuilder\manager;
+use local_evidencehub\output\hub_matrix_page;
+use local_evidencehub\output\hub_report_view;
+use local_evidencehub\reportbuilder\local\systemreports\hub_pairs;
 use local_evidencehub\task\build_dossier_export;
 use local_evidencehub\tests\dossier_scenario;
 use local_evidencehub\tests\hub_scenario;
@@ -34,7 +37,8 @@ use PHPUnit\Framework\Attributes\CoversFunction;
  */
 #[CoversClass(dossier_export::class)]
 #[CoversClass(dossier_config::class)]
-#[CoversClass(hub_page::class)]
+#[CoversClass(hub_matrix_page::class)]
+#[CoversClass(hub_report_view::class)]
 #[CoversFunction('local_evidencehub_pluginfile')]
 final class dossier_export_test extends \advanced_testcase {
     use hub_scenario;
@@ -83,8 +87,8 @@ final class dossier_export_test extends \advanced_testcase {
     }
 
     /**
-     * The hub offers "Export dossiers" only to a holder of exportdossier, in the list and the matrix alike,
-     * and the matrix's form carries the filter.
+     * The hub offers "Export dossiers" only to a holder of exportdossier: the list's dock through its export form, the
+     * matrix's button, whose form names the template and returns to the matrix.
      *
      * @return void
      */
@@ -95,66 +99,89 @@ final class dossier_export_test extends \advanced_testcase {
         $output = $PAGE->get_renderer('core');
         $viewer = $this->viewer(['local/evidencehub:view', 'moodle/competency:userevidenceview', 'moodle/competency:templateview']);
         $exporter = $this->requester([$worker]);
-        $this->setAdminUser();
+        $pages = function () use ($system, $output): array {
+            manager::reset_caches();
+            $report = hub_pairs::for_template($system, $this->templateid, ['scope' => 'all']);
+            $matrix = (new hub_matrix_page($system, $report, 'all'))->export_for_template($output);
+            return [(new hub_report_view($system, $report))->props(), $matrix];
+        };
 
-        foreach ([hub_filter::VIEW_LIST, hub_filter::VIEW_MATRIX] as $view) {
-            $filter = hub_filter::from_values(['templateid' => $this->templateid, 'statuses' => [], 'view' => $view], $system);
-            $this->setUser($viewer);
-            $export = (new hub_page($system, $filter, hub_scope::for_user()))->export_for_template($output);
-            $this->assertFalse($export['canexport'], $view);
-            $html = $output->render_from_template('local_evidencehub/hub_page', $export);
-            $this->assertStringNotContainsString('value="exportdossiers"', $html, $view);
+        $this->setUser($viewer);
+        [$props, $matrix] = $pages();
+        $this->assertNull($props['exportform']);
+        $this->assertFalse($matrix['canexport']);
+        $html = $output->render_from_template('local_evidencehub/hub_matrix', $matrix);
+        $this->assertStringNotContainsString('value="exportdossiers"', $html);
 
-            $this->setUser($exporter);
-            $export = (new hub_page($system, $filter, hub_scope::for_user()))->export_for_template($output);
-            $this->assertTrue($export['canexport'], $view);
-            $html = $output->render_from_template('local_evidencehub/hub_page', $export);
-            $this->assertStringContainsString('value="exportdossiers"', $html, $view);
-            $this->assertStringContainsString('name="templateid" value="' . $this->templateid . '"', $html, $view);
-        }
-        $this->assertTrue($export['matrix']['canexport']);
-        $this->assertContains(['name' => 'view', 'value' => hub_filter::VIEW_MATRIX], $export['matrix']['filterfields']);
+        $this->setUser($exporter);
+        [$props, $matrix] = $pages();
+        $this->assertSame(['action', 'sesskey'], array_keys($props['exportform']));
+        $this->assertTrue($matrix['canexport']);
+        $html = $output->render_from_template('local_evidencehub/hub_matrix', $matrix);
+        $this->assertStringContainsString('value="exportdossiers"', $html);
+        $this->assertStringContainsString('name="templateid" value="' . $this->templateid . '"', $html);
+        $this->assertStringContainsString('name="view" value="matrix"', $html);
     }
 
     /**
-     * The posted workers are kept only when they belong to the filter's set as the viewer sees it.
+     * The posted workers are kept only when they belong to the template's pair set as the reader may view it, with
+     * suspended accounts as the reader's preference lists them, and by nothing else: a worker whose every pair is
+     * compliant, outside the list's default scope, is kept.
      *
      * @return void
      */
     public function test_the_selection_is_checked_against_the_visible_set(): void {
         $readable = $this->worker($this->templateid);
+        $compliant = $this->worker($this->templateid);
+        $this->status_row((int) $compliant->id, $this->competencyid, status::STATUS_VALID, 20990101);
         $unreadable = $this->worker($this->templateid);
         $elsewhere = $this->worker($this->template([$this->competencyid]));
         $suspended = $this->worker($this->templateid, ['suspended' => 1]);
-        $this->setUser($this->requester([$readable, $elsewhere, $suspended]));
+        $this->setUser($this->requester([$readable, $compliant, $elsewhere, $suspended]));
         $system = \context_system::instance();
-        $filter = $this->filter($this->templateid);
 
         $kept = dossier_export::selection(
             $system,
-            $filter,
+            $this->templateid,
             hub_scope::for_user(),
-            [$readable->id, $unreadable->id, $elsewhere->id, $suspended->id, 0, -3]
+            [$readable->id, $compliant->id, $unreadable->id, $elsewhere->id, $suspended->id, 0, -3]
         );
-        $this->assertSame([(int) $readable->id], $kept);
-        // The control: with suspended workers in the filter, the suspended one is kept.
-        $kept = dossier_export::selection(
-            $system,
-            $this->filter($this->templateid, ['suspended' => 1]),
-            hub_scope::for_user(),
-            [$readable->id, $suspended->id]
-        );
+        $this->assertSame([(int) $readable->id, (int) $compliant->id], $kept);
+        // The control: with suspended accounts listed in the reader's preference, the suspended one is kept.
+        reportpreference::write_grid(null, [], true);
+        $kept = dossier_export::selection($system, $this->templateid, hub_scope::for_user(), [$readable->id, $suspended->id]);
         $this->assertEqualsCanonicalizing([(int) $readable->id, (int) $suspended->id], $kept);
 
         try {
-            dossier_export::selection($system, $filter, hub_scope::for_user(), [$unreadable->id]);
+            dossier_export::selection($system, $this->templateid, hub_scope::for_user(), [$unreadable->id]);
             $this->fail('A selection with no visible worker was accepted.');
         } catch (\moodle_exception $e) {
             $this->assertSame('errordossiernoselection', $e->errorcode);
         }
         set_config('maxexportworkers', 1, 'local_evidencehub');
         $this->expectExceptionMessage(get_string('errordossiertoomany', 'local_evidencehub', 1));
-        dossier_export::selection($system, $filter, hub_scope::for_user(), [$readable->id, $suspended->id]);
+        dossier_export::selection($system, $this->templateid, hub_scope::for_user(), [$readable->id, $suspended->id]);
+    }
+
+    /**
+     * A posted pair of another shape, or too many pairs, is refused; a repeated one counts once.
+     *
+     * @return void
+     */
+    public function test_malformed_pairs_are_refused(): void {
+        $this->assertSame(['3:4' => true], dossier_export::parse_pairs(['3:4', '3:4']));
+        foreach (['3', '3:4:5', 'a:b', '0:4', '-1:4', '3:4 OR 1=1'] as $value) {
+            try {
+                dossier_export::parse_pairs([$value]);
+                $this->fail($value . ' was accepted.');
+            } catch (\moodle_exception $e) {
+                $this->assertSame('errorhubpairs', $e->errorcode);
+            }
+        }
+        // The bound: MAX_PAIRS is accepted, one more is not.
+        $this->assertCount(1, dossier_export::parse_pairs(array_fill(0, dossier_export::MAX_PAIRS, '1:1')));
+        $this->expectException(\moodle_exception::class);
+        dossier_export::parse_pairs(array_fill(0, dossier_export::MAX_PAIRS + 1, '1:1'));
     }
 
     /**

@@ -569,6 +569,55 @@ final class reportengine {
     }
 
     /**
+     * The workers the report lists at least one pair of, as SQL: the matrix's rows ({@see hub_matrix}).
+     *
+     * Read from the report's own table, as core builds it for the reader: its FROM, and its WHERE after the report's
+     * base conditions (the template, the reader's userevidenceview cut, the suspended flag, the scope when the report
+     * was built with one) and the reader's stored filters. So the matrix lists the workers of the rows the list shows,
+     * never a second copy of the filters' rules.
+     *
+     * @param hub_pairs $report The report, built with the scope the matrix applies.
+     * @return array [SQL of one column, userid, with each worker once; its named parameters].
+     */
+    public static function workers_sql(hub_pairs $report): array {
+        /** @var headless_table $table */
+        $table = headless_table::create((int) $report->get_report_persistent()->get('id'), $report->get_parameters());
+        /** @var hub_pairs $tablereport */
+        $tablereport = $table->get_report();
+        [$userid] = $tablereport->pair_key_sql();
+        return [
+            "SELECT DISTINCT {$userid} AS userid FROM {$table->sql->from} WHERE {$table->sql->where}",
+            $table->sql->params,
+        ];
+    }
+
+    /**
+     * The reader's stored filters in force, as plain text for a line that says what a view is cut by.
+     *
+     * Each filter whose class builds a condition from the stored values: its heading and, for a filter of options,
+     * the chosen option's label. Both in the plain spelling, for a template's double stash to escape once.
+     *
+     * @param hub_pairs $report The report.
+     * @return array Each: title, value ('' for a filter without options).
+     */
+    public static function criteria(hub_pairs $report): array {
+        $values = $report->get_filter_values();
+        $criteria = [];
+        foreach ($report->get_active_filters() as $identifier => $filter) {
+            if (!self::applies($filter, $values)) {
+                continue;
+            }
+            $offered = self::offered($filter);
+            $chosen = (string) ($values[$identifier . '_value'] ?? '');
+            $criteria[] = [
+                'title' => html_entity_decode((string) $filter->get_header(), ENT_QUOTES | ENT_HTML401, 'UTF-8'),
+                'value' => $offered[$chosen] ?? '',
+            ];
+        }
+        return $criteria;
+    }
+
+    /**
      * Read one page of a set-up table whose total it was given ({@see headless_table::know_total()}).
      *
      * @param headless_table $table The table, set up.

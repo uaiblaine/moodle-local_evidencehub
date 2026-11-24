@@ -1,1 +1,1 @@
-s/default => "w\.urgency \$dir, /default => "/;
+s/ORDER BY w\.urgency, /ORDER BY /;

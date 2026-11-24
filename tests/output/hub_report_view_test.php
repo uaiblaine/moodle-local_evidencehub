@@ -42,18 +42,17 @@ final class hub_report_view_test extends \advanced_testcase {
     /** @var array The props' keys, every one configuration or strings ({@see hub_report_view::props()}). */
     private const array PROPS = [
         'mount', 'contextid', 'templateid', 'reportid', 'perpage', 'perpages', 'searchmin', 'matrixurl', 'tableurl',
-        'exportform', 'labels',
+        'downloadurl', 'formats', 'exportform', 'labels',
     ];
 
     /**
      * Label names the shared parts read only in a branch the hub never reaches, each with the branch.
      *
-     * - download: the Download menu, absent until stage E4 (the hub passes no download link);
      * - grouping, allgroupings, moregroupsgrouping: a group facet's groupings, which no hub filter has;
      * - waitminutes, waithours, waitdayshours, waitdays: str.ts duration(), the reference's wait, never called.
      */
     private const array UNREACHED = [
-        'download', 'grouping', 'allgroupings', 'moregroupsgrouping', 'waitminutes', 'waithours', 'waitdayshours', 'waitdays',
+        'grouping', 'allgroupings', 'moregroupsgrouping', 'waitminutes', 'waithours', 'waitdayshours', 'waitdays',
     ];
 
     #[\Override]
@@ -148,6 +147,19 @@ final class hub_report_view_test extends \advanced_testcase {
         $this->assertStringContainsString('view=matrix', $props['matrixurl']);
         $this->assertStringContainsString('templateid=' . $templateid, $props['matrixurl']);
         $this->assertStringContainsString('view=' . hub_pairs::VIEW, $props['tableurl']);
+        // The download: index.php's own branch with the context, the template and the sesskey; the enabled formats.
+        $this->assertSame(
+            (new \moodle_url('/local/evidencehub/index.php', [
+                'contextid' => $system->id,
+                'templateid' => $templateid,
+                'sesskey' => sesskey(),
+            ]))->out(false),
+            $props['downloadurl']
+        );
+        $this->assertSame(
+            array_values(array_map('strval', array_keys(\core\plugininfo\dataformat::get_enabled_plugins()))),
+            array_column($props['formats'], 'value')
+        );
         $this->assertSame(['action', 'sesskey'], array_keys($props['exportform']));
         $this->assertSame(sesskey(), $props['exportform']['sesskey']);
 
@@ -336,7 +348,7 @@ final class hub_report_view_test extends \advanced_testcase {
     }
 
     /**
-     * The matrix keeps its own page, and its "List" tab leads to the list's shell.
+     * The matrix keeps its own page, which leads back to the list's shell to change its criteria.
      *
      * @return void
      */
@@ -348,7 +360,51 @@ final class hub_report_view_test extends \advanced_testcase {
         $html = $this->run_page(['contextid' => $system->id, 'templateid' => $templateid, 'view' => 'matrix']);
         $this->assertStringContainsString('local-evidencehub-matrix', $html);
         $this->assertStringNotContainsString('data-region="local-evidencehub-reportview"', $html);
-        $this->assertMatchesRegularExpression('~<a href="([^"]*view=list[^"]*)" class="nav-link">~', $html);
+        $this->assertStringContainsString(
+            '<a href="' . hub_report_view::url($system, $templateid)->out() . '" class="local-evidencehub-matrix-change">',
+            $html
+        );
+    }
+
+    /**
+     * With view=table the page renders core's table of the template's pairs and a link back to the list.
+     *
+     * @return void
+     */
+    public function test_the_table_view(): void {
+        $this->setAdminUser();
+        [$templateid] = $this->scenario();
+        $system = \context_system::instance();
+
+        $html = $this->run_page(['contextid' => $system->id, 'templateid' => $templateid, 'view' => 'table']);
+        $this->assertStringContainsString('data-region="core_reportbuilder/report"', $html);
+        $this->assertStringContainsString('Ana Souza', $html);
+        $this->assertMatchesRegularExpression(
+            '~<a href="' . preg_quote(hub_report_view::url($system, $templateid)->out(false), '~') . '"[^>]*>'
+                . get_string('hubbacktolist', 'local_evidencehub') . '</a>~',
+            $html
+        );
+        $this->assertStringNotContainsString('data-region="local-evidencehub-reportview"', $html);
+    }
+
+    /**
+     * A category manager is refused in another category, and a template of another context is refused there.
+     *
+     * @return void
+     */
+    public function test_the_page_refuses_another_category_and_its_templates(): void {
+        $category = $this->getDataGenerator()->create_category();
+        $other = $this->getDataGenerator()->create_category();
+        $this->setUser($this->viewer(['local/evidencehub:view'], \context_coursecat::instance($category->id)));
+        try {
+            $this->run_page(['contextid' => \context_coursecat::instance($other->id)->id]);
+            $this->fail('Another category was opened.');
+        } catch (\required_capability_exception $e) {
+            $this->assertSame('nopermissions', $e->errorcode);
+        }
+        // The control: the reader's own category opens, asking for a template.
+        $html = $this->run_page(['contextid' => \context_coursecat::instance($category->id)->id]);
+        $this->assertStringContainsString(get_string('hubnotemplates', 'local_evidencehub'), $html);
     }
 
     /**
@@ -394,7 +450,6 @@ final class hub_report_view_test extends \advanced_testcase {
         $request = [
             'contextid' => $system->id,
             'templateid' => $templateid,
-            'statusfilter' => 1,
             'action' => 'exportdossiers',
             'pairs' => [$worker->id . ':1'],
         ];
@@ -423,7 +478,7 @@ final class hub_report_view_test extends \advanced_testcase {
      */
     public static function refused_templates(): array {
         $cases = [];
-        foreach (['list', 'bogus', 'table', 'none'] as $view) {
+        foreach (['list', 'bogus', 'table', 'matrix', 'none'] as $view) {
             $cases[$view . ', not offered'] = [$view, true];
             $cases[$view . ', missing'] = [$view, false];
         }
@@ -434,8 +489,8 @@ final class hub_report_view_test extends \advanced_testcase {
      * A template the hub does not offer in the context is refused with one error whatever the view asked for, and
      * so is a template that does not exist.
      *
-     * Changes that must make it fail: require_template() skipped by one of the branches (the list, the table, an
-     * unknown view), or the shell rendered for a template that is not offered.
+     * Changes that must make it fail: require_template() skipped by one of the branches (the list, the table, the
+     * matrix, an unknown view), or the shell rendered for a template that is not offered.
      *
      * @param string $view The view parameter; "none" sends none.
      * @param bool $exists Whether the template exists (and is offered in the system, not in the category).
@@ -508,5 +563,208 @@ final class hub_report_view_test extends \advanced_testcase {
         $this->assertStringNotContainsString(' < ', $option[1]);
         $this->assertStringNotContainsString('&amp;lt;', $option[1]);
         $this->assertStringNotContainsString('&amp;amp;', $option[1]);
+    }
+
+    /**
+     * A post of the export branch names workers; the selection keeps only those of the template's pair set the reader
+     * may view: a reader who posts the pairs of a worker they may not view gets no export, and the same post naming a
+     * worker they may view queues one.
+     *
+     * The page ends in redirect() either way, which under PHPUnit (a CLI script) throws redirecterrordetected: the
+     * export rows say which way it went.
+     *
+     * Changes that must make it fail: the selection taken from the post as it came.
+     *
+     * @return void
+     */
+    public function test_the_export_branch_keeps_only_the_workers_the_reader_may_view(): void {
+        global $DB;
+        [$templateid, $worker, $c1] = $this->scenario();
+        $hidden = $this->worker($templateid, ['firstname' => 'Hid', 'lastname' => 'Den']);
+        $system = \context_system::instance();
+        $exporter = $this->requester([$worker]);
+        set_config('syncmaxworkers', 0, 'local_evidencehub');
+        $this->setUser($exporter);
+        $request = [
+            'contextid' => $system->id,
+            'templateid' => $templateid,
+            'action' => 'exportdossiers',
+            'sesskey' => sesskey(),
+        ];
+        $before = $DB->count_records(dossier_export::TABLE);
+
+        $refusal = $this->refusal($request + ['pairs' => [$hidden->id . ':' . $c1]], 'POST');
+        $this->assertSame('redirecterrordetected', $refusal->errorcode);
+        $this->assertSame($before, $DB->count_records(dossier_export::TABLE));
+
+        // The control: the worker the reader may view is exported (queued: no worker is streamed here).
+        $this->refusal($request + ['pairs' => [$worker->id . ':' . $c1, $hidden->id . ':' . $c1]], 'POST');
+        $this->assertSame($before + 1, $DB->count_records(dossier_export::TABLE));
+        $task = \core\task\manager::get_adhoc_tasks(\local_evidencehub\task\build_dossier_export::class);
+        $this->assertSame([(int) $worker->id], reset($task)->get_custom_data()->userids);
+    }
+
+    /**
+     * The matrix posts workers[] where the list posts pairs[]: the same cut applies, a worker the reader may not view
+     * gets no export and the one they may view queues one.
+     *
+     * Changes that must make it fail: the posted workers[] taken as they came.
+     *
+     * @return void
+     */
+    public function test_the_export_branch_cuts_posted_workers_to_those_the_reader_may_view(): void {
+        global $DB;
+        [$templateid, $worker] = $this->scenario();
+        $hidden = $this->worker($templateid, ['firstname' => 'Hid', 'lastname' => 'Den']);
+        $exporter = $this->requester([$worker]);
+        set_config('syncmaxworkers', 0, 'local_evidencehub');
+        $this->setUser($exporter);
+        $request = [
+            'contextid' => \context_system::instance()->id,
+            'templateid' => $templateid,
+            'action' => 'exportdossiers',
+            'view' => 'matrix',
+            'sesskey' => sesskey(),
+        ];
+        $before = $DB->count_records(dossier_export::TABLE);
+
+        $refusal = $this->refusal($request + ['workers' => [(int) $hidden->id]], 'POST');
+        $this->assertSame('redirecterrordetected', $refusal->errorcode);
+        $this->assertSame($before, $DB->count_records(dossier_export::TABLE));
+        $this->assertSame([], \core\task\manager::get_adhoc_tasks(\local_evidencehub\task\build_dossier_export::class));
+
+        // The control: the same post naming the viewable worker as well queues an export for that worker alone.
+        $this->refusal($request + ['workers' => [(int) $worker->id, (int) $hidden->id]], 'POST');
+        $this->assertSame($before + 1, $DB->count_records(dossier_export::TABLE));
+        $task = \core\task\manager::get_adhoc_tasks(\local_evidencehub\task\build_dossier_export::class);
+        $this->assertSame([(int) $worker->id], reset($task)->get_custom_data()->userids);
+    }
+
+    /**
+     * A posted template the context does not offer is refused before anything is written: no export row, no task, no
+     * event.
+     *
+     * Changes that must make it fail: require_template() removed from the export branch.
+     *
+     * @return void
+     */
+    public function test_the_export_branch_refuses_a_template_not_offered_before_writing(): void {
+        global $DB, $PAGE;
+        $this->setAdminUser();
+        [$templateid, $worker] = $this->scenario();
+        $catcontext = \context_coursecat::instance($this->getDataGenerator()->create_category()->id);
+        set_config('syncmaxworkers', 0, 'local_evidencehub');
+        $request = [
+            'templateid' => $templateid,
+            'action' => 'exportdossiers',
+            'workers' => [(int) $worker->id],
+            'sesskey' => sesskey(),
+        ];
+        $before = $DB->count_records(dossier_export::TABLE);
+        $files = $DB->count_records('files', ['component' => 'local_evidencehub']);
+        $sink = $this->redirectEvents();
+
+        $this->assertSame('errorhubtemplate', $this->refusal($request + ['contextid' => $catcontext->id], 'POST')->errorcode);
+        $this->assertSame($before, $DB->count_records(dossier_export::TABLE));
+        $this->assertSame($files, $DB->count_records('files', ['component' => 'local_evidencehub']));
+        $this->assertSame([], \core\task\manager::get_adhoc_tasks(\local_evidencehub\task\build_dossier_export::class));
+        $this->assertSame([], $sink->get_events());
+
+        // The control: the context that offers the template takes the same post and queues the export. It is a request
+        // of its own: the refused one's page holds the category's context, which core does not let a page leave.
+        $PAGE = new \moodle_page();
+        $this->assertSame(
+            'redirecterrordetected',
+            $this->refusal($request + ['contextid' => \context_system::instance()->id], 'POST')->errorcode
+        );
+        $this->assertSame($before + 1, $DB->count_records(dossier_export::TABLE));
+    }
+
+    /**
+     * A visitor not logged in is asked to log in whether the context id exists or not: the page does not tell the two
+     * apart before the login.
+     *
+     * Changes that must make it fail: the context looked up before require_login().
+     *
+     * @return void
+     */
+    public function test_a_signed_out_visitor_cannot_tell_a_context_that_exists(): void {
+        $this->setUser(0);
+        $existing = $this->refusal(['contextid' => \context_system::instance()->id]);
+        $missing = $this->refusal(['contextid' => 987654321]);
+        $this->assertSame($existing::class, $missing::class);
+        $this->assertSame($existing->errorcode, $missing->errorcode);
+
+        // The control: a logged in reader meets the missing context's own error, so the two do differ once past the login.
+        $this->setAdminUser();
+        $this->assertNotSame($existing->errorcode, $this->refusal(['contextid' => 987654321])->errorcode);
+    }
+
+    /**
+     * The ways the download branch is asked for wrongly, each with the error it ends in and the request one step
+     * further, which must end in another error (the check before it passed).
+     *
+     * @return array Case name => [the change to the request, the error, the change one step further (null for none), its
+     *     error].
+     */
+    public static function download_refusals(): array {
+        return [
+            'no sesskey' => [['sesskey' => null], 'missingparam', [], 'invalidparameter'],
+            'a wrong sesskey' => [['sesskey' => 'wrong'], 'invalidsesskey', [], 'invalidparameter'],
+            // Its control is the next case's: one request may not set two contexts on the page.
+            'a template of another context' => [['context' => 'category'], 'errorhubtemplate', null, ''],
+            'a template that does not exist' => [['templateid' => 1000], 'errorhubtemplate', [], 'invalidparameter'],
+            // The last check before the file: its control, an enabled format, is report_download_test's.
+            'a format not enabled' => [[], 'invalidparameter', null, ''],
+            'a reader without view' => [['reader' => 'outsider'], 'nopermissions', [], 'invalidparameter'],
+        ];
+    }
+
+    /**
+     * The download branch refuses a GET without the sesskey or with a wrong one, a template not offered, a format not
+     * enabled and a reader without view, each before the report is built and before its event. Each refusal's control
+     * is the same request one step further: it ends in the next check's error, so the check refused passed it. The
+     * whole way through is tests/local/report_download_test.php's (core's writer ends the request) and
+     * hub_report.feature's.
+     *
+     * Changes that must make it fail: require_sesskey(), require_template(), the format check or require_view()
+     * removed from the branch's way, or the event fired before them.
+     *
+     * @param array $change The change to a request that is right but for its format.
+     * @param string $error The error the request ends in.
+     * @param array|null $further The change to the right request that is one step further, or null for none.
+     * @param string $furthererror The error that one ends in.
+     * @return void
+     */
+    #[DataProvider('download_refusals')]
+    public function test_the_download_branch_refuses(array $change, string $error, ?array $further, string $furthererror): void {
+        [$templateid] = $this->scenario();
+        $reader = $this->viewer([
+            'local/evidencehub:view',
+            'moodle/competency:templateview',
+            'moodle/competency:userevidenceview',
+        ]);
+        $outsider = $this->getDataGenerator()->create_user();
+        $catcontext = \context_coursecat::instance($this->getDataGenerator()->create_category()->id);
+        $request = function (array $change) use ($templateid, $catcontext, $reader, $outsider): array {
+            $this->setUser(($change['reader'] ?? '') === 'outsider' ? $outsider : $reader);
+            $request = [
+                'contextid' => ($change['context'] ?? '') === 'category' ? $catcontext->id : \context_system::instance()->id,
+                'templateid' => $templateid + (int) ($change['templateid'] ?? 0),
+                'download' => $change['download'] ?? 'nonsense',
+                'sesskey' => array_key_exists('sesskey', $change) ? $change['sesskey'] : sesskey(),
+            ];
+            return array_filter($request, fn($value): bool => $value !== null);
+        };
+        $sink = $this->redirectEvents();
+
+        $this->assertSame($error, $this->refusal($request($change))->errorcode);
+        if ($further !== null) {
+            $this->assertSame($furthererror, $this->refusal($request($further))->errorcode);
+        }
+        $this->assertSame([], array_filter(
+            $sink->get_events(),
+            fn($event): bool => $event instanceof \local_evidencehub\event\hub_downloaded
+        ));
     }
 }

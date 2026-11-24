@@ -113,7 +113,7 @@ final class get_readiness extends external_api {
         self::validate_context($context);
         hub_access::require_view($context);
         // The template must also be readable there, as the hub offers it.
-        $filter = hub_filter::from_values(['templateid' => $templateid, 'statuses' => [], 'suspended' => 1], $context);
+        $filter = hub_filter::from_values(['templateid' => $templateid, 'suspended' => 1], $context);
 
         $workerid = self::worker($context, $templateid, $userid, $useridnumber);
         return self::readiness($filter, $context, $workerid);
@@ -189,7 +189,7 @@ final class get_readiness extends external_api {
             }
             $real[] = [$realcode, $column->kind];
             $shown[] = [$code, $column->kind];
-            $expiry = $pair === null ? 0 : (int) $pair->eexpiry;
+            $expiry = $pair === null ? null : hub_query::expiry_day((int) $pair->eexpiry);
             $competencies[] = [
                 'id' => $column->id,
                 'shortname' => format_string(
@@ -199,7 +199,7 @@ final class get_readiness extends external_api {
                 ),
                 'idnumber' => $pair === null ? '' : (string) $pair->idnumber,
                 'status' => $code,
-                'expiry' => $expiry ? meta::iso_date($expiry) : null,
+                'expiry' => $expiry === null ? null : meta::iso_date($expiry),
                 // As the hub counts it: a restricted competency is not met, so the flag hides what the status hides.
                 'blocking' => $column->kind === policy::KIND_REGULATORY && !in_array($code, hub_kpis::READY, true),
             ];

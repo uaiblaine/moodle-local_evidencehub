@@ -125,6 +125,18 @@ Feature: The hub's list of pairs as a data report
     When I click on "Export dossiers" "button" in the "[data-region='local-evidencehub-dock']" "css_element"
     Then I should see "The dossiers of 2 workers are being prepared"
 
+  Scenario: Download offers the site's formats, each a link to the list's rows under the criteria in force
+    Given I log in as "manager1"
+    And I am on the "Electricians" "local_evidencehub > Hub" page
+    And I should see "Bia Lima" in the "[data-region='local-evidencehub-rows']" "css_element"
+    And I click on "All" "button" in the "[data-region='local-evidencehub-bar']" "css_element"
+    And I should see "4 pairs" in the "[data-region='local-evidencehub-total']" "css_element"
+    When I press "Download"
+    Then "Comma separated values (.csv)" "link" should exist in the "[data-region='local-evidencehub-bar'] [role='menu'][aria-label='Download']" "css_element"
+    And the "href" attribute of "Comma separated values (.csv)" "link" should contain "download=csv"
+    And the "href" attribute of "Comma separated values (.csv)" "link" should contain "scope=all"
+    And the "href" attribute of "Comma separated values (.csv)" "link" should contain "sesskey="
+
   Scenario: Inspect opens the pair's drawer
     Given I log in as "manager1"
     And I am on the "Electricians" "local_evidencehub > Hub" page

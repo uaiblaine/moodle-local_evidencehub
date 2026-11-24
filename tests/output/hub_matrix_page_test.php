@@ -16,16 +16,17 @@
 
 namespace local_evidencehub\output;
 
-use local_evidencehub\local\hub_filter;
-use local_evidencehub\local\hub_kpis;
-use local_evidencehub\local\hub_scope;
+use core_reportbuilder\local\filters\select;
+use core_reportbuilder\manager;
 use local_evidencehub\local\policy;
+use local_evidencehub\local\reportengine;
 use local_evidencehub\local\status;
+use local_evidencehub\reportbuilder\local\systemreports\hub_pairs;
 use local_evidencehub\tests\hub_scenario;
 use PHPUnit\Framework\Attributes\CoversClass;
 
 /**
- * The hub's matrix view: its export, its escaping, the tabs, and the page script with view=matrix.
+ * The hub's matrix page: its export, its escaping, the criteria line, and the page script with view=matrix.
  *
  * @package    local_evidencehub
  * @category   test
@@ -33,7 +34,6 @@ use PHPUnit\Framework\Attributes\CoversClass;
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 #[CoversClass(hub_matrix_page::class)]
-#[CoversClass(hub_page::class)]
 final class hub_matrix_page_test extends \advanced_testcase {
     use hub_scenario;
 
@@ -75,17 +75,27 @@ final class hub_matrix_page_test extends \advanced_testcase {
     }
 
     /**
-     * The export of a matrix filter.
+     * The export of a template's matrix for the current user, every pair listed (the scope "All").
      *
-     * @param hub_filter $filter The filter.
+     * @param int $templateid The template.
+     * @param string $scope The scope.
      * @return array
      */
-    private function export(hub_filter $filter): array {
+    private function export(int $templateid, string $scope = reportengine::SCOPE_ALL): array {
         global $PAGE;
         $system = \context_system::instance();
-        $scope = hub_scope::for_user();
-        $page = new hub_matrix_page($system, $filter, $scope, hub_kpis::get($filter, $scope, $system));
+        manager::reset_caches();
+        $page = new hub_matrix_page($system, hub_pairs::for_template($system, $templateid, ['scope' => $scope]), $scope);
         return $page->export_for_template($PAGE->get_renderer('core'));
+    }
+
+    /**
+     * A reader of every worker without viewsensitive.
+     *
+     * @return \stdClass
+     */
+    private function reader(): \stdClass {
+        return $this->viewer(['local/evidencehub:view', 'moodle/competency:templateview', 'moodle/competency:userevidenceview']);
     }
 
     /**
@@ -101,11 +111,9 @@ final class hub_matrix_page_test extends \advanced_testcase {
         $worker = $this->worker($templateid, ['firstname' => 'Ana', 'lastname' => 'Souza']);
         $this->status_row((int) $worker->id, $c1, status::STATUS_EXPIRED, 20260520);
         $this->status_row((int) $worker->id, $c2, status::STATUS_DUE, 20260611, 'aso');
-        // Validated as the administrator: the viewer reads the workers' evidence, not the template.
-        $filter = $this->filter($templateid, ['view' => hub_filter::VIEW_MATRIX]);
-        $this->setUser($this->viewer(['local/evidencehub:view', 'moodle/competency:userevidenceview']));
+        $this->setUser($this->reader());
 
-        $export = $this->export($filter);
+        $export = $this->export($templateid);
         $this->assertSame(get_string('hubmatrixtotal', 'local_evidencehub', 1), $export['total']);
         $this->assertSame(
             array_map([status::class, 'effective_label'], status::effective_codes()),
@@ -148,7 +156,7 @@ final class hub_matrix_page_test extends \advanced_testcase {
 
         // The control: an administrator reads the due pair's days left.
         $this->setAdminUser();
-        $cells = $this->export($filter)['rows'][0]['cells'];
+        $cells = $this->export($templateid)['rows'][0]['cells'];
         $this->assertSame([status::STATUS_DUE, false], [$cells[1]['code'], $cells[1]['restricted']]);
         $this->assertSame(get_string('hubmatrixdaysleft', 'local_evidencehub', 10), $cells[1]['text']);
     }
@@ -167,9 +175,8 @@ final class hub_matrix_page_test extends \advanced_testcase {
         $competency = $generator->create_competency(['competencyframeworkid' => $framework->get('id'), 'shortname' => $name]);
         $templateid = $this->template([(int) $competency->get('id')]);
         $this->worker($templateid, ['firstname' => $name, 'lastname' => 'X']);
-        $filter = $this->filter($templateid, ['view' => hub_filter::VIEW_MATRIX]);
 
-        $export = $this->export($filter);
+        $export = $this->export($templateid);
         $this->assertSame($name, $export['columns'][0]['name']);
         $this->assertSame($name . ' X', $export['rows'][0]['workername']);
         $html = $PAGE->get_renderer('core')->render_from_template('local_evidencehub/hub_matrix', $export);
@@ -187,8 +194,52 @@ final class hub_matrix_page_test extends \advanced_testcase {
     }
 
     /**
-     * The page with view=matrix shows the tabs, the legend and the cells, each cell a button that opens its
-     * pair's drawer; each row's checkbox posts its worker's id.
+     * The criteria line says which workers are listed: the scope, then each stored filter in force with its option, a
+     * cohort's admin-set name plain in the export and escaped once on the page; the link back is the list's.
+     *
+     * Changes that must make it fail: the criteria read from anything but the report's stored values; a name printed
+     * raw or escaped twice.
+     *
+     * @return void
+     */
+    public function test_the_criteria_line(): void {
+        global $PAGE;
+        [$c1] = $this->competencies(1);
+        $templateid = $this->template([$c1]);
+        $cohort = $this->getDataGenerator()->create_cohort(['name' => 'Night & day < shift']);
+        $system = \context_system::instance();
+        manager::reset_caches();
+        hub_pairs::for_template($system, $templateid)->set_filter_values([
+            'user:cohort_operator' => select::EQUAL_TO,
+            'user:cohort_value' => $cohort->id,
+        ]);
+
+        $export = $this->export($templateid, reportengine::SCOPE_ATTENTION);
+        $this->assertSame(get_string('hubmatrixscopeattention', 'local_evidencehub'), $export['scopetext']);
+        $this->assertSame([[
+            'text' => get_string('hubmatrixcriterion', 'local_evidencehub', (object) [
+                'title' => get_string('cohort', 'core_cohort'),
+                'value' => 'Night & day < shift',
+            ]),
+        ]], $export['criteria']);
+        $this->assertSame(hub_report_view::url($system, $templateid)->out(false), $export['listurl']);
+        $html = $PAGE->get_renderer('core')->render_from_template('local_evidencehub/hub_matrix', $export);
+        $this->assertStringContainsString('Night &amp; day &lt; shift', $html);
+        $this->assertStringNotContainsString('&amp;amp;', $html);
+        $this->assertStringNotContainsString('Night & day', $html);
+
+        // The control: with no stored filter, the line holds the scope alone.
+        manager::reset_caches();
+        hub_pairs::for_template($system, $templateid)->set_filter_values([]);
+        $export = $this->export($templateid);
+        $this->assertSame([], $export['criteria']);
+        $this->assertSame(get_string('hubmatrixscopeall', 'local_evidencehub'), $export['scopetext']);
+    }
+
+    /**
+     * The page with view=matrix shows the template picker, the criteria line, the legend and the cells, each cell a
+     * button that opens its pair's drawer; each row's checkbox posts its worker's id, and the export form returns to
+     * this matrix and scope.
      *
      * @return void
      */
@@ -197,24 +248,20 @@ final class hub_matrix_page_test extends \advanced_testcase {
         $templateid = $this->template([$c1]);
         $worker = $this->worker($templateid, ['firstname' => 'Ana', 'lastname' => 'Souza']);
         $this->status_row((int) $worker->id, $c1, status::STATUS_EXPIRED, 20250101);
+        $ready = $this->worker($templateid, ['firstname' => 'Bia', 'lastname' => 'Lima']);
+        $this->status_row((int) $ready->id, $c1, status::STATUS_VALID, 20990101);
         $system = \context_system::instance();
 
         $html = $this->run_page([
             'contextid' => $system->id,
             'templateid' => $templateid,
-            'statusfilter' => 1,
-            'view' => hub_filter::VIEW_MATRIX,
+            'view' => hub_matrix_page::VIEW,
         ]);
-        $this->assertSame(hub_filter::VIEW_MATRIX, hub_filter::from_preference($system)->view);
-        $this->assertMatchesRegularExpression(
-            '~<a href="[^"]*view=matrix[^"]*" class="nav-link active" aria-current="page">'
-                . get_string('hubmatrix', 'local_evidencehub') . '</a>~',
-            $html
-        );
-        $this->assertMatchesRegularExpression(
-            '~<a href="[^"]*view=list[^"]*" class="nav-link">' . get_string('hublist', 'local_evidencehub') . '</a>~',
-            $html
-        );
+        // The page's default scope is the list's: the worker whose every pair is compliant is not a row.
+        $this->assertStringNotContainsString('Bia Lima', $html);
+        $this->assertMatchesRegularExpression('~<option\s+value="' . $templateid . '"\s+selected>~', $html);
+        $this->assertStringContainsString(get_string('hubmatrixscopeattention', 'local_evidencehub'), $html);
+        $this->assertStringContainsString('href="' . hub_report_view::url($system, $templateid)->out() . '"', $html);
         $this->assertStringContainsString(get_string('hubmatrixkinds', 'local_evidencehub'), $html);
         $this->assertStringContainsString('local-evidencehub-swatch ' . status::effective_badge_class(status::STATUS_VALID), $html);
         $label = get_string('hubmatrixcell', 'local_evidencehub', (object) [
@@ -236,14 +283,40 @@ final class hub_matrix_page_test extends \advanced_testcase {
         $this->assertSame(1, substr_count($html, 'name="workers[]"'));
         $this->assertStringNotContainsString('name="pairs[]"', $html);
         $this->assertStringContainsString('data-templateid="' . $templateid . '"', $html);
-        // The list's grid is not on the page.
-        $this->assertStringNotContainsString('local-evidencehub-grid', $html);
+        $this->assertStringContainsString('<input type="hidden" name="view" value="matrix">', $html);
+        $this->assertStringContainsString('<input type="hidden" name="scope" value="attention">', $html);
+        // The old matrix's own filter form and status chips are gone.
+        $this->assertStringNotContainsString('name="statuses[]"', $html);
         $this->assertStringNotContainsString('name="download"', $html);
     }
 
     /**
-     * The control of the matrix page: the list's tab, view=list, renders the list's shell and no matrix, and stores
-     * no hub filter (the list's filters are core's store now).
+     * The control of the page's default scope: the scope "All", as the list's View link passes it, lists the worker
+     * whose every pair is compliant, and the export form returns to it.
+     *
+     * Changes that must make it fail: the page's scope parameter not passed to the report.
+     *
+     * @return void
+     */
+    public function test_the_page_follows_the_scope_it_is_given(): void {
+        [$c1] = $this->competencies(1);
+        $templateid = $this->template([$c1]);
+        $ready = $this->worker($templateid, ['firstname' => 'Bia', 'lastname' => 'Lima']);
+        $this->status_row((int) $ready->id, $c1, status::STATUS_VALID, 20990101);
+
+        $html = $this->run_page([
+            'contextid' => \context_system::instance()->id,
+            'templateid' => $templateid,
+            'view' => hub_matrix_page::VIEW,
+            'scope' => 'all',
+        ]);
+        $this->assertStringContainsString('Bia Lima', $html);
+        $this->assertStringContainsString('<input type="hidden" name="scope" value="all">', $html);
+        $this->assertStringContainsString(get_string('hubmatrixscopeall', 'local_evidencehub'), $html);
+    }
+
+    /**
+     * The control of the matrix page: view=list renders the list's shell and no matrix.
      *
      * @return void
      */
@@ -254,14 +327,8 @@ final class hub_matrix_page_test extends \advanced_testcase {
         $this->status_row((int) $worker->id, $c1, status::STATUS_EXPIRED, 20250101);
         $system = \context_system::instance();
 
-        $html = $this->run_page([
-            'contextid' => $system->id,
-            'templateid' => $templateid,
-            'statusfilter' => 1,
-            'view' => hub_filter::VIEW_LIST,
-        ]);
+        $html = $this->run_page(['contextid' => $system->id, 'templateid' => $templateid, 'view' => 'list']);
         $this->assertStringContainsString('data-region="local-evidencehub-reportview"', $html);
         $this->assertStringNotContainsString('local-evidencehub-matrix', $html);
-        $this->assertNull(hub_filter::from_preference($system));
     }
 }

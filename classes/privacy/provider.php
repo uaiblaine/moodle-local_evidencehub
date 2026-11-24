@@ -23,10 +23,11 @@ use core_privacy\local\request\contextlist;
 use core_privacy\local\request\transform;
 use core_privacy\local\request\userlist;
 use core_privacy\local\request\writer;
+use core_reportbuilder\local\models\report;
+use core_reportbuilder\local\models\user_filter;
 use local_evidencehub\local\audit;
 use local_evidencehub\local\dossier_export;
 use local_evidencehub\local\export;
-use local_evidencehub\local\hub_filter;
 use local_evidencehub\local\meta;
 use local_evidencehub\local\reportpreference;
 use local_evidencehub\local\status;
@@ -39,8 +40,11 @@ use local_evidencehub\local\status;
  * trail of the details and the dossiers issued about the worker. A dossier export request lives
  * in the requester's user context, with the ZIP prepared for it (file area export, itemid the export).
  *
- * The user's last filter of the hub and their settings of its pairs report (columns, widths, the suspended
- * accounts choice, the last template per hub context) are user preferences, exported with the others.
+ * The user's settings of the hub's pairs report (columns, widths, the suspended accounts choice, the last template
+ * per hub context) are a user preference, exported with the others. Their stored filter values of that report are
+ * rows core writes (reportbuilder_user_filter) for a report whose persistent has this plugin's component: core's own
+ * provider covers custom reports only, so these are this plugin's to find, export and delete, in the reader's own
+ * user context.
  *
  * Other users appear as actors (who verified, who acted in the trail, who issued a dossier). They
  * find those rows in their own export, but deleting an actor's data leaves the worker's rows
@@ -133,7 +137,16 @@ class provider implements
             'timeexpires' => 'privacy:metadata:local_evidencehub_export:timeexpires',
         ], 'privacy:metadata:local_evidencehub_export');
 
-        $collection->add_user_preference(hub_filter::PREFERENCE, 'privacy:metadata:preference:hubfilter');
+        // The reader's stored filter values of the plugin's system reports: core writes them, under the plugin's report.
+        $collection->add_database_table(user_filter::TABLE, [
+            'reportid' => 'privacy:metadata:reportbuilder_user_filter:reportid',
+            'filterdata' => 'privacy:metadata:reportbuilder_user_filter:filterdata',
+            'usercreated' => 'privacy:metadata:reportbuilder_user_filter:usercreated',
+            'usermodified' => 'privacy:metadata:reportbuilder_user_filter:usermodified',
+            'timecreated' => 'privacy:metadata:timecreated',
+            'timemodified' => 'privacy:metadata:timemodified',
+        ], 'privacy:metadata:reportbuilder_user_filter');
+
         $collection->add_user_preference(reportpreference::NAME, 'privacy:metadata:preference:report');
 
         return $collection;
@@ -185,6 +198,14 @@ class provider implements
              WHERE e.requestedby = :userid
         ", ['level' => $level, 'userid' => $userid]);
 
+        $contextlist->add_from_sql("
+            SELECT ctx.id
+              FROM {" . user_filter::TABLE . "} f
+              JOIN {" . report::TABLE . "} r ON r.id = f.reportid AND r.component = :component
+              JOIN {context} ctx ON ctx.instanceid = f.usercreated AND ctx.contextlevel = :level
+             WHERE f.usercreated = :userid
+        ", ['component' => 'local_evidencehub', 'level' => $level, 'userid' => $userid]);
+
         return $contextlist;
     }
 
@@ -218,6 +239,14 @@ class provider implements
             'SELECT requestedby FROM {local_evidencehub_export} WHERE requestedby = :subject',
             $params
         );
+        $userlist->add_from_sql(
+            'usercreated',
+            'SELECT f.usercreated
+               FROM {' . user_filter::TABLE . '} f
+               JOIN {' . report::TABLE . '} r ON r.id = f.reportid AND r.component = :component
+              WHERE f.usercreated = :subject',
+            $params + ['component' => 'local_evidencehub']
+        );
     }
 
     /**
@@ -242,27 +271,27 @@ class provider implements
             if ($own) {
                 static::export_statuses($context, $userid);
                 static::export_requests($context, $userid);
+                static::export_report_filters($context, $userid);
             }
         }
     }
 
     /**
-     * Export the user's last hub filter and their settings of the pairs report, each as stored: JSON.
+     * Export the user's settings of the pairs report, as stored: JSON.
      *
      * @param int $userid The user.
      * @return void
      */
     #[\Override]
     public static function export_user_preferences(int $userid): void {
-        $preferences = [
-            hub_filter::PREFERENCE => 'privacy:metadata:preference:hubfilter',
-            reportpreference::NAME => 'privacy:metadata:preference:report',
-        ];
-        foreach ($preferences as $name => $description) {
-            $value = get_user_preferences($name, null, $userid);
-            if ($value !== null) {
-                writer::export_user_preference('local_evidencehub', $name, $value, get_string($description, 'local_evidencehub'));
-            }
+        $value = get_user_preferences(reportpreference::NAME, null, $userid);
+        if ($value !== null) {
+            writer::export_user_preference(
+                'local_evidencehub',
+                reportpreference::NAME,
+                $value,
+                get_string('privacy:metadata:preference:report', 'local_evidencehub')
+            );
         }
     }
 
@@ -315,13 +344,33 @@ class provider implements
     }
 
     /**
-     * Delete every row about one worker, and the worker's own export requests and their ZIPs.
+     * Delete one user's stored filter values of the plugin's reports, in core's table.
+     *
+     * The one definition of the cut (the user's own rows, a report whose persistent has this component), shared by the
+     * privacy requests and the deletion of the account, after which the user context the finder reads is gone.
+     *
+     * @param int $userid The reader.
+     * @return void
+     */
+    public static function delete_stored_filters(int $userid): void {
+        global $DB;
+        $DB->delete_records_select(
+            user_filter::TABLE,
+            'usercreated = :userid AND reportid IN (SELECT r.id FROM {' . report::TABLE . '} r WHERE r.component = :component)',
+            ['userid' => $userid, 'component' => 'local_evidencehub']
+        );
+    }
+
+    /**
+     * Delete every row about one worker, the worker's own export requests and their ZIPs, and their stored filter
+     * values of the plugin's reports.
      *
      * @param int $userid The worker.
      * @return void
      */
     protected static function delete_worker(int $userid): void {
         global $DB;
+        self::delete_stored_filters($userid);
         $DB->delete_records('local_evidencehub_audit', ['relateduserid' => $userid]);
         $DB->delete_records('local_evidencehub_meta', ['userid' => $userid]);
         $DB->delete_records('local_evidencehub_status', ['userid' => $userid]);
@@ -528,6 +577,42 @@ class provider implements
         }
         if ($entries) {
             writer::with_context($context)->export_data($path, (object) ['requests' => $entries]);
+        }
+    }
+
+    /**
+     * The user's stored filter values of the plugin's reports, each with the template and the hub context it is of.
+     *
+     * @param \context $context The user's own context.
+     * @param int $userid The user.
+     * @return void
+     */
+    protected static function export_report_filters(\context $context, int $userid): void {
+        global $DB;
+        $records = $DB->get_records_sql("
+            SELECT f.id, f.filterdata, f.timecreated, f.timemodified, r.contextid, t.shortname AS templatename
+              FROM {" . user_filter::TABLE . "} f
+              JOIN {" . report::TABLE . "} r ON r.id = f.reportid AND r.component = :component
+         LEFT JOIN {competency_template} t ON t.id = r.itemid
+             WHERE f.usercreated = :userid
+          ORDER BY f.id
+        ", ['component' => 'local_evidencehub', 'userid' => $userid]);
+        $entries = [];
+        foreach ($records as $record) {
+            $hubcontext = \context::instance_by_id((int) $record->contextid, IGNORE_MISSING);
+            $entries[] = (object) [
+                'template' => format_string($record->templatename ?? '', true, ['context' => \context_system::instance()]),
+                'context' => $hubcontext ? $hubcontext->get_context_name(false, false, false) : '',
+                'filters' => json_decode((string) $record->filterdata),
+                'timecreated' => transform::datetime($record->timecreated),
+                'timemodified' => transform::datetime($record->timemodified),
+            ];
+        }
+        if ($entries) {
+            writer::with_context($context)->export_data(
+                static::path(get_string('privacy:path:reportfilters', 'local_evidencehub')),
+                (object) ['filters' => $entries]
+            );
         }
     }
 

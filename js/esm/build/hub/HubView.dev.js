@@ -47,7 +47,7 @@ import { Cards } from "./Cards";
 import { SIZING } from "./cells";
 import { Dock } from "./Dock";
 import { exportDossiers } from "./export";
-import { COMPETENCY_FILTER, STATUS_FILTER, withChoice, without } from "./filters";
+import { COMPETENCY_FILTER, STATUS_FILTER, chosen as chosenValue, withChoice, without } from "./filters";
 import { Grid } from "./Grid";
 import { getRows, getSummary, resetFilters, setFilters, setPreference } from "./repository";
 const SEARCH_DELAY = 300;
@@ -69,6 +69,15 @@ const settingsOf = /* @__PURE__ */ __name((rows) => rows === null ? { allcolumns
   suspended: rows.preference.suspended,
   candecide: rows.candecide
 }, "settingsOf");
+const listFacts = /* @__PURE__ */ __name((rows, filters) => {
+  const statusfilter = filters.find((filter) => filter.name === STATUS_FILTER && filter.applied);
+  return {
+    sort: rows?.sort ?? "",
+    direction: rows?.direction ?? "",
+    downloadable: rows !== null && rows.total > 0,
+    chosenstatus: statusfilter ? chosenValue(statusfilter) : ""
+  };
+}, "listFacts");
 const HubView = /* @__PURE__ */ __name((props) => {
   const { labels, reportid } = props;
   const target = useMemo(
@@ -399,7 +408,6 @@ const HubView = /* @__PURE__ */ __name((props) => {
       ...props.exportform,
       contextid: props.contextid,
       templateid: props.templateid,
-      suspended,
       pairs: chosen.map((row) => ({ userid: row.userid, competencyid: row.competencyid }))
     });
   }, "onExport");
@@ -424,7 +432,7 @@ const HubView = /* @__PURE__ */ __name((props) => {
       false,
       {
         fileName: "public/local/evidencehub/js/esm/src/hub/HubView.tsx",
-        lineNumber: 657,
+        lineNumber: 676,
         columnNumber: 13
       }
     ) : /* @__PURE__ */ jsxDEV(
@@ -447,7 +455,7 @@ const HubView = /* @__PURE__ */ __name((props) => {
       false,
       {
         fileName: "public/local/evidencehub/js/esm/src/hub/HubView.tsx",
-        lineNumber: 667,
+        lineNumber: 686,
         columnNumber: 13
       }
     );
@@ -461,6 +469,7 @@ const HubView = /* @__PURE__ */ __name((props) => {
     fixed: key === "worker"
   }));
   const workers = new Set(chosen.map((row) => row.userid)).size;
+  const facts = listFacts(rows, filters);
   return /* @__PURE__ */ jsxDEV("div", { className: "local-evidencehub-rview-root", ref: root, "data-region": "local-evidencehub-hubview", children: [
     /* @__PURE__ */ jsxDEV(
       Band,
@@ -470,6 +479,7 @@ const HubView = /* @__PURE__ */ __name((props) => {
         loading: bandloading,
         error: banderror,
         canfilter: rows !== null,
+        chosenstatus: facts.chosenstatus,
         onStatus: (status) => setChoice(STATUS_FILTER, String(status)),
         onCompetency: (competencyid) => setChoice(COMPETENCY_FILTER, String(competencyid)),
         onRetry: () => loadBand(query.current)
@@ -478,7 +488,7 @@ const HubView = /* @__PURE__ */ __name((props) => {
       false,
       {
         fileName: "public/local/evidencehub/js/esm/src/hub/HubView.tsx",
-        lineNumber: 695,
+        lineNumber: 716,
         columnNumber: 13
       }
     ),
@@ -502,6 +512,12 @@ const HubView = /* @__PURE__ */ __name((props) => {
         searching: rowsloading,
         matrixurl: props.matrixurl,
         tableurl: props.tableurl,
+        downloadurl: props.downloadurl,
+        formats: props.formats,
+        appliedsearch: current.search,
+        sort: facts.sort,
+        direction: facts.direction,
+        downloadable: facts.downloadable,
         onScope: (scope) => run({ scope, page: 0 }, true),
         onSearch,
         onFilter: (filter, value) => writeFilters(() => setFilters(reportid, withChoice(filters, filter, value))),
@@ -536,7 +552,7 @@ const HubView = /* @__PURE__ */ __name((props) => {
       false,
       {
         fileName: "public/local/evidencehub/js/esm/src/hub/HubView.tsx",
-        lineNumber: 705,
+        lineNumber: 727,
         columnNumber: 13
       }
     ),
@@ -552,9 +568,9 @@ const HubView = /* @__PURE__ */ __name((props) => {
         cards,
         narrow,
         skeleton: { columns: skeleton, lead: "worker", widths, sizing: SIZING },
-        dock: decides && chosen.length > 0 ? /* @__PURE__ */ jsxDEV(Dock, { labels, count: chosen.length, workers, posting, onExport }, void 0, false, {
+        dock: rows !== null && decides && chosen.length > 0 ? /* @__PURE__ */ jsxDEV(Dock, { labels, count: chosen.length, workers, posting, onExport }, void 0, false, {
           fileName: "public/local/evidencehub/js/esm/src/hub/HubView.tsx",
-          lineNumber: 765,
+          lineNumber: 793,
           columnNumber: 21
         }) : null,
         onRetry: () => loadRows(query.current, true),
@@ -564,7 +580,7 @@ const HubView = /* @__PURE__ */ __name((props) => {
       false,
       {
         fileName: "public/local/evidencehub/js/esm/src/hub/HubView.tsx",
-        lineNumber: 754,
+        lineNumber: 782,
         columnNumber: 13
       }
     ),
@@ -585,13 +601,13 @@ const HubView = /* @__PURE__ */ __name((props) => {
       false,
       {
         fileName: "public/local/evidencehub/js/esm/src/hub/HubView.tsx",
-        lineNumber: 772,
+        lineNumber: 800,
         columnNumber: 17
       }
     ) : null
   ] }, void 0, true, {
     fileName: "public/local/evidencehub/js/esm/src/hub/HubView.tsx",
-    lineNumber: 694,
+    lineNumber: 715,
     columnNumber: 9
   });
 }, "HubView");

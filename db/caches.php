@@ -17,7 +17,7 @@
 /**
  * Cache definitions.
  *
- * The hub's KPIs are retired by a generation, never by a time to live: see local\hub_kpis.
+ * The hub's cached figures are retired by a generation, never by a time to live: see local\hub_kpis.
  *
  * @package    local_evidencehub
  * @copyright  2026 Anderson Blaine
@@ -27,16 +27,8 @@
 defined('MOODLE_INTERNAL') || die();
 
 $definitions = [
-    // The KPI bar of one filter for one viewer's scope, keyed by a hash that holds the generation.
-    'hubkpis' => [
-        'mode' => cache_store::MODE_APPLICATION,
-        'simplekeys' => true,
-        'simpledata' => true,
-        'staticacceleration' => true,
-        'staticaccelerationsize' => 10,
-    ],
-    // One value: the current generation of the KPIs. Read from the shared store on every page, so a
-    // bump in another process is seen at once.
+    // One value: the generation of the pair set and its statuses; each replacement also replaces the report's
+    // generation ({@see \local_evidencehub\local\hub_kpis::bump_generation()}).
     'hubgeneration' => [
         'mode' => cache_store::MODE_APPLICATION,
         'simplekeys' => true,
