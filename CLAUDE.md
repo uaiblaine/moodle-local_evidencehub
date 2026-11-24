@@ -131,6 +131,16 @@ tests/generator/  writes rows directly (create_status() stays direct for the tas
 2026100504 (the status row's `issensitive`), then 2026100507 (the export's `contextid`); every later step ends in a savepoint no higher than
 `version.php`.
 
+## Owner decisions (2026-11-23)
+
+- **Maturity is BETA** for the first public release (v5.3-r1); STABLE after time in production.
+- **A pair valid with no expiry sorts as the least urgent** by "valid until" (after every dated pair,
+  ascending); a restricted pair still sorts as urgent as a missing one. The data report stages apply it to
+  `hub_query` and the pairs report's key.
+- **The drawer's timeline judges a non-deciding evidence by its printed expiry**: it reads "Expired" the day
+  after that date even within a technical policy's grace, because grace belongs to the pair's status, which
+  the deciding evidence (shown in force) already carries.
+
 ## Architecture gotchas
 
 - **The family bridge is a listener, not a dependency**: `db/hooks.php` names

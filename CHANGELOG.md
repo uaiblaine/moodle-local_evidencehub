@@ -32,6 +32,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- The plugin's maturity is BETA (was ALPHA).
 - Version 2026100512: the code comments were audited against Moodle's guidance and the code they describe: 30
   that contradicted their code are corrected, and planning and environment references are gone, from the
   comments and from this changelog. No code changed; `amd/build/drawer.min.js.map` is rebuilt for its source's
