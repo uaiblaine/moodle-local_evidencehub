@@ -1,0 +1,1 @@
+s/return self::report_key\('rows', \$context, \$templateid, \$scope, \$filtervalues,/return self::report_key('rows', \$context, \$templateid, \$scope, array_filter(\$filtervalues, static fn(string \$name): bool => !str_starts_with(\$name, reportengine::STATUS_FILTER . '_'), ARRAY_FILTER_USE_KEY),/;

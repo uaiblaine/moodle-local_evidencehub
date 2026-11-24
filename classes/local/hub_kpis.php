@@ -38,6 +38,9 @@ use core_competency\plan;
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 final class hub_kpis {
+    /** @var bool Whether the end of this request already replaces the generations a second time. */
+    private static bool $deferred = false;
+
     /** @var array The effective statuses a worker is ready with. */
     public const array READY = [status::STATUS_VALID, status::STATUS_DUE, status::STATUS_CRITICAL];
 
@@ -67,6 +70,47 @@ final class hub_kpis {
     }
 
     /**
+     * Whether a replacement of the generations is waiting for the end of the request.
+     *
+     * @return bool
+     */
+    public static function has_deferred_replacement(): bool {
+        return self::$deferred;
+    }
+
+    /**
+     * Replace both generations once the request's transactions are over: the shutdown function registered by
+     * {@see self::defer_when_in_transaction()}.
+     *
+     * @return void
+     */
+    public static function replace_after_transaction(): void {
+        self::$deferred = false;
+        \cache::make('local_evidencehub', 'hubgeneration')->set('generation', self::new_generation());
+        \cache::make('local_evidencehub', 'reportgeneration')->set('generation', self::new_generation());
+    }
+
+    /**
+     * Register one more replacement of both generations for the end of the request when a transaction is open.
+     *
+     * The replacement made now lets a reader inside the transaction see fresh keys, but a reader arriving after it
+     * and before the commit computes the figures from the rows as they were, and stores them under the new
+     * generation: stale until the next replacement. Moodle has no commit callback, so the second replacement waits
+     * for the shutdown, which runs once the request's transactions have ended. One registration serves every
+     * replacement of the request.
+     *
+     * @return void
+     */
+    private static function defer_when_in_transaction(): void {
+        global $DB;
+        if (self::$deferred || !$DB->is_transaction_started()) {
+            return;
+        }
+        self::$deferred = true;
+        \core_shutdown_manager::register_function([self::class, 'replace_after_transaction']);
+    }
+
+    /**
      * The current generation of the pairs report's summary, starting one when the cache holds none.
      *
      * @return string
@@ -89,6 +133,7 @@ final class hub_kpis {
      */
     public static function bump_report_generation(): void {
         \cache::make('local_evidencehub', 'reportgeneration')->set('generation', self::new_generation());
+        self::defer_when_in_transaction();
     }
 
     /**
@@ -181,7 +226,8 @@ final class hub_kpis {
 
     /**
      * Pairs per effective status of any set of pairs: the statement of {@see self::distribution()}, over the
-     * hub's base set or the pairs report's rows ({@see reportengine::summary()}).
+     * hub's base set. The pairs report's summary reads its distribution in a grouped statement of its own
+     * ({@see reportengine::summary()}), beside the expiring and open pairs.
      *
      * @param string $basesql A SELECT of one row per pair with the column estatus (its effective code).
      * @param array $params Its parameters.
@@ -299,6 +345,7 @@ final class hub_kpis {
      * @param array $filtervalues The reader's stored filter values.
      * @param bool $suspended Whether suspended accounts are listed.
      * @param int $today Today, YYYYMMDD.
+     * @param array $cohorts The cohort ids the report offers this reader.
      * @return string
      */
     public static function report_summary_key(
@@ -307,21 +354,90 @@ final class hub_kpis {
         hub_scope $scope,
         array $filtervalues,
         bool $suspended,
-        int $today
+        int $today,
+        array $cohorts = []
     ): string {
         $values = array_filter(
             $filtervalues,
             static fn(string $name): bool => !str_starts_with($name, reportengine::STATUS_FILTER . '_'),
             ARRAY_FILTER_USE_KEY
         );
+        return self::report_key('report', $context, $templateid, $scope, $values, $suspended, '', $cohorts, $today);
+    }
+
+    /**
+     * The cache key of the pairs report's total and facet counts for a reader: what decides which pairs the rows
+     * list, and the generation.
+     *
+     * Unlike the summary's, every stored filter value is in it, the status filter's included, and so is the scope:
+     * both cut the rows. The page, its size and the sort are not: they order and slice the same rows. Today is,
+     * because the valid-until filter and facet count from it. A search is never cached ({@see reportengine::rows()}).
+     *
+     * @param \context $context The hub context.
+     * @param int $templateid The template.
+     * @param hub_scope $scope The reader's capability cuts.
+     * @param array $filtervalues The reader's stored filter values, every filter's.
+     * @param bool $suspended Whether suspended accounts are listed.
+     * @param string $rowscope The rows' scope ({@see reportengine::SCOPES}).
+     * @param int $today Today, YYYYMMDD.
+     * @param array $cohorts The cohort ids the report offers this reader.
+     * @return string
+     */
+    public static function report_rows_key(
+        \context $context,
+        int $templateid,
+        hub_scope $scope,
+        array $filtervalues,
+        bool $suspended,
+        string $rowscope,
+        int $today,
+        array $cohorts
+    ): string {
+        return self::report_key('rows', $context, $templateid, $scope, $filtervalues, $suspended, $rowscope, $cohorts, $today);
+    }
+
+    /**
+     * A key of the reportsummary cache: one reader's report under one set of criteria, at the current generation.
+     *
+     * The reader's scope key carries the viewer and both capability fragments, so an entry is never another reader's,
+     * nor this reader's under other rights. The cohorts offered are in it because a stored cohort value applies only
+     * while the report offers that cohort ({@see \local_evidencehub\reportbuilder\local\filters\cohort}), and a
+     * cohort's visibility changes with no event the generation follows.
+     *
+     * @param string $kind What the entry holds: 'report' for the summary, 'rows' for the total and the facets.
+     * @param \context $context The hub context.
+     * @param int $templateid The template.
+     * @param hub_scope $scope The reader's capability cuts.
+     * @param array $values The stored filter values that decide the entry.
+     * @param bool $suspended Whether suspended accounts are listed.
+     * @param string $rowscope The rows' scope, '' for an entry that ignores it.
+     * @param array $cohorts The cohort ids offered.
+     * @param int $today Today, YYYYMMDD.
+     * @return string
+     */
+    private static function report_key(
+        string $kind,
+        \context $context,
+        int $templateid,
+        hub_scope $scope,
+        array $values,
+        bool $suspended,
+        string $rowscope,
+        array $cohorts,
+        int $today
+    ): string {
         ksort($values);
+        $cohorts = array_map('intval', $cohorts);
+        sort($cohorts);
         return sha1(json_encode([
-            'report',
+            $kind,
             $context->id,
             $templateid,
             $scope->key(),
             sha1(json_encode($values)),
             (int) $suspended,
+            $rowscope,
+            $cohorts,
             $today,
             self::template_signature($templateid),
             self::report_generation(),
@@ -336,12 +452,33 @@ final class hub_kpis {
      * @return array The figures.
      */
     public static function remember(string $key, callable $compute): array {
-        $cache = \cache::make('local_evidencehub', 'reportsummary');
-        $figures = $cache->get($key);
-        if ($figures === false) {
+        $figures = self::recall($key);
+        if ($figures === null) {
             $figures = $compute();
-            $cache->set($key, $figures);
+            self::keep($key, $figures);
         }
         return $figures;
+    }
+
+    /**
+     * What the reportsummary cache holds under a key.
+     *
+     * @param string $key A key from {@see self::report_summary_key()} or {@see self::report_rows_key()}.
+     * @return array|null The entry, or null when it holds none.
+     */
+    public static function recall(string $key): ?array {
+        $entry = \cache::make('local_evidencehub', 'reportsummary')->get($key);
+        return is_array($entry) ? $entry : null;
+    }
+
+    /**
+     * Store an entry in the reportsummary cache: codes, ids and counts only, never a label or a name.
+     *
+     * @param string $key A key from {@see self::report_summary_key()} or {@see self::report_rows_key()}.
+     * @param array $entry An array of scalars and arrays.
+     * @return void
+     */
+    public static function keep(string $key, array $entry): void {
+        \cache::make('local_evidencehub', 'reportsummary')->set($key, $entry);
     }
 }

@@ -313,6 +313,46 @@ final class hub_kpis_test extends \advanced_testcase {
     }
 
     /**
+     * A generation replaced inside a transaction is replaced once more when the request's transactions are over: a
+     * reader arriving after the replacement and before the commit stores pre-commit figures under the new one. The
+     * replacement inside is made at once, so a reader inside the transaction sees fresh keys; outside a transaction
+     * nothing is deferred.
+     *
+     * @return void
+     */
+    public function test_a_generation_replaced_in_a_transaction_is_replaced_again_after_it(): void {
+        global $DB;
+        // PostgreSQL wraps each test in a transaction, which would make "outside" a lie.
+        $this->preventResetByRollback();
+        hub_kpis::replace_after_transaction();
+        $this->assertFalse($DB->is_transaction_started());
+
+        hub_kpis::bump_generation();
+        hub_kpis::bump_report_generation();
+        $this->assertFalse(hub_kpis::has_deferred_replacement());
+
+        $bumps = [
+            'both' => fn() => hub_kpis::bump_generation(),
+            'report' => fn() => hub_kpis::bump_report_generation(),
+        ];
+        foreach ($bumps as $name => $bump) {
+            $transaction = $DB->start_delegated_transaction();
+            $before = [hub_kpis::generation(), hub_kpis::report_generation()];
+            $bump();
+            $this->assertNotSame($before[1], hub_kpis::report_generation(), $name);
+            $this->assertTrue(hub_kpis::has_deferred_replacement(), $name);
+            $transaction->allow_commit();
+
+            // What the shutdown runs once the transaction has committed.
+            $inside = [hub_kpis::generation(), hub_kpis::report_generation()];
+            hub_kpis::replace_after_transaction();
+            $this->assertFalse(hub_kpis::has_deferred_replacement(), $name);
+            $this->assertNotSame($inside[0], hub_kpis::generation(), $name);
+            $this->assertNotSame($inside[1], hub_kpis::report_generation(), $name);
+        }
+    }
+
+    /**
      * Give a user a capability in one worker's user context.
      *
      * @param \stdClass $user The user.
