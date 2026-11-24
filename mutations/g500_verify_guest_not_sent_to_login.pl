@@ -1,1 +1,1 @@
-s/    if \(isguestuser\(\)\) \{/    if (false) {/;
+s/        if \(isguestuser\(\)\) \{/        if (false) {/;

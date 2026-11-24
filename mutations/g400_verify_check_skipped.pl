@@ -1,1 +1,1 @@
-s/if \(!\\local_evidencehub\\local\\dossier::can_verify\(\)\) \{/if (false) {/;
+s/if \(self::can_verify\(\)\) \{\n(\s*return;\n\s*\}\n\s*\$back = )/if (true) {\n$1/;

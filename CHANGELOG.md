@@ -58,6 +58,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- Version 2026100517: a visitor whom an authentication plugin logs in on the way to the login page (single
+  sign-on through its `pre_loginpage_hook`) reads the dossier when the account may verify; the page used to
+  refuse it without reading the right again. The page's whole decision is now `dossier::require_verify()`.
 - Version 2026100516: the public verification page sends the guest user, logged in as guest, to the login
   page when the guest role may not verify, as it does a visitor; and with `autologinguests` on, a visitor the
   guest role may not verify is no longer logged in as guest and then refused. Either way the login brings them

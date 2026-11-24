@@ -348,6 +348,54 @@ final class verify_page_test extends \advanced_testcase {
             $this->assertSame('redirecterrordetected', $e->errorcode);
         }
         $this->assert_returns_to(null);
+
+        // Nor is a code followed by a line break, which require_verify() may get untrimmed from another caller.
+        try {
+            dossier::require_verify($this->dossier->code . "\n");
+            $this->fail('A visitor the guest role does not let in must be sent to the login page.');
+        } catch (\moodle_exception $e) {
+            $this->assertSame('redirecterrordetected', $e->errorcode);
+        }
+        $this->assert_returns_to(null);
+    }
+
+    /**
+     * A visitor whom an authentication plugin logs in during the login step, instead of redirecting, reads
+     * the dossier when the account may verify, and is refused when it may not.
+     *
+     * @return void
+     */
+    public function test_a_visitor_logged_in_by_an_authentication_plugin_verifies(): void {
+        global $CFG;
+        assign_capability(
+            'local/evidencehub:verifydossier',
+            CAP_PREVENT,
+            (int) $CFG->guestroleid,
+            \context_system::instance(),
+            true
+        );
+        $user = $this->getDataGenerator()->create_user();
+        $this->assertFalse(dossier::can_verify(), 'Precondition: the visitor may not verify.');
+
+        // The stand-in for the plugin's pre_loginpage_hook: it logs the visitor in and returns.
+        dossier::require_verify($this->dossier->code, fn() => $this->setUser($user));
+        $this->assertTrue(dossier::can_verify());
+
+        // The control: an account that may not verify either is refused once logged in.
+        $this->setUser(null);
+        assign_capability(
+            'local/evidencehub:verifydossier',
+            CAP_PREVENT,
+            (int) $CFG->defaultuserroleid,
+            \context_system::instance(),
+            true
+        );
+        try {
+            dossier::require_verify($this->dossier->code, fn() => $this->setUser($user));
+            $this->fail('An account without verifydossier must be refused.');
+        } catch (\moodle_exception $e) {
+            $this->assertSame('errorverifydossier', $e->errorcode);
+        }
     }
 
     /**

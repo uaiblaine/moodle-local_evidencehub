@@ -171,6 +171,42 @@ final class dossier {
     }
 
     /**
+     * Let the current visitor open the verification page, or send them to log in, or refuse them.
+     *
+     * An account may hold what the guest role does not, so the guest user and a visitor who is not logged in are
+     * sent to the login page, which brings them back with the code they came with (the page's own URL leaves it
+     * out) when it has the shape of one; a logged-in user is refused. A visitor is never logged in as guest
+     * automatically, since the guest role was just refused. An authentication plugin may log the visitor in
+     * during the login step instead of redirecting (its pre_loginpage_hook), so the right is read again then.
+     *
+     * @param string $code The code the visitor came with, as sent.
+     * @param \Closure|null $login What sends a visitor who is not logged in to log in; null for core's
+     *     require_login(). A test stands in with it for an authentication plugin.
+     * @return void
+     * @throws \moodle_exception errorverifydossier when the user may not verify.
+     */
+    public static function require_verify(string $code, ?\Closure $login = null): void {
+        global $SESSION;
+        if (self::can_verify()) {
+            return;
+        }
+        $back = new \moodle_url('/local/evidencehub/verify.php', preg_match('/^[0-9a-f]{32}$/D', $code) ? ['code' => $code] : []);
+        if (isguestuser()) {
+            // Require_login() lets the guest user through, so it is sent to the login page directly.
+            $SESSION->wantsurl = $back->out(false);
+            redirect(get_login_url());
+        }
+        if (!isloggedin()) {
+            $SESSION->wantsurl = $back->out(false);
+            ($login ?? static fn() => require_login(null, false, null, false))();
+            if (self::can_verify()) {
+                return;
+            }
+        }
+        throw new \moodle_exception('errorverifydossier', 'local_evidencehub');
+    }
+
+    /**
      * Whether the current user may revoke a dossier: its creator, or a holder of exportdossier on the site.
      *
      * @param \stdClass $dossier The dossier row.

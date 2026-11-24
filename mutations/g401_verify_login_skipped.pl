@@ -1,1 +1,1 @@
-s/^        require_login\(null, false, null, false\);\n//m;
+s/\(\$login \?\? static fn\(\) => require_login\(null, false, null, false\)\)\(\);/(\$login ?? static fn() => null)();/;

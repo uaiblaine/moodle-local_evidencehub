@@ -1,0 +1,1 @@
+s/\n\s*\(\$login \?\? static fn\(\) => require_login\(null, false, null, false\)\)\(\);\n\s*if \(self::can_verify\(\)\) \{\n\s*return;\n\s*\}/\n            (\$login ?? static fn() => require_login(null, false, null, false))();/;
