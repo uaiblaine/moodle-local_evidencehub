@@ -46,6 +46,38 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- The pairs report's headless rows and summary read the pairs fewer times. Measured on the EHR6 seed (10,000 workers
+  by 30 competencies, 294,000 pairs, PostgreSQL 18), a rows call with facets took 909/1183 ms at p50/p95 for a reader
+  of every worker, in up to 17 statements that varied between calls: six facet statements each scanned the whole pair
+  set (53 to 92 ms each), and the page's key statement joined every pair to its status row and counted them with a
+  window spilled to disk (150 to 250 ms) on every page turn and sort.
+  - The facets whose own filter is not in force (status, competency, type, verification, valid until) are counted
+    in one statement grouped by their masked fields and added up in PHP; the valid-until windows are grouped by the
+    narrowest window a pair falls in and summed up. A facet whose filter is in force, and the cohort, keep their own.
+  - The rows' total (the shared facet read's sum, or a count of its own with no column and no window), the hidden
+    workers and the facet counts are kept in the `reportsummary` cache under the reader's scope and every criterion
+    that cuts the rows (stored filters, status included, the scope, suspended accounts, today, the cohorts offered),
+    retired by the report generation; neither a search nor a stored name filter with a value is kept (each value typed
+    would add an entry). A page turn or a sort sends the page's two statements.
+  - The summary reads its distribution, expiring pairs and open pairs per competency in one grouped statement.
+  - The report joins the competency and its framework as LEFT joins on their primary keys, which list the same pairs
+    (core refuses to delete a competency or framework a template uses) and let each database drop them from
+    statements that read neither; for a reader who holds viewsensitive over every user, the report no longer reads
+    the status table a second time for the restricted rule, which is false for every pair.
+  - The summary's cache key also holds the cohorts offered, so hiding a stored cohort retires its figures.
+  - A generation replaced inside a transaction (an observer, or a recomputation nested in a caller's) is replaced
+    once more when the request ends, so a reader arriving before the commit cannot leave pre-commit figures under
+    the new generation.
+  - A page that comes back empty and counts again now answers the fresh facet counts, not the cached ones. A pair
+    whose competency or framework row is missing in a damaged database keeps its row, with no name, instead of
+    aborting the page.
+  - The statement counts that varied between calls of one case came from core, not the report: `require_login()`
+    updates the user's last access once a minute, and a long-lived process reloads `$USER`'s preferences every two
+    minutes. The report's own statements are constant.
+  - Statements per call for a manager, measured in the PHPUnit suite on PostgreSQL and MariaDB alike: the first page
+    with facets 19 to 16 (of which three read the pairs, from eight), the same call again 19 to 13 (one reads the
+    pairs, from eight), a page turn or a sort 13 (one reads the pairs, with no window), a search with facets 19 to
+    15, the summary 17 to 15 (two read the pairs, from four), the cached summary 8.
 - The plugin's maturity is BETA (was ALPHA).
 - Version 2026100512: the code comments were audited against Moodle's guidance and the code they describe: 30
   that contradicted their code are corrected, and planning and environment references are gone, from the

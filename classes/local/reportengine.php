@@ -33,9 +33,11 @@ use local_evidencehub\reportbuilder\local\systemreports\hub_pairs;
  * chose. The scope and the search are appended to that table's WHERE by {@see self::conditions()}, the
  * definition the report itself uses for its parameters, and can only narrow it.
  *
- * Every count is SQL, grouped: the report is 300,000 pairs at the seed, so nothing is tallied in PHP and no
- * statement runs per row. Nothing is node-local: the figures are the database's, or the summary's MUC
- * application cache retired by the shared generation ({@see hub_kpis}).
+ * Every count is SQL, grouped: the report is 300,000 pairs at the seed, so no pair reaches PHP and no statement
+ * runs per row; PHP only adds up grouped rows, whose number the options bound, never the pairs. Criteria that share
+ * a WHERE share a statement. Nothing is node-local: the figures are the database's, or entries of the MUC
+ * application cache reportsummary (the summary, and the rows' total and facet counts), keyed per reader and
+ * retired by the shared generation ({@see hub_kpis}).
  *
  * Core keeps one instance of a report per reader for the whole request
  * (\core_reportbuilder\manager::get_report_from_persistent()), so every call is meant to be a request of its
@@ -93,6 +95,18 @@ final class reportengine {
 
     /** @var string The filter whose field the search reads: the worker's full name. */
     public const string SEARCH_FILTER = 'user:fullname';
+
+    /**
+     * @var array The facets whose field holds one value per pair, read together in one statement while their own
+     *     filters are not in force ({@see self::shared_facet_counts()}). The cohort is not one: a worker is in several.
+     */
+    public const array SHARED_FACETS = [
+        self::STATUS_FILTER,
+        'competency:competency',
+        'evidence_details:type',
+        'evidence_details:verifystatus',
+        self::VALIDUNTIL_FILTER,
+    ];
 
     /**
      * The hub context and template a client names, after the report's whole access rule.
@@ -209,6 +223,12 @@ final class reportengine {
      * restricted, read from the report's base fields. The sort names a column key; one the report does not show,
      * or cannot sort by, leaves the report's own sort and comes back empty.
      *
+     * The total, the hidden workers and the facet counts do not change with the page, its size or the sort: without
+     * a search they are kept in the reportsummary cache under the reader's criteria ({@see hub_kpis::report_rows_key()}),
+     * so a page turn or a sort reads the page's keys and nothing else. Counted here, the total is the shared facet
+     * read's sum when that read ran over the rows' own WHERE, else a count of its own. An empty page counts again,
+     * and a page past the last answers the last one.
+     *
      * @param hub_pairs $report The report, as {@see self::report()} returned it.
      * @param array $options 'scope', 'search', 'page' (from 0), 'perpage', 'sort' (a column key), 'direction'
      *     ('asc' or 'desc'), 'facets' (bool, default true).
@@ -237,14 +257,56 @@ final class reportengine {
         $table->guess_base_url();
         $table->setup();
 
-        [$records, $total] = self::page($table, $page, $perpage);
-        if ($records === [] && $page > 0) {
-            // A window count counts nothing past the last row: count apart, then read the last page.
-            $total = $table->get_total_row_count();
+        // A search is never kept, nor is a name filter with a value: free text would grow the cache without bound.
+        $cachekey = null;
+        if ($search === '' && !self::name_in_force($tablereport, $table->filter_values())) {
+            $cachekey = hub_kpis::report_rows_key(
+                $tablereport->get_context(),
+                $tablereport->template_id(),
+                $tablereport->scope(),
+                $table->filter_values(),
+                $tablereport->includes_suspended(),
+                $scope,
+                validuntil::today(),
+                self::offered_cohorts($tablereport)
+            );
+        }
+        $kept = $cachekey === null ? [] : (hub_kpis::recall($cachekey) ?? []);
+        $known = $kept;
+        $counts = $counted ? ($known['facets'] ?? null) : null;
+        $fresh = false;
+        if ($counted && $counts === null) {
+            [$counts, $sum] = self::facet_counts($table);
+            $known['facets'] = $counts;
+            $known['total'] ??= $sum;
+            $fresh = true;
+        }
+        $known['hidden'] ??= hub_kpis::hidden_workers($tablereport->template_id(), $tablereport->scope());
+        $known['total'] ??= $table->count_rows();
+        $total = (int) $known['total'];
+
+        $table->know_total($total);
+        $records = self::page($table, $page, $perpage);
+        if ($records === [] && ($page > 0 || $total > 0)) {
+            // Past the last page, or rows gone in a way no generation follows: count again, then read the last page.
+            $total = $table->count_rows();
+            if ($total !== (int) $known['total'] && !$fresh) {
+                // The cached facets counted rows that are gone: this response and the entry take the fresh ones.
+                unset($known['facets']);
+                if ($counted) {
+                    [$counts] = self::facet_counts($table);
+                    $known['facets'] = $counts;
+                }
+            }
+            $known['total'] = $total;
+            $table->know_total($total);
             $page = $total > 0 ? intdiv($total - 1, $perpage) : 0;
             if ($total > 0) {
-                [$records, $total] = self::page($table, $page, $perpage);
+                $records = self::page($table, $page, $perpage);
             }
+        }
+        if ($cachekey !== null && $known !== $kept) {
+            hub_kpis::keep($cachekey, $known);
         }
 
         $aliases = [];
@@ -291,13 +353,13 @@ final class reportengine {
             'page' => $page,
             'perpage' => $perpage,
             'total' => $total,
-            'hidden' => hub_kpis::hidden_workers($tablereport->template_id(), $tablereport->scope()),
+            'hidden' => (int) $known['hidden'],
             'candecide' => $candecide,
             'columns' => self::columns($tablereport),
             'presets' => self::presets($tablereport),
             'rows' => $rows,
             'counted' => $counted,
-            'filters' => self::filters($table, $counted),
+            'filters' => self::filters($table, $counts),
             'preference' => reportpreference::export(reportpreference::read()),
         ];
     }
@@ -316,7 +378,8 @@ final class reportengine {
      * @return bool
      */
     public static function can_inspect(int $frameworkcontextid): bool {
-        $context = \context::instance_by_id($frameworkcontextid, IGNORE_MISSING);
+        // Id 0 is a pair whose competency or framework row is missing: no context, no drawer.
+        $context = $frameworkcontextid > 0 ? \context::instance_by_id($frameworkcontextid, IGNORE_MISSING) : false;
         return $context !== false && has_any_capability(
             ['moodle/competency:competencyview', 'moodle/competency:competencymanage'],
             $context
@@ -344,14 +407,16 @@ final class reportengine {
         $search = self::search((string) ($options['search'] ?? ''));
         $today = validuntil::today();
         $compute = static fn(): array => self::figures($report, $search, $today);
-        if ($search === '') {
+        $values = $report->get_filter_values();
+        if ($search === '' && !self::name_in_force($report, $values)) {
             $key = hub_kpis::report_summary_key(
                 $report->get_context(),
                 $report->template_id(),
                 $report->scope(),
-                $report->get_filter_values(),
+                $values,
                 $report->includes_suspended(),
-                $today
+                $today,
+                self::offered_cohorts($report)
             );
             $figures = hub_kpis::remember($key, $compute);
         } else {
@@ -374,10 +439,12 @@ final class reportengine {
         }
         $figures['distribution'] = $distribution;
 
-        $names = [];
-        $ids = array_column($figures['worst'], 'competencyid');
-        if ($ids !== []) {
-            [$insql, $params] = $DB->get_in_or_equal($ids, SQL_PARAMS_NAMED);
+        // The cached list holds every competency with an open pair, most open first: one whose row is gone (a damaged
+        // database; core refuses to delete a competency a template uses) is skipped before the list is cut to WORST,
+        // so the band never lists fewer than the template has. Normally the first read of names is the only one.
+        $worst = [];
+        foreach (array_chunk($figures['worst'], self::WORST) as $chunk) {
+            [$insql, $params] = $DB->get_in_or_equal(array_column($chunk, 'competencyid'), SQL_PARAMS_NAMED);
             $names = $DB->get_records_sql(
                 "SELECT c.id, c.shortname, f.contextid
                    FROM {competency} c
@@ -385,22 +452,21 @@ final class reportengine {
                   WHERE c.id $insql",
                 $params
             );
-        }
-        $worst = [];
-        foreach ($figures['worst'] as $entry) {
-            $record = $names[$entry['competencyid']] ?? null;
-            if ($record === null) {
-                continue;
+            foreach ($chunk as $entry) {
+                $record = $names[$entry['competencyid']] ?? null;
+                if ($record === null) {
+                    continue;
+                }
+                $context = \context::instance_by_id((int) $record->contextid, IGNORE_MISSING) ?: \context_system::instance();
+                $worst[] = [
+                    'competencyid' => $entry['competencyid'],
+                    'name' => format_string($record->shortname, true, ['context' => $context, 'escape' => false]),
+                    'count' => $entry['count'],
+                ];
+                if (count($worst) === self::WORST) {
+                    break 2;
+                }
             }
-            $worst[] = [
-                'competencyid' => $entry['competencyid'],
-                'name' => format_string(
-                    $record->shortname,
-                    true,
-                    ['context' => \context::instance_by_id((int) $record->contextid), 'escape' => false]
-                ),
-                'count' => $entry['count'],
-            ];
         }
         $figures['worst'] = $worst;
         return $figures;
@@ -413,7 +479,8 @@ final class reportengine {
      * @param string $search A cleaned search.
      * @param int $today Today, YYYYMMDD.
      * @return array workers, ready, rate, pairs, attention, expiring, distribution (status code => pairs), worst (each
-     *     competencyid and count, the most open first), hidden.
+     *     competency with an open pair: competencyid and count, the most open first; {@see self::labelled()} cuts it),
+     *     hidden.
      */
     private static function figures(hub_pairs $report, string $search, int $today): array {
         global $DB;
@@ -428,26 +495,42 @@ final class reportengine {
         $expiry = $tablereport->get_filter(self::VALIDUNTIL_FILTER)->get_field_sql();
 
         $basesql = "SELECT {$userid} AS userid, {$status} AS estatus FROM {$from} WHERE {$where}";
-        $counts = hub_kpis::distribution_of($basesql, $params);
         [$workers, $ready] = hub_kpis::readiness_of($basesql, $params);
-        $window = validuntil::condition($expiry, validuntil::within(self::EXPIRING_DAYS), $today);
-        $expiring = (int) $DB->count_records_sql("SELECT COUNT(1) FROM {$from} WHERE ({$where}) AND {$window}", $params);
-        $worst = [];
+
+        // The distribution, the expiring pairs and the open pairs per competency share one WHERE: one statement
+        // grouped by the three, at most (statuses x template competencies x 2) rows, added up here.
+        $window = validuntil::condition('x.expiry', validuntil::within(self::EXPIRING_DAYS), $today);
         $records = $DB->get_records_sql(
-            "SELECT w.competencyid, w.pairs
-               FROM (SELECT {$competencyid} AS competencyid, COUNT(1) AS pairs
-                       FROM {$from}
-                      WHERE ({$where}) AND {$status} <> " . status::STATUS_VALID . "
-                   GROUP BY {$competencyid}) w
-               JOIN {competency} wc ON wc.id = w.competencyid
-           ORDER BY w.pairs DESC, w.competencyid ASC",
-            $params,
-            0,
-            self::WORST
+            "SELECT ROW_NUMBER() OVER (ORDER BY y.estatus, y.competencyid, y.expiring) AS figurerow,
+                    y.estatus, y.competencyid, y.expiring, COUNT(1) AS pairs
+               FROM (SELECT x.estatus, x.competencyid, CASE WHEN {$window} THEN 1 ELSE 0 END AS expiring
+                       FROM (SELECT {$status} AS estatus, {$competencyid} AS competencyid, {$expiry} AS expiry
+                               FROM {$from}
+                              WHERE {$where}) x) y
+           GROUP BY y.estatus, y.competencyid, y.expiring",
+            $params
         );
+        $counts = array_fill_keys(status::effective_codes(), 0);
+        $expiring = 0;
+        $open = [];
         foreach ($records as $record) {
-            $worst[] = ['competencyid' => (int) $record->competencyid, 'count' => (int) $record->pairs];
+            $code = (int) $record->estatus;
+            $pairs = (int) $record->pairs;
+            $counts[$code] = ($counts[$code] ?? 0) + $pairs;
+            $expiring += (int) $record->expiring === 1 ? $pairs : 0;
+            if ($code !== status::STATUS_VALID) {
+                $open[(int) $record->competencyid] = ($open[(int) $record->competencyid] ?? 0) + $pairs;
+            }
         }
+        // The most open pairs first, ties by competency.
+        $worst = [];
+        foreach ($open as $id => $count) {
+            $worst[] = ['competencyid' => $id, 'count' => $count];
+        }
+        usort(
+            $worst,
+            static fn(array $a, array $b): int => [$b['count'], $a['competencyid']] <=> [$a['count'], $b['competencyid']]
+        );
 
         $pairs = array_sum($counts);
         return [
@@ -486,17 +569,43 @@ final class reportengine {
     }
 
     /**
-     * Read one page of a set-up table.
+     * Read one page of a set-up table whose total it was given ({@see headless_table::know_total()}).
      *
      * @param headless_table $table The table, set up.
      * @param int $page From 0.
      * @param int $perpage Rows per page.
-     * @return array [the records, the total].
+     * @return array The records.
      */
     private static function page(headless_table $table, int $page, int $perpage): array {
         $table->set_page_number($page + 1);
         $table->query_db($perpage, false);
-        return [$table->rawdata, (int) $table->totalrows];
+        return $table->rawdata;
+    }
+
+    /**
+     * The cohort ids the report offers its reader as the cohort filter's options: a stored cohort value applies
+     * only while its cohort is among them.
+     *
+     * @param hub_pairs $report The report.
+     * @return array Cohort ids.
+     */
+    private static function offered_cohorts(hub_pairs $report): array {
+        $filter = $report->get_filter(self::COHORT_FILTER);
+        return $filter === null ? [] : array_map('intval', array_keys((array) $filter->get_options()));
+    }
+
+    /**
+     * Whether the reader's stored name filter has a value in force: free text, so its figures are never cached.
+     *
+     * The value is part of every key, so each one typed would mint an entry, as a search would.
+     *
+     * @param hub_pairs $report The report.
+     * @param array $values The reader's stored filter values.
+     * @return bool
+     */
+    private static function name_in_force(hub_pairs $report, array $values): bool {
+        $filter = $report->get_filter(self::SEARCH_FILTER);
+        return $filter !== null && self::applies($filter, $values);
     }
 
     /**
@@ -565,10 +674,10 @@ final class reportengine {
      * counts, an option no row would list is left out unless it is the one chosen.
      *
      * @param headless_table $table The rows' table, its scope and search appended.
-     * @param bool $counted Whether to count the facets' options.
+     * @param array|null $counts The facets' counts ({@see self::facet_counts()}), null when not counted.
      * @return array Each: name, title, type, facet, options (value, label, count), applied, values (JSON).
      */
-    private static function filters(headless_table $table, bool $counted): array {
+    private static function filters(headless_table $table, ?array $counts): array {
         /** @var hub_pairs $report */
         $report = $table->get_report();
         $values = $table->filter_values();
@@ -576,15 +685,9 @@ final class reportengine {
         foreach ($report->get_active_filters() as $identifier => $filter) {
             $class = $filter->get_filter_class();
             $type = (new \ReflectionClass($class))->getShortName();
-            $offered = [];
-            if (is_array($filter->get_options())) {
-                foreach ($filter->get_options() as $value => $label) {
-                    $offered[(string) $value] = html_entity_decode((string) $label, ENT_QUOTES | ENT_HTML401, 'UTF-8');
-                }
-            }
-            $facet = $offered !== [] && $class !== \core_reportbuilder\local\filters\text::class ? 'choice' : '';
-            [$sql] = $class::create($filter)->get_sql_filter($values);
-            $applied = $sql !== '';
+            $offered = self::offered($filter);
+            $facet = self::is_facet($filter, $offered) ? 'choice' : '';
+            $applied = self::applies($filter, $values);
             $own = array_filter(
                 $values,
                 static fn(string $name): bool => str_starts_with($name, $identifier . '_'),
@@ -592,10 +695,10 @@ final class reportengine {
             );
             $chosen = $applied ? (string) ($values[$identifier . '_value'] ?? '') : null;
 
-            $counts = $counted && $facet !== '' ? self::facet_counts($table, $identifier, $filter, array_keys($offered)) : null;
+            $facetcounts = $counts !== null && $facet !== '' ? ($counts[$identifier] ?? []) : null;
             $options = [];
             foreach ($offered as $value => $label) {
-                $count = $counts === null ? -1 : (int) ($counts[(string) $value] ?? 0);
+                $count = $facetcounts === null ? -1 : (int) ($facetcounts[(string) $value] ?? 0);
                 if ($count === 0 && (string) $value !== $chosen) {
                     continue;
                 }
@@ -615,7 +718,169 @@ final class reportengine {
     }
 
     /**
-     * How many pairs each option of one facet would list, under every other criterion in force.
+     * A filter's options in the plain spelling, by value.
+     *
+     * @param filter $filter The filter.
+     * @return array Value (string) => plain label; empty for a filter without options.
+     */
+    private static function offered(filter $filter): array {
+        $offered = [];
+        if (is_array($filter->get_options())) {
+            foreach ($filter->get_options() as $value => $label) {
+                $offered[(string) $value] = html_entity_decode((string) $label, ENT_QUOTES | ENT_HTML401, 'UTF-8');
+            }
+        }
+        return $offered;
+    }
+
+    /**
+     * Whether a filter is a facet the panel counts: a filter of options that is not free text.
+     *
+     * @param filter $filter The filter.
+     * @param array $offered Its options ({@see self::offered()}).
+     * @return bool
+     */
+    private static function is_facet(filter $filter, array $offered): bool {
+        return $offered !== [] && $filter->get_filter_class() !== \core_reportbuilder\local\filters\text::class;
+    }
+
+    /**
+     * Whether a filter is in force for the reader's stored values: its class builds a condition from them.
+     *
+     * @param filter $filter The filter.
+     * @param array $values The reader's stored filter values.
+     * @return bool
+     */
+    private static function applies(filter $filter, array $values): bool {
+        $class = $filter->get_filter_class();
+        [$sql] = $class::create($filter)->get_sql_filter($values);
+        return $sql !== '';
+    }
+
+    /**
+     * Every facet's counts, in as few statements as the WHEREs they need.
+     *
+     * The facets of {@see self::SHARED_FACETS} whose own filter is not in force all count under the rows' own WHERE:
+     * one statement reads them together ({@see self::shared_facet_counts()}), and its pairs add up to the rows'
+     * total, returned beside the counts. A facet whose own filter is in force counts under the WHERE without it, and
+     * the cohort counts memberships: each keeps a statement of its own ({@see self::facet_count()}).
+     *
+     * @param headless_table $table The rows' table.
+     * @return array [facet identifier => (option value => pairs), the rows' total or null when no shared read ran].
+     */
+    private static function facet_counts(headless_table $table): array {
+        /** @var hub_pairs $report */
+        $report = $table->get_report();
+        $values = $table->filter_values();
+        $shared = [];
+        $counts = [];
+        foreach ($report->get_active_filters() as $identifier => $filter) {
+            $offered = self::offered($filter);
+            if (!self::is_facet($filter, $offered)) {
+                continue;
+            }
+            if (in_array($identifier, self::SHARED_FACETS, true) && !self::applies($filter, $values)) {
+                $shared[$identifier] = $filter;
+                continue;
+            }
+            $counts[$identifier] = self::facet_count($table, $identifier, $filter, array_keys($offered));
+        }
+        if ($shared === []) {
+            return [$counts, null];
+        }
+        [$sharedcounts, $total] = self::shared_facet_counts($table, $shared);
+        return [$sharedcounts + $counts, $total];
+    }
+
+    /**
+     * The facets whose own filters are not in force, counted in one statement over the rows' own WHERE.
+     *
+     * The pairs are grouped by every facet's field at once and each facet's counts are the sums of the groups by its
+     * own field: the same numbers as one statement per facet, for one read of the pairs. Each field is the filter's
+     * own, masked for a restricted pair as the filter compares it. The valid-until facet is grouped by the first of its
+     * choices a pair's day matches, in {@see validuntil::choices()} order: "expired" or the smallest window, since the
+     * expired days come before today and every window starts today and contains the narrower ones; a window's count
+     * then adds up its band and every narrower one, and a pair matching none (no day) adds to none.
+     *
+     * The groups are at most the product of each facet's distinct values plus one (status codes, the template's
+     * competencies, the types, the verification states, the valid-until bands), and never more than the pairs. In
+     * practice the facets go together (a competency takes a few types, a status its own band of days), so a template
+     * of 30 competencies yields hundreds of groups, not the tens of thousands the product allows.
+     *
+     * @param headless_table $table The rows' table.
+     * @param array $filters Facet identifier => filter, each one of SHARED_FACETS and not in force.
+     * @return array [facet identifier => (option value => pairs), the rows' total].
+     */
+    private static function shared_facet_counts(headless_table $table, array $filters): array {
+        global $DB;
+        [$where, $params] = $table->where_without('');
+        $params = array_merge($table->sql->params, $params);
+        $from = $table->from_with(...array_values($filters));
+        $today = validuntil::today();
+        $choices = array_keys(validuntil::choices());
+
+        $inner = [];
+        $middle = [];
+        $names = [];
+        foreach (array_keys($filters) as $index => $identifier) {
+            $name = 'facet' . $index;
+            $names[$identifier] = $name;
+            $field = $filters[$identifier]->get_field_sql();
+            $params += $filters[$identifier]->get_field_params();
+            $inner[] = "{$field} AS {$name}";
+            if ($identifier !== self::VALIDUNTIL_FILTER) {
+                $middle[] = "x.{$name}";
+                continue;
+            }
+            $whens = [];
+            foreach ($choices as $position => $choice) {
+                $whens[] = 'WHEN ' . validuntil::condition("x.{$name}", $choice, $today) . ' THEN ' . ($position + 1);
+            }
+            $middle[] = 'CASE ' . implode(' ', $whens) . " ELSE 0 END AS {$name}";
+        }
+        $grouped = implode(', ', array_map(static fn(string $name): string => "y.{$name}", $names));
+        // The row number only gives each group a unique first column, as get_records_sql() keys its rows by it.
+        $records = $DB->get_records_sql(
+            "SELECT ROW_NUMBER() OVER (ORDER BY {$grouped}) AS facetrow, {$grouped}, COUNT(1) AS pairs
+               FROM (SELECT " . implode(', ', $middle) . "
+                       FROM (SELECT " . implode(', ', $inner) . " FROM {$from} WHERE {$where}) x) y
+           GROUP BY {$grouped}",
+            $params
+        );
+
+        $counts = array_fill_keys(array_keys($filters), []);
+        $bands = [];
+        $total = 0;
+        foreach ($records as $record) {
+            $pairs = (int) $record->pairs;
+            $total += $pairs;
+            foreach ($names as $identifier => $name) {
+                $value = $record->{$name};
+                if ($identifier === self::VALIDUNTIL_FILTER) {
+                    $bands[(int) $value] = ($bands[(int) $value] ?? 0) + $pairs;
+                } else if ($value !== null) {
+                    $counts[$identifier][(string) $value] = ($counts[$identifier][(string) $value] ?? 0) + $pairs;
+                }
+            }
+        }
+        if (isset($names[self::VALIDUNTIL_FILTER])) {
+            $running = 0;
+            foreach ($choices as $position => $choice) {
+                $band = $bands[$position + 1] ?? 0;
+                if ($choice === validuntil::EXPIRED) {
+                    $counts[self::VALIDUNTIL_FILTER][$choice] = $band;
+                    continue;
+                }
+                $running += $band;
+                $counts[self::VALIDUNTIL_FILTER][$choice] = $running;
+            }
+        }
+        return [$counts, $total];
+    }
+
+    /**
+     * How many pairs each option of one facet would list, under every other criterion in force: a facet whose own
+     * filter is in force, or the cohort.
      *
      * One grouped statement over the table's FROM and its WHERE rebuilt without this facet's own condition
      * ({@see headless_table::where_without()}): the base conditions (the reader's cut, the restricted rule),
@@ -633,7 +898,7 @@ final class reportengine {
      * @param array $offered The option values offered.
      * @return array Option value => pairs.
      */
-    private static function facet_counts(headless_table $table, string $identifier, filter $filter, array $offered): array {
+    private static function facet_count(headless_table $table, string $identifier, filter $filter, array $offered): array {
         global $DB;
         [$where, $params] = $table->where_without($identifier);
         $params = array_merge($table->sql->params, $params);

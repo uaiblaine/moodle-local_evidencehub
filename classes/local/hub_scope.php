@@ -79,6 +79,19 @@ final class hub_scope {
     }
 
     /**
+     * Whether the viewer holds viewsensitive over every user: core's "everyone" fragment, with no parameters.
+     *
+     * Then nothing is restricted to them ({@see pairset::restricted()} needs a worker outside the fragment), so a
+     * reader of the pair set may skip the restricted rule. Any other spelling of the fragment, including one core
+     * might return in a later version for the same users, answers false and keeps the rule: the safe side.
+     *
+     * @return bool
+     */
+    public function sees_every_sensitive(): bool {
+        return $this->sensitivesql === '> 0' && $this->sensitiveparams === [];
+    }
+
+    /**
      * What the scope reaches, independent of the parameter names a request happened to draw.
      *
      * get_in_or_equal() numbers its placeholders with a counter of the request, so two requests of

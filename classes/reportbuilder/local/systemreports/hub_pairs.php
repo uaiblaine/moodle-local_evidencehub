@@ -240,15 +240,24 @@ class hub_pairs extends system_report {
         // The deciding evidence and its type, for the details entity.
         $this->add_join("LEFT JOIN {" . details::TABLE . "} {$m} ON {$m}.id = {$s}.metaid");
         $this->add_join("LEFT JOIN {local_evidencehub_type} {$t} ON {$t}.id = {$m}.typeid");
-        // The status row again, joined only when it is restricted to the reader.
-        [$restrictedjoin, $restrictedparams] = pairset::restricted_join($r, $s, "{$p}.userid", $scope, $names);
-        $this->add_join($restrictedjoin, $restrictedparams);
-        $restricted = "{$r}.id IS NOT NULL";
+        if ($scope->sees_every_sensitive()) {
+            // Nothing is restricted to this reader: the rule is false for every row, and the status table is read once.
+            $restricted = '1 = 0';
+        } else {
+            // The status row again, joined only when it is restricted to the reader.
+            [$restrictedjoin, $restrictedparams] = pairset::restricted_join($r, $s, "{$p}.userid", $scope, $names);
+            $this->add_join($restrictedjoin, $restrictedparams);
+            $restricted = "{$r}.id IS NOT NULL";
+        }
 
+        // LEFT joins on primary keys, so a statement that reads neither table (the page's keys, the total, the facets)
+        // lets the planner drop them on every database. They list the same pairs as inner joins: core refuses to
+        // delete a competency or a framework that a template uses (competency::can_all_be_deleted()), so a template's
+        // competency always has its row and its framework.
         $competencyentity = new competency();
         $c = $competencyentity->get_table_alias('competency');
-        $this->add_join("JOIN {competency} {$c} ON {$c}.id = {$tc}.competencyid");
-        $this->add_join("JOIN {competency_framework} {$f} ON {$f}.id = {$c}.competencyframeworkid");
+        $this->add_join("LEFT JOIN {competency} {$c} ON {$c}.id = {$tc}.competencyid");
+        $this->add_join("LEFT JOIN {competency_framework} {$f} ON {$f}.id = {$c}.competencyframeworkid");
         $this->aliases = ['plan' => $p, 'user' => $u, 'templatecomp' => $tc, 'competency' => $c, 'framework' => $f];
 
         $this->add_entity($userentity);
@@ -452,15 +461,27 @@ class hub_pairs extends system_report {
      * columns do; the names are plain, for text the client escapes itself.
      *
      * @param \stdClass $record A row of the report's table.
-     * @return array userid, competencyid, status (effective code), restricted, frameworkcontextid, worker and
-     *     competency (plain names).
+     * @return array userid, competencyid, status (effective code), restricted, frameworkcontextid (0 when the pair's
+     *     competency or framework row is missing), worker and competency (plain names; '' when a row is missing).
      */
     public function pair_facts(\stdClass $record): array {
         $names = new \stdClass();
         foreach (fields::get_name_fields() as $field) {
             $names->{$field} = (string) ($record->{'pairname_' . $field} ?? '');
         }
-        $frameworkcontextid = (int) $record->pairframeworkcontextid;
+        // A pair whose competency or framework row is gone (a damaged database: the joins are LEFT) keeps its row, with
+        // no name and no drawer; a name is formatted in the system context when its framework's context is gone too.
+        $named = $record->paircompetencyname !== null && $record->pairframeworkcontextid !== null;
+        $frameworkcontextid = $named ? (int) $record->pairframeworkcontextid : 0;
+        $context = $named ? \context::instance_by_id($frameworkcontextid, IGNORE_MISSING) : false;
+        $competency = '';
+        if ($named) {
+            $competency = format_string(
+                (string) $record->paircompetencyname,
+                true,
+                ['context' => $context ?: \context_system::instance(), 'escape' => false]
+            );
+        }
         return [
             'userid' => (int) $record->userid,
             'competencyid' => (int) $record->competencyid,
@@ -468,11 +489,7 @@ class hub_pairs extends system_report {
             'restricted' => (int) $record->pairrestricted === 1,
             'frameworkcontextid' => $frameworkcontextid,
             'worker' => fullname($names, $this->viewfullnames),
-            'competency' => format_string(
-                (string) $record->paircompetencyname,
-                true,
-                ['context' => \context::instance_by_id($frameworkcontextid), 'escape' => false]
-            ),
+            'competency' => $competency,
         ];
     }
 
@@ -561,7 +578,7 @@ class hub_pairs extends system_report {
             ->add_fields("{$c}.shortname, {$f}.contextid")
             ->set_is_sortable(true, ["{$c}.shortname"])
             ->add_callback(static function ($value, \stdClass $row): string {
-                if ($value === null) {
+                if ($value === null || $row->contextid === null) {
                     return '';
                 }
                 return format_string($value, true, ['context' => \context::instance_by_id((int) $row->contextid)]);
@@ -592,7 +609,7 @@ class hub_pairs extends system_report {
             ->add_fields("{$f}.shortname, {$f}.contextid")
             ->set_is_sortable(true, ["{$f}.shortname"])
             ->add_callback(static function ($value, \stdClass $row): string {
-                if ($value === null) {
+                if ($value === null || $row->contextid === null) {
                     return '';
                 }
                 return format_string($value, true, ['context' => \context::instance_by_id((int) $row->contextid)]);

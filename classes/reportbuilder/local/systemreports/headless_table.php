@@ -27,9 +27,9 @@ use core_reportbuilder\table\system_report_table;
  * The table core's dynamic table and its download build, so the rows carry the report's base conditions (the
  * template, the reader's userevidenceview cut, the restricted rule), the reader's stored filters and the
  * formatters: the headless rows ({@see \local_evidencehub\local\reportengine}) cannot widen what the report
- * shows. Three additions only: a way to append a condition to the table's WHERE, which can only narrow it,
- * that WHERE rebuilt without one filter for the facet counts, and a page read whose cost does not grow with
- * the page number.
+ * shows. Four additions only: a way to append a condition to the table's WHERE, which can only narrow it,
+ * that WHERE rebuilt without one filter for the facet counts, a page read whose cost does not grow with
+ * the page number, and a count of the rows that the page read can be given instead of counting again.
  *
  * A row is a pair (worker, competency), which has no id of its own: the page is keyed by both parts
  * ({@see hub_pairs::pair_key_sql()}), read in the base fields as userid and competencyid.
@@ -44,6 +44,9 @@ class headless_table extends system_report_table {
 
     /** @var array|null The reader's stored filter values, read once for every WHERE rebuilt. */
     protected $filtervalues = null;
+
+    /** @var int|null The rows' total when the caller already knows it ({@see self::know_total()}). */
+    protected $knowntotal = null;
 
     /**
      * The report this table was built from.
@@ -142,6 +145,38 @@ class headless_table extends system_report_table {
     }
 
     /**
+     * Give the rows' total, so the next page reads send no count: a total the caller kept from an earlier read of
+     * the same rows ({@see \local_evidencehub\local\reportengine::rows()}). Null counts again.
+     *
+     * @param int|null $total The total, or null.
+     * @return void
+     */
+    public function know_total(?int $total): void {
+        $this->knowntotal = $total;
+    }
+
+    /**
+     * How many rows the table lists: one count over the table's FROM and WHERE, with no column, no order and no
+     * window.
+     *
+     * Every join a condition does not read is a LEFT join on a primary key, which each database drops from a
+     * statement that reads none of its columns, so this counts the pair set, the status rows and what the conditions
+     * name. A table that groups its rows is counted as core counts it.
+     *
+     * @return int
+     */
+    public function count_rows(): int {
+        global $DB;
+        if ($this->groupbysql !== '') {
+            return $this->get_total_row_count();
+        }
+        return (int) $DB->count_records_sql(
+            "SELECT COUNT(1) FROM {$this->sql->from} WHERE {$this->sql->where}",
+            $this->sql->params
+        );
+    }
+
+    /**
      * Read one page in two statements: the page's pairs and the total, then those pairs whole.
      *
      * Core's own read ({@see \core_reportbuilder\table\base_report_table::query_db()}) selects every column
@@ -152,7 +187,8 @@ class headless_table extends system_report_table {
      * went away between the two.
      *
      * The count follows core's {@see \moodle_database::get_counted_recordset_sql()}: a window count where the
-     * database offers one, a count of its own first where it does not.
+     * database offers one, a count of its own first where it does not. A total given by {@see self::know_total()}
+     * replaces it: the window count makes the database join and hold every row before it sorts the page.
      *
      * @param int $pagesize Rows per page.
      * @param bool $useinitialsbar Unused, as in core's report table.
@@ -164,14 +200,18 @@ class headless_table extends system_report_table {
         $this->pagesize($pagesize, 0);
         $tablesql = $this->get_table_sql(false);
         $countalias = database::generate_alias();
-        $count = $DB->is_count_window_function_supported()
-            ? 'COUNT(1) OVER()'
-            : (string) $DB->count_records_sql("SELECT COUNT(1) FROM ({$tablesql}) results", $this->sql->params);
+        $count = '';
+        if ($this->knowntotal === null) {
+            $count = $DB->is_count_window_function_supported()
+                ? 'COUNT(1) OVER()'
+                : (string) $DB->count_records_sql("SELECT COUNT(1) FROM ({$tablesql}) results", $this->sql->params);
+            $count = ", {$count} AS {$countalias}";
+        }
         $keys = [];
         $total = 0;
         // A recordset, because a worker heads many rows; with a limit it is one statement on every family.
         $recordset = $DB->get_recordset_sql(
-            "SELECT results.userid, results.competencyid, {$count} AS {$countalias}
+            "SELECT results.userid, results.competencyid{$count}
                FROM ({$tablesql}) results
            ORDER BY {$this->page_order()}",
             $this->sql->params,
@@ -180,9 +220,12 @@ class headless_table extends system_report_table {
         );
         foreach ($recordset as $record) {
             $keys[] = [(int) $record->userid, (int) $record->competencyid];
-            $total = (int) $record->{$countalias};
+            if ($this->knowntotal === null) {
+                $total = (int) $record->{$countalias};
+            }
         }
         $recordset->close();
+        $total = $this->knowntotal ?? $total;
         $this->pagesize($pagesize, $total);
 
         $rows = $keys ? $this->read_pairs($keys) : [];
