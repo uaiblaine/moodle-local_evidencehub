@@ -33,4 +33,8 @@ $callbacks = [
         'hook' => \local_dimensions\hook\competency_status_badges::class,
         'callback' => [\local_evidencehub\hook_callbacks::class, 'competency_status_badges'],
     ],
+    [
+        'hook' => \local_dimensions\hook\competency_panel_sections::class,
+        'callback' => [\local_evidencehub\hook_callbacks::class, 'competency_panel_sections'],
+    ],
 ];

@@ -265,6 +265,7 @@ $string['policy_notblocking'] = 'não bloqueia a prontidão';
 $string['policy_unverifiedcounts'] = 'evidência não verificada conta';
 $string['policy_verifiedonly'] = 'somente evidência verificada';
 $string['policyalerts'] = '{$a->alert1} e {$a->alert2} dias antes';
+$string['policysection'] = 'Política de validade';
 $string['privacy:metadata:core_competency'] = 'Os detalhes descrevem evidências de aprendizagem prévia que as competências do núcleo armazenam, com seus arquivos.';
 $string['privacy:metadata:core_files'] = 'O ZIP de dossiês de prontidão preparado para um usuário fica guardado no contexto desse usuário até expirar.';
 $string['privacy:metadata:core_message'] = 'Os alertas são enviados pelo sistema de mensagens: ao usuário quando a validade dele fica a vencer, crítica ou vencida, aos verificadores quando uma evidência aguarda verificação, aos mentores como resumo semanal e a quem solicitou uma exportação de dossiês quando ela fica pronta ou falha.';
