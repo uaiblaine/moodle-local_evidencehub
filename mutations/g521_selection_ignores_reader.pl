@@ -1,0 +1,1 @@
+s/\[\$basesql, \$params\] = hub_query::base_sql\(\$filter, \$scope, \$context\);(\n\s*\[\$userin, \$userparams\] = \$DB->get_in_or_equal\(\$userids, SQL_PARAMS_NAMED, 'dsel'\);)/[\$basesql, \$params] = hub_query::base_sql(\$filter, new hub_scope(\$scope->viewerid, '> 0', [], \$scope->sensitivesql, \$scope->sensitiveparams), \$context);$1/;

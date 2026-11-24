@@ -12,8 +12,11 @@ import { Fragment, jsxDEV } from "react/jsx-dev-runtime";
  * which is not a stored filter but the reader's preference (decision 5), and a note leading to core's table
  * view for the filter the panel does not draw (the worker's name). Columns starts with the two sets
  * (Validity, Deciding evidence), then the catalogue, the worker and the competency always shown. View is
- * Automatic, Table or Cards, then the matrix (in the same scope) and core's table view. No Download yet (stage E4) and no
- * More menu: the dossiers are the dock's (the selection variant).
+ * Automatic, Table or Cards, then the matrix (in the same scope) and core's table view. Download is the capsule's last
+ * button (D114): a menu of the site's enabled formats, each a link to index.php's download branch with the scope, the
+ * search and the sort in force, so the file holds what the list shows; the report applies the stored filters and the
+ * columns itself. It is offered only once rows have arrived and while there are any. No More menu: the dossiers are
+ * the dock's (the selection variant).
  *
  * @module     local_evidencehub/hub/Bar
  * @copyright  2026 Anderson Blaine
@@ -47,11 +50,22 @@ const chip = /* @__PURE__ */ __name((labels, filter) => {
   const value = chosenLabel(filter);
   return { key: filter.name, text: value === "" ? filter.title : fillObject(labels.filterchip, { title: filter.title, value }) };
 }, "chip");
-const matrixHref = /* @__PURE__ */ __name((url, scope) => scope === "all" ? `${url}&statusfilter=1` : url, "matrixHref");
+const matrixHref = /* @__PURE__ */ __name((url, scope) => scope === "all" ? `${url}&scope=all` : url, "matrixHref");
+const downloadQuery = /* @__PURE__ */ __name((scope, search, sort, direction) => {
+  const query = new URLSearchParams({ scope });
+  if (search !== "") {
+    query.set("search", search);
+  }
+  if (sort !== "") {
+    query.set("sort", sort);
+    query.set("dir", direction === "desc" ? "desc" : "asc");
+  }
+  return query.toString();
+}, "downloadQuery");
 const Accounts = /* @__PURE__ */ __name(({ labels, suspended, onAccounts }) => /* @__PURE__ */ jsxDEV("div", { className: "local-evidencehub-rview-fgroup", "data-region": "local-evidencehub-accounts", children: [
   /* @__PURE__ */ jsxDEV("span", { className: "local-evidencehub-rview-fpanel-head", children: labels.accounts }, void 0, false, {
     fileName: "public/local/evidencehub/js/esm/src/hub/Bar.tsx",
-    lineNumber: 146,
+    lineNumber: 180,
     columnNumber: 9
   }),
   /* @__PURE__ */ jsxDEV(
@@ -71,13 +85,13 @@ const Accounts = /* @__PURE__ */ __name(({ labels, suspended, onAccounts }) => /
     false,
     {
       fileName: "public/local/evidencehub/js/esm/src/hub/Bar.tsx",
-      lineNumber: 147,
+      lineNumber: 181,
       columnNumber: 9
     }
   )
 ] }, void 0, true, {
   fileName: "public/local/evidencehub/js/esm/src/hub/Bar.tsx",
-  lineNumber: 145,
+  lineNumber: 179,
   columnNumber: 5
 }), "Accounts");
 const Bar = /* @__PURE__ */ __name((props) => {
@@ -85,6 +99,12 @@ const Bar = /* @__PURE__ */ __name((props) => {
   const panelfilters = filters.filter(choosable);
   const others = filters.filter((filter) => !choosable(filter));
   const named = /* @__PURE__ */ __name((name) => filters.find((filter) => filter.name === name), "named");
+  const query = downloadQuery(props.scope, props.appliedsearch, props.sort, props.direction);
+  const downloads = props.downloadable && props.downloadurl !== "" ? props.formats.map((format) => ({
+    key: format.value,
+    label: format.label,
+    href: `${props.downloadurl}&${query}&download=${encodeURIComponent(format.value)}`
+  })) : [];
   const sets = props.presets.map((preset) => ({
     name: preset.name,
     label: presetLabel(labels, preset.name),
@@ -106,7 +126,7 @@ const Bar = /* @__PURE__ */ __name((props) => {
       panelnote: /* @__PURE__ */ jsxDEV(Fragment, { children: [
         /* @__PURE__ */ jsxDEV(Accounts, { labels, suspended: props.suspended, onAccounts: props.onAccounts }, void 0, false, {
           fileName: "public/local/evidencehub/js/esm/src/hub/Bar.tsx",
-          lineNumber: 198,
+          lineNumber: 238,
           columnNumber: 21
         }),
         others.length > 0 ? /* @__PURE__ */ jsxDEV("p", { className: "local-evidencehub-rview-note", children: [
@@ -114,17 +134,17 @@ const Bar = /* @__PURE__ */ __name((props) => {
           " ",
           /* @__PURE__ */ jsxDEV("a", { href: props.tableurl, children: labels.morefilters }, void 0, false, {
             fileName: "public/local/evidencehub/js/esm/src/hub/Bar.tsx",
-            lineNumber: 202,
+            lineNumber: 242,
             columnNumber: 29
           })
         ] }, void 0, true, {
           fileName: "public/local/evidencehub/js/esm/src/hub/Bar.tsx",
-          lineNumber: 200,
+          lineNumber: 240,
           columnNumber: 25
         }) : null
       ] }, void 0, true, {
         fileName: "public/local/evidencehub/js/esm/src/hub/Bar.tsx",
-        lineNumber: 197,
+        lineNumber: 237,
         columnNumber: 17
       }),
       chips: filters.filter((filter) => filter.applied).map((filter) => chip(labels, filter)),
@@ -138,7 +158,7 @@ const Bar = /* @__PURE__ */ __name((props) => {
       viewlinks: props.matrixurl === "" ? [] : [
         { key: "matrix", label: labels.matrix, href: matrixHref(props.matrixurl, props.scope), icon: "matrix" }
       ],
-      downloads: [],
+      downloads,
       search: props.search,
       searchmin: props.searchmin,
       searching: props.searching,
@@ -173,7 +193,7 @@ const Bar = /* @__PURE__ */ __name((props) => {
     false,
     {
       fileName: "public/local/evidencehub/js/esm/src/hub/Bar.tsx",
-      lineNumber: 185,
+      lineNumber: 225,
       columnNumber: 9
     }
   );

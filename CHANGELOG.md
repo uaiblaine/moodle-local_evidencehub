@@ -43,8 +43,50 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   opens the existing drawer. Without JavaScript the page holds core's table. The hub opens on the reader's last
   template in that place while it is still offered. The matrix, the table view, the download and the dossier
   export's server side are unchanged; the old list's code stays until the next stage removes it.
+- Version 2026100519: the list's bar gains Download, a menu of the site's enabled formats, each a link to the hub's
+  own download (`index.php?download=<format>`, GET with the sesskey): the pairs report's own table under the
+  criteria in force (the reader's stored filters, the scope, the search, the sort, the suspended choice, the chosen
+  columns), a restricted pair masked as in the list, logged with `hub_downloaded` once, with the number of rows the
+  file holds. Core's report download stays refused: the report is not downloadable, and refuses a `download`
+  parameter. Offered once the rows have arrived and while there are any.
+- The plugin's uninstall (`db/uninstall.php`) removes what core's leaves: the pairs report's persistents with every
+  reader's stored filter values, and the plugin's user preferences.
+- The privacy provider declares, finds, exports and deletes a reader's stored filter values of the pairs report
+  (`reportbuilder_user_filter` rows of this plugin's reports, which core's provider leaves out for a system report),
+  in the reader's own user context, with the template and the hub context named.
+- Four fixes to the list's download and the matrix: a request that names core's dynamic table service
+  (`info=core_table_get_dynamic_table_content`) no longer leaves the table without its report, which ended the
+  download and the matrix in a fatal error; a statement's parameter arrays that share a name throw instead of one
+  silently keeping the other's value; `index.php` logs the visitor in before it looks the context up, so a visitor not
+  logged in cannot tell an existing context id from a missing one; and deleting an account removes the reader's stored
+  filter values of the plugin's reports, which the privacy finder could no longer reach once the user context is gone.
 
 ### Changed
+
+- The matrix reads the list's criteria (decision 11): its rows are the workers of the pairs report's rows under the
+  reader's stored filters, the scope (`scope`, "Needs attention" by default; the list's View link passes its own)
+  and the suspended choice, each showing every competency of the template. Its own filter form, status chips, tiles
+  and tabs are gone; the page has the list's template picker, a line saying which criteria are in force with a link
+  back to the list, the legend, the matrix, its pager and its dossier export, which returns to it.
+- The dossier export takes the selection only: the posted workers are kept when they belong to the template's pair
+  set as the reader may view it, suspended accounts as the reader's preference lists them, and nothing else (no
+  status, cohort or search). The limits and refusals are unchanged; after the export the hub returns to the list or
+  the matrix the post came from.
+- A pair with a status and no expiry (valid with no end) sorts as the least urgent by "valid until": after every
+  dated pair ascending, first descending, in the list's sort and the hub's pair set (the matrix's urgency); a
+  restricted or a missing pair still sorts as the most urgent. The "valid until" filter, its counts and "Expiring in
+  30 days" still read no day for it.
+- At the narrow step the scope's cells keep their words on one line; "Pairs by status" leaves out a status with no
+  pair unless it is the status filter in force.
+
+### Removed
+
+- The old list of the hub: its page (`output\hub_page`, `templates/hub_page.mustache`), its reads
+  (`hub_query::page()`, `page_keys()`, `page_details()`, `rows()`), its download of ticked rows (`hub_download`; the
+  posted pairs' parser moved to `dossier_export::parse_pairs()`), its figures (`hub_kpis::get()`, `compute()`,
+  `pager_count()` and the application cache `hubkpis`), and its filter's request and preference parsing
+  (`hub_filter` keeps the pair set's cuts: template, cohort, search, suspended). The user preference
+  `local_evidencehub_hubfilter` is deleted by the upgrade (decision 1: no migration) and no longer declared.
 
 - The pairs report's headless rows and summary read the pairs fewer times. Measured on the EHR6 seed (10,000 workers
   by 30 competencies, 294,000 pairs, PostgreSQL 18), a rows call with facets took 909/1183 ms at p50/p95 for a reader

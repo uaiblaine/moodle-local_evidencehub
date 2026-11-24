@@ -1,1 +1,1 @@
-s/hub_query::base_sql\(\$filter, \$scope, \$context\);(\n\s*\[\$userin, \$userparams\])/hub_query::base_sql(\$filter, new hub_scope(\$scope->viewerid, '> 0', [], \$scope->sensitivesql, \$scope->sensitiveparams), \$context);$1/;
+s/hub_query::base_sql\(\$this->filter, \$this->scope, \$this->context\);(\n\s*\[\$userin, \$userparams\])/hub_query::base_sql(\$this->filter, new hub_scope(\$this->scope->viewerid, '> 0', [], \$this->scope->sensitivesql, \$this->scope->sensitiveparams), \$this->context);$1/;

@@ -68,7 +68,7 @@ final class upgrade_test extends \advanced_testcase {
         );
         $this->assertSame([$c1 => 1, $c2 => 0, $c3 => 0], array_map('intval', $flags));
         // The run goes on to the last step's savepoint.
-        $this->assertEquals(2026100507, get_config('local_evidencehub', 'version'));
+        $this->assertEquals(2026100519, get_config('local_evidencehub', 'version'));
     }
 
     /**
@@ -131,6 +131,43 @@ final class upgrade_test extends \advanced_testcase {
         $this->assertTrue($dbman->field_exists($table, $field));
         $this->assertNull($DB->get_field('local_evidencehub_export', 'contextid', ['id' => $export->id]));
         $this->assertFalse($DB->get_columns('local_evidencehub_export')['contextid']->not_null);
-        $this->assertEquals(2026100507, get_config('local_evidencehub', 'version'));
+        $this->assertEquals(2026100519, get_config('local_evidencehub', 'version'));
+    }
+
+    /**
+     * Upgrading from 2026100518 deletes the old list's stored filter of every reader (decision 1: no migration), and
+     * nothing else: the same reader's other preferences stay, the pairs report's own among them.
+     *
+     * Changes that must make it fail: the step deleting by a name pattern that also takes the report's preference, or
+     * leaving the old rows.
+     *
+     * @return void
+     */
+    public function test_the_old_list_filter_is_deleted(): void {
+        global $DB;
+        $this->resetAfterTest();
+        $reader = $this->getDataGenerator()->create_user();
+        $other = $this->getDataGenerator()->create_user();
+        set_user_preference('local_evidencehub_hubfilter', json_encode(['templateid' => 5]), $reader);
+        set_user_preference('local_evidencehub_hubfilter', json_encode(['templateid' => 6]), $other);
+        set_user_preference('local_evidencehub_report', json_encode(['suspended' => true]), $reader);
+        set_user_preference('local_evidencehub_hubfilterx', 'kept', $reader);
+        // The precondition: both readers hold the old row.
+        $this->assertSame(2, $DB->count_records('user_preferences', ['name' => 'local_evidencehub_hubfilter']));
+        set_config('version', 2026100518, 'local_evidencehub');
+
+        $this->assertTrue(xmldb_local_evidencehub_upgrade(2026100518));
+
+        $this->assertSame(0, $DB->count_records('user_preferences', ['name' => 'local_evidencehub_hubfilter']));
+        // The control: the same reader's other preferences stay.
+        $this->assertSame(
+            json_encode(['suspended' => true]),
+            $DB->get_field('user_preferences', 'value', ['userid' => $reader->id, 'name' => 'local_evidencehub_report'])
+        );
+        $this->assertSame(
+            'kept',
+            $DB->get_field('user_preferences', 'value', ['userid' => $reader->id, 'name' => 'local_evidencehub_hubfilterx'])
+        );
+        $this->assertEquals(2026100519, get_config('local_evidencehub', 'version'));
     }
 }

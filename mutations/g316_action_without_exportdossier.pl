@@ -1,1 +1,1 @@
-s/'canexport' => has_capability\('local\/evidencehub:exportdossier', \$this->context\),/'canexport' => true,/;
+s/'canexport' => dossier_builder::can_export\(\$this->context\),/'canexport' => true,/;

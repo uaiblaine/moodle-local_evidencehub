@@ -24,8 +24,11 @@
  * which is not a stored filter but the reader's preference (decision 5), and a note leading to core's table
  * view for the filter the panel does not draw (the worker's name). Columns starts with the two sets
  * (Validity, Deciding evidence), then the catalogue, the worker and the competency always shown. View is
- * Automatic, Table or Cards, then the matrix (in the same scope) and core's table view. No Download yet (stage E4) and no
- * More menu: the dossiers are the dock's (the selection variant).
+ * Automatic, Table or Cards, then the matrix (in the same scope) and core's table view. Download is the capsule's last
+ * button (D114): a menu of the site's enabled formats, each a link to index.php's download branch with the scope, the
+ * search and the sort in force, so the file holds what the list shows; the report applies the stored filters and the
+ * columns itself. It is offered only once rows have arrived and while there are any. No More menu: the dossiers are
+ * the dock's (the selection variant).
  *
  * @module     local_evidencehub/hub/Bar
  * @copyright  2026 Anderson Blaine
@@ -36,9 +39,9 @@ import type {ReactElement} from 'react';
 import {Bar as DataBar} from '../datareport/Bar';
 import {Segmented} from '../datareport/Segmented';
 import {fillObject, num} from '../datareport/str';
-import type {Chip, ColumnSet, FacetDefinition} from '../datareport/types';
+import type {Chip, ColumnSet, DownloadLink, FacetDefinition} from '../datareport/types';
 import {COHORT_FILTER, COMPETENCY_FILTER, choosable, chosen, chosenLabel} from './filters';
-import type {Column, Filter, Preset, Scope, SummaryAnswer, ViewMode} from './types';
+import type {Column, Filter, Format, Preset, Scope, SummaryAnswer, ViewMode} from './types';
 
 type BarProps = {
     labels: Record<string, string>,
@@ -58,6 +61,15 @@ type BarProps = {
     searching: boolean,
     matrixurl: string,
     tableurl: string,
+    /** Index.php's download branch with the context, the template and the sesskey; '' offers no download. */
+    downloadurl: string,
+    formats: Format[],
+    /** The search in force (as the rows were read with it), the sort and its direction. */
+    appliedsearch: string,
+    sort: string,
+    direction: '' | 'asc' | 'desc',
+    /** Whether the rows can be downloaded now: they have arrived and there are some. */
+    downloadable: boolean,
     onScope: (scope: Scope) => void,
     onSearch: (text: string) => void,
     onFilter: (filter: Filter, value: string) => void,
@@ -125,14 +137,36 @@ const chip = (labels: Record<string, string>, filter: Filter): Chip => {
 };
 
 /**
- * The matrix's address for the scope in force: its own default is the pairs needing attention, and its
- * `statusfilter` with no status chosen lists every status (hub_filter::from_request()), as "All" does here.
+ * The matrix's address for the scope in force: its own default is the pairs needing attention, as here.
  *
  * @param {string} url The matrix's address, with the context and the template.
  * @param {string} scope The scope in force.
  * @returns {string} The address.
  */
-const matrixHref = (url: string, scope: Scope): string => (scope === 'all' ? `${url}&statusfilter=1` : url);
+const matrixHref = (url: string, scope: Scope): string => (scope === 'all' ? `${url}&scope=all` : url);
+
+/**
+ * The criteria of the download link: the scope, the search in force and the sort, as index.php's download branch reads
+ * them; the stored filters and the columns are the report's own.
+ *
+ * @param {string} scope The scope in force.
+ * @param {string} search The search in force, or ''.
+ * @param {string} sort The column key sorted by, or '' for the report's own order.
+ * @param {string} direction asc or desc.
+ * @returns {string} The query string's added part, encoded.
+ */
+const downloadQuery = (scope: Scope, search: string, sort: string, direction: string): string => {
+    const query = new URLSearchParams({scope});
+    if (search !== '') {
+        query.set('search', search);
+    }
+    if (sort !== '') {
+        query.set('sort', sort);
+        query.set('dir', direction === 'desc' ? 'desc' : 'asc');
+    }
+
+    return query.toString();
+};
 
 /**
  * The panel's "Accounts" group: a preference, not a stored filter, drawn under the facets.
@@ -175,6 +209,12 @@ export const Bar = (props: BarProps): ReactElement => {
      * @returns {object|undefined} The filter.
      */
     const named = (name: string): Filter | undefined => filters.find((filter) => filter.name === name);
+    const query = downloadQuery(props.scope, props.appliedsearch, props.sort, props.direction);
+    const downloads: DownloadLink[] = props.downloadable && props.downloadurl !== '' ? props.formats.map((format) => ({
+        key: format.value,
+        label: format.label,
+        href: `${props.downloadurl}&${query}&download=${encodeURIComponent(format.value)}`,
+    })) : [];
     const sets: ColumnSet[] = props.presets.map((preset) => ({
         name: preset.name,
         label: presetLabel(labels, preset.name),
@@ -215,7 +255,7 @@ export const Bar = (props: BarProps): ReactElement => {
             viewlinks={props.matrixurl === '' ? [] : [
                 {key: 'matrix', label: labels.matrix, href: matrixHref(props.matrixurl, props.scope), icon: 'matrix'},
             ]}
-            downloads={[]}
+            downloads={downloads}
             search={props.search}
             searchmin={props.searchmin}
             searching={props.searching}

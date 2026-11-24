@@ -1,42 +1,8 @@
-/* The evidence hub: KPI tiles and the grid. Colours come from the theme through a fallback chain. */
+/* The evidence hub's matrix page. Colours come from the theme through a fallback chain. */
 .local-evidencehub-hub {
     --local-evidencehub-accent: var(--dimensions-accent, var(--bs-primary, var(--primary, #0f6cbf)));
     --local-evidencehub-muted: var(--dimensions-muted, var(--bs-secondary-color, var(--secondary, #6a737b)));
     --local-evidencehub-border: var(--dimensions-border, var(--bs-border-color, var(--gray-300, #dee2e6)));
-}
-
-.local-evidencehub-hub .local-evidencehub-tile {
-    flex: 1 1 10rem;
-    min-width: 10rem;
-    border: 1px solid var(--local-evidencehub-border);
-    color: inherit;
-    transition: border-color 150ms ease-in-out;
-}
-
-.local-evidencehub-hub a.local-evidencehub-tile:hover,
-.local-evidencehub-hub a.local-evidencehub-tile:focus {
-    border-color: var(--local-evidencehub-accent);
-}
-
-.local-evidencehub-hub .local-evidencehub-tile.local-evidencehub-tile-active {
-    border-color: var(--local-evidencehub-accent);
-    box-shadow: inset 0 0 0 1px var(--local-evidencehub-accent);
-}
-
-.local-evidencehub-hub .local-evidencehub-tile-count {
-    font-size: 1.5rem;
-    font-weight: 600;
-    font-variant-numeric: tabular-nums;
-}
-
-.local-evidencehub-hub .local-evidencehub-tile-share,
-.local-evidencehub-hub .local-evidencehub-hiddenworkers {
-    color: var(--local-evidencehub-muted);
-}
-
-.local-evidencehub-hub .local-evidencehub-grid-date {
-    font-variant-numeric: tabular-nums;
-    white-space: nowrap;
 }
 
 /* The inspection drawer: core's modal dialog as a sheet on the right edge, full height, its body scrolling. */
@@ -190,6 +156,22 @@
 .local-evidencehub-hub .local-evidencehub-matrix .local-evidencehub-cell:focus-visible {
     outline: 2px solid var(--local-evidencehub-accent);
     outline-offset: 2px;
+}
+
+/* The matrix's criteria line: the scope, then each stored filter in force, a middle dot between them, then the way back
+   to the list where they are changed. */
+.local-evidencehub-hub .local-evidencehub-matrix-criteria {
+    color: var(--local-evidencehub-muted);
+    font-size: 0.875rem;
+    margin: 0 0 0.75rem;
+}
+
+.local-evidencehub-hub .local-evidencehub-matrix-criterion::before {
+    content: " \00b7  ";
+}
+
+.local-evidencehub-hub .local-evidencehub-matrix-change {
+    margin-inline-start: 0.75rem;
 }
 
 /* The public verification page sits in the embedded layout, which gives its content no gutter of its own. */
@@ -1219,13 +1201,17 @@ body.jsenabled .local-evidencehub-rview .local-evidencehub-rview-preload + .loca
 .local-evidencehub-rview .local-evidencehub-rview-bar--narrow > .local-evidencehub-rview-seg {
     display: flex;
     flex: 1 0 100%;
+    flex-wrap: nowrap;
     order: 1;
 }
 
+/* The cells share the row (segmented-control.md, "On a row of its own"), each label on one line: a cell never
+   narrows below its own words. */
 .local-evidencehub-rview .local-evidencehub-rview-bar--narrow > .local-evidencehub-rview-seg .local-evidencehub-rview-seg-cell {
     flex: 1 1 0;
     justify-content: center;
-    min-width: 0;
+    min-width: max-content;
+    white-space: nowrap;
 }
 
 .local-evidencehub-rview .local-evidencehub-rview-bar--narrow > .local-evidencehub-rview-chips {

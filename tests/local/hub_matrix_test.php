@@ -16,13 +16,17 @@
 
 namespace local_evidencehub\local;
 
+use core_reportbuilder\local\filters\select;
+use core_reportbuilder\manager;
+use core_reportbuilder\table\system_report_table;
 use local_evidencehub\output\hub_matrix_page;
+use local_evidencehub\reportbuilder\local\systemreports\hub_pairs;
 use local_evidencehub\tests\hub_scenario;
 use PHPUnit\Framework\Attributes\CoversClass;
 
 /**
- * The hub's readiness matrix: its workers, the status filter, the sorts, paging, the columns, the
- * restricted cell, the worker count, and its agreement with the list.
+ * The hub's readiness matrix: its workers are the pairs report's under the reader's stored filters, the scope and the
+ * suspended choice; each shows every competency; the order, paging, the columns, the restricted cell and the count.
  *
  * @package    local_evidencehub
  * @category   test
@@ -31,6 +35,7 @@ use PHPUnit\Framework\Attributes\CoversClass;
  */
 #[CoversClass(hub_matrix::class)]
 #[CoversClass(hub_matrix_page::class)]
+#[CoversClass(reportengine::class)]
 final class hub_matrix_test extends \advanced_testcase {
     use hub_scenario;
 
@@ -43,17 +48,58 @@ final class hub_matrix_test extends \advanced_testcase {
     }
 
     /**
-     * Every worker of a filter, page after page, in order, for the current user.
+     * The pairs report of a template for the current user, built afresh with a scope, its stored filters set first.
      *
-     * @param \context $context The page context.
-     * @param hub_filter $filter The filter; its page is replaced.
+     * @param int $templateid The template.
+     * @param string $scope The scope.
+     * @param array $filters Stored filter values, as core's store holds them; empty clears them.
+     * @param \context|null $context The hub context; the system when null.
+     * @return hub_pairs
+     */
+    private function report(
+        int $templateid,
+        string $scope = reportengine::SCOPE_ALL,
+        array $filters = [],
+        ?\context $context = null
+    ): hub_pairs {
+        $context ??= \context_system::instance();
+        manager::reset_caches();
+        $report = hub_pairs::for_template($context, $templateid);
+        $report->set_filter_values($filters);
+        manager::reset_caches();
+        return hub_pairs::for_template($context, $templateid, ['scope' => $scope]);
+    }
+
+    /**
+     * The status filter's stored values for one effective code.
+     *
+     * @param int $code The code.
+     * @return array
+     */
+    private static function status_is(int $code): array {
+        return ['validity:status_operator' => select::EQUAL_TO, 'validity:status_value' => $code];
+    }
+
+    /**
+     * The matrix of a report, as the matrix page builds it.
+     *
+     * @param hub_pairs $report The report.
+     * @return hub_matrix
+     */
+    private function matrix(hub_pairs $report): hub_matrix {
+        return hub_matrix::for_report($report);
+    }
+
+    /**
+     * Every worker of a matrix, page after page of 25, in order.
+     *
+     * @param hub_matrix $matrix The matrix.
      * @return array User ids.
      */
-    private function all_workers(\context $context, hub_filter $filter): array {
-        $matrix = new hub_matrix($context, hub_scope::for_user());
+    private function all_workers(hub_matrix $matrix): array {
         $userids = [];
         for ($page = 0; $page < 100; $page++) {
-            $rows = $matrix->workers($filter->with(['page' => $page]));
+            $rows = $matrix->workers($page, 25);
             if (!$rows) {
                 break;
             }
@@ -66,35 +112,40 @@ final class hub_matrix_test extends \advanced_testcase {
     }
 
     /**
-     * Every cell of a filter's workers, as "userid:competencyid" => effective status.
+     * Every cell of a matrix's workers, as "userid:competencyid" => effective status.
      *
-     * @param \context $context The page context.
-     * @param hub_filter $filter The filter.
+     * @param hub_matrix $matrix The matrix.
      * @return array
      */
-    private function all_cells(\context $context, hub_filter $filter): array {
-        $matrix = new hub_matrix($context, hub_scope::for_user());
-        $cells = $matrix->cells($this->all_workers($context, $filter), $filter)['cells'];
-        return array_map(fn(\stdClass $cell): int => $cell->estatus, $cells);
+    private function all_cells(hub_matrix $matrix): array {
+        return array_map(fn(\stdClass $cell): int => $cell->estatus, $matrix->cells($this->all_workers($matrix))['cells']);
     }
 
     /**
-     * One cell, as the current user reads it.
+     * The workers of the rows core's own table of a report lists, the list's rows read whole.
      *
-     * @param \context $context The page context.
-     * @param hub_filter $filter The filter.
-     * @param int $userid The worker.
-     * @param int $competencyid The competency.
-     * @return \stdClass
+     * @param hub_pairs $report The report.
+     * @return array User ids, ascending.
      */
-    private function cell(\context $context, hub_filter $filter, int $userid, int $competencyid): \stdClass {
-        $cells = (new hub_matrix($context, hub_scope::for_user()))->cells([$userid], $filter)['cells'];
-        return $cells[$userid . ':' . $competencyid];
+    private function listed_workers(hub_pairs $report): array {
+        global $SESSION;
+        unset($SESSION->flextable);
+        $table = system_report_table::create((int) $report->get_report_persistent()->get('id'), $report->get_parameters());
+        $table->define_baseurl(new \moodle_url('/local/evidencehub/index.php'));
+        $table->setup();
+        $table->query_db(1000, false);
+        $userids = [];
+        foreach ($table->rawdata as $record) {
+            $userids[(int) $record->userid] = (int) $record->userid;
+        }
+        $table->close_recordset();
+        sort($userids);
+        return array_values($userids);
     }
 
     /**
-     * A category manager without the user-context capability has no row and no cell, even for a worker
-     * named outright; given it over a cohort through tool_cohortroles, exactly the cohort's workers.
+     * A category manager without the user-context capability has no row and no cell, even for a worker named
+     * outright; given it over a cohort through tool_cohortroles, exactly the cohort's workers.
      *
      * @return void
      */
@@ -108,15 +159,13 @@ final class hub_matrix_test extends \advanced_testcase {
         $cohort = $this->getDataGenerator()->create_cohort(['contextid' => $catcontext->id]);
         cohort_add_member($cohort->id, $team->id);
         $manager = $this->viewer(['local/evidencehub:view', 'moodle/competency:templateview'], $catcontext);
-        $filter = $this->filter($templateid, [], $catcontext);
-        $missing = $filter->with(['statuses' => [status::EFFECTIVE_MISSING]]);
         $both = [(int) $team->id, (int) $outsider->id];
 
         $this->setUser($manager);
-        $matrix = new hub_matrix($catcontext, hub_scope::for_user());
-        $this->assertSame([], $this->all_workers($catcontext, $filter));
-        $this->assertSame(['workers' => [], 'cells' => []], $matrix->cells($both, $filter));
-        $this->assertSame(0, $matrix->worker_count($missing, []));
+        $matrix = $this->matrix($this->report($templateid, reportengine::SCOPE_ALL, [], $catcontext));
+        $this->assertSame([], $this->all_workers($matrix));
+        $this->assertSame(['workers' => [], 'cells' => []], $matrix->cells($both));
+        $this->assertSame(0, $matrix->worker_count());
 
         // Mentor role over the cohort's user contexts, as tool_cohortroles assigns it.
         $this->setAdminUser();
@@ -132,28 +181,30 @@ final class hub_matrix_test extends \advanced_testcase {
         accesslib_clear_all_caches_for_unit_testing();
 
         $this->setUser($manager);
-        $matrix = new hub_matrix($catcontext, hub_scope::for_user());
-        $this->assertSame([(int) $team->id], $this->all_workers($catcontext, $filter));
-        $cells = $matrix->cells($both, $filter);
+        $matrix = $this->matrix($this->report($templateid, reportengine::SCOPE_ALL, [], $catcontext));
+        $this->assertSame([(int) $team->id], $this->all_workers($matrix));
+        $cells = $matrix->cells($both);
         $this->assertSame([$this->pair($team, $c1)], array_keys($cells['cells']));
         $this->assertSame([(int) $team->id], array_keys($cells['workers']));
-        $this->assertSame(1, $matrix->worker_count($missing, []));
+        $this->assertSame(1, $matrix->worker_count());
 
         // The control: the site administrator sees both.
         $this->setAdminUser();
-        $matrix = new hub_matrix($catcontext, hub_scope::for_user());
-        $this->assertEqualsCanonicalizing($both, $this->all_workers($catcontext, $filter));
-        $this->assertCount(2, $matrix->cells($both, $filter)['cells']);
-        $this->assertSame(2, $matrix->worker_count($missing, []));
+        $matrix = $this->matrix($this->report($templateid, reportengine::SCOPE_ALL, [], $catcontext));
+        $this->assertEqualsCanonicalizing($both, $this->all_workers($matrix));
+        $this->assertCount(2, $matrix->cells($both)['cells']);
+        $this->assertSame(2, $matrix->worker_count());
     }
 
     /**
-     * The status chips keep a worker with one pair in the chosen statuses, whose row still shows every
-     * competency, and drop a worker with none.
+     * A stored status filter keeps a worker with one pair in that status, whose row still shows every competency,
+     * and drops a worker with none: the workers the list's rows name under the same filter.
+     *
+     * Changes that must make it fail: the matching set read without the reader's stored filters; the cells cut by them.
      *
      * @return void
      */
-    public function test_the_status_filter_keeps_workers_with_one_matching_pair(): void {
+    public function test_the_stored_status_filter_keeps_workers_with_one_matching_pair(): void {
         [$c1, $c2] = $this->competencies(2);
         $templateid = $this->template([$c1, $c2]);
         $late = $this->worker($templateid);
@@ -162,30 +213,92 @@ final class hub_matrix_test extends \advanced_testcase {
         $ready = $this->worker($templateid);
         $this->status_row((int) $ready->id, $c1, status::STATUS_VALID, 20300101);
         $this->status_row((int) $ready->id, $c2, status::STATUS_VALID, 20300101);
-        $system = \context_system::instance();
-        $expired = $this->filter($templateid, ['statuses' => [status::STATUS_EXPIRED]]);
 
-        $this->assertSame([(int) $late->id], $this->all_workers($system, $expired));
+        $report = $this->report($templateid, reportengine::SCOPE_ALL, self::status_is(status::STATUS_EXPIRED));
+        $matrix = $this->matrix($report);
+        $this->assertSame([(int) $late->id], $this->all_workers($matrix));
+        $this->assertSame($this->listed_workers($report), $this->all_workers($matrix));
         $this->assertSame(
             [$this->pair($late, $c1) => status::STATUS_EXPIRED, $this->pair($late, $c2) => status::STATUS_VALID],
-            $this->all_cells($system, $expired)
+            $this->all_cells($matrix)
         );
-        $this->assertSame(1, (new hub_matrix($system, hub_scope::for_user()))->worker_count($expired, []));
+        $this->assertSame(1, $matrix->worker_count());
 
         // The control: a status both workers have keeps both.
-        $valid = $expired->with(['statuses' => [status::STATUS_VALID]]);
-        $this->assertEqualsCanonicalizing([(int) $late->id, (int) $ready->id], $this->all_workers($system, $valid));
-        $this->assertSame(2, (new hub_matrix($system, hub_scope::for_user()))->worker_count($valid, []));
+        $report = $this->report($templateid, reportengine::SCOPE_ALL, self::status_is(status::STATUS_VALID));
+        $matrix = $this->matrix($report);
+        $this->assertEqualsCanonicalizing([(int) $late->id, (int) $ready->id], $this->all_workers($matrix));
+        $this->assertSame($this->listed_workers($report), $this->sorted($this->all_workers($matrix)));
+        $this->assertSame(2, $matrix->worker_count());
     }
 
     /**
-     * By name (last, first, id) either way; by urgency, a missing pair first, then the lowest expiry
-     * among the pairs not compliant, the compliant workers last, ties by name then id. The list's other
-     * sorts read as urgency.
+     * The scope and a stored cohort filter narrow the matrix as they narrow the list: "Needs attention" keeps the
+     * workers with a pair not compliant, "All" every worker; a cohort keeps its members.
+     *
+     * Changes that must make it fail: the scope or the cohort filter left out of the matching set.
      *
      * @return void
      */
-    public function test_each_sort_and_its_ties(): void {
+    public function test_the_scope_and_a_stored_cohort_follow_the_list(): void {
+        [$c1] = $this->competencies(1);
+        $templateid = $this->template([$c1]);
+        $late = $this->worker($templateid);
+        $this->status_row((int) $late->id, $c1, status::STATUS_EXPIRED, 20250101);
+        $ready = $this->worker($templateid);
+        $this->status_row((int) $ready->id, $c1, status::STATUS_VALID, 20300101);
+        $cohort = $this->getDataGenerator()->create_cohort();
+        cohort_add_member($cohort->id, $ready->id);
+        $incohort = ['user:cohort_operator' => select::EQUAL_TO, 'user:cohort_value' => $cohort->id];
+
+        $attention = $this->report($templateid, reportengine::SCOPE_ATTENTION);
+        $this->assertSame([(int) $late->id], $this->all_workers($this->matrix($attention)));
+        $this->assertSame($this->listed_workers($attention), $this->all_workers($this->matrix($attention)));
+        $all = $this->report($templateid, reportengine::SCOPE_ALL);
+        $this->assertSame(
+            $this->sorted([(int) $late->id, (int) $ready->id]),
+            $this->sorted($this->all_workers($this->matrix($all)))
+        );
+
+        $report = $this->report($templateid, reportengine::SCOPE_ALL, $incohort);
+        $this->assertSame([(int) $ready->id], $this->all_workers($this->matrix($report)));
+        $this->assertSame($this->listed_workers($report), $this->all_workers($this->matrix($report)));
+        // The control: the cohort's only member has no pair needing attention, so both cuts together list nobody.
+        $both = $this->report($templateid, reportengine::SCOPE_ATTENTION, $incohort);
+        $this->assertSame([], $this->all_workers($this->matrix($both)));
+    }
+
+    /**
+     * A suspended worker is in the matrix only while the reader's preference lists suspended accounts, as in the list.
+     *
+     * Changes that must make it fail: the matching set or the cells read without the report's suspended choice.
+     *
+     * @return void
+     */
+    public function test_suspended_accounts_follow_the_preference(): void {
+        [$c1] = $this->competencies(1);
+        $templateid = $this->template([$c1]);
+        $active = $this->worker($templateid);
+        $suspended = $this->worker($templateid, ['suspended' => 1]);
+
+        $matrix = $this->matrix($this->report($templateid));
+        $this->assertSame([(int) $active->id], $this->all_workers($matrix));
+        $this->assertSame([], $matrix->cells([(int) $suspended->id])['cells']);
+
+        // The control: with suspended accounts listed, the suspended worker is a row with their cells.
+        reportpreference::write_grid(null, [], true);
+        $matrix = $this->matrix($this->report($templateid));
+        $this->assertEqualsCanonicalizing([(int) $active->id, (int) $suspended->id], $this->all_workers($matrix));
+        $this->assertSame([$this->pair($suspended, $c1)], array_keys($matrix->cells([(int) $suspended->id])['cells']));
+    }
+
+    /**
+     * By urgency: a missing pair first, then the lowest "valid until" key among the pairs not compliant, a pair valid
+     * with no end after every day, the compliant workers last; ties by name, then by id.
+     *
+     * @return void
+     */
+    public function test_the_order_and_its_ties(): void {
         [$c1, $c2] = $this->competencies(2);
         $templateid = $this->template([$c1, $c2]);
         $workers = [];
@@ -194,6 +307,7 @@ final class hub_matrix_test extends \advanced_testcase {
             'b' => ['Braga', 'Bia', [status::STATUS_EXPIRED, 20250101]],
             'c' => ['Costa', 'Caio', null],
             'd' => ['Dias', 'Duda', [status::STATUS_DUE, 20261201]],
+            'e' => ['Elias', 'Eva', [status::STATUS_UNVERIFIED, null]],
             't1' => ['Teles', 'Tom', [status::STATUS_VALID, 20300101]],
             't2' => ['Teles', 'Tom', [status::STATUS_VALID, 20300101]],
         ];
@@ -206,36 +320,17 @@ final class hub_matrix_test extends \advanced_testcase {
             $this->status_row((int) $worker->id, $c2, status::STATUS_VALID, 20240101);
             $workers[$key] = (int) $worker->id;
         }
-        $system = \context_system::instance();
         $ids = fn(array $keys): array => array_map(fn(string $key): int => $workers[$key], $keys);
-        $filter = $this->filter($templateid);
 
         $this->assertSame(
-            $ids(['a', 'b', 'c', 'd', 't1', 't2']),
-            $this->all_workers($system, $filter->with(['sort' => hub_filter::SORT_WORKER]))
-        );
-        $this->assertSame(
-            $ids(['t1', 't2', 'd', 'c', 'b', 'a']),
-            $this->all_workers($system, $filter->with(['sort' => hub_filter::SORT_WORKER, 'dir' => 'desc']))
-        );
-        $this->assertSame(
-            $ids(['c', 'b', 'd', 'a', 't1', 't2']),
-            $this->all_workers($system, $filter->with(['sort' => hub_filter::SORT_EXPIRY]))
-        );
-        $this->assertSame(
-            $ids(['a', 't1', 't2', 'd', 'b', 'c']),
-            $this->all_workers($system, $filter->with(['sort' => hub_filter::SORT_EXPIRY, 'dir' => 'desc']))
-        );
-        $this->assertSame(
-            $ids(['c', 'b', 'd', 'a', 't1', 't2']),
-            $this->all_workers($system, $filter->with(['sort' => hub_filter::SORT_STATUS]))
+            $ids(['c', 'b', 'd', 'a', 'e', 't1', 't2']),
+            $this->all_workers($this->matrix($this->report($templateid)))
         );
     }
 
     /**
-     * A worker whose only pair not compliant is restricted to the viewer ranks as urgent as one with a
-     * missing pair, then by name: the stored expiry of the restricted pair never orders the rows. With
-     * viewsensitive that stored expiry orders them.
+     * A worker whose only pair not compliant is restricted to the viewer ranks as urgent as one with a missing pair,
+     * then by name: the stored expiry of the restricted pair never orders the rows. With viewsensitive it does.
      *
      * @return void
      */
@@ -251,17 +346,15 @@ final class hub_matrix_test extends \advanced_testcase {
         foreach ([$restricted, $missing, $expired] as $worker) {
             $this->status_row((int) $worker->id, $c2, status::STATUS_VALID, 20300101);
         }
-        $viewer = $this->viewer(['local/evidencehub:view', 'moodle/competency:userevidenceview']);
-        $system = \context_system::instance();
-        $filter = $this->filter($templateid, ['sort' => hub_filter::SORT_EXPIRY]);
+        $viewer = $this->viewer([
+            'local/evidencehub:view',
+            'moodle/competency:templateview',
+            'moodle/competency:userevidenceview',
+        ]);
         $ids = fn(\stdClass ...$workers): array => array_map(fn(\stdClass $worker): int => (int) $worker->id, $workers);
 
         $this->setUser($viewer);
-        $this->assertSame($ids($restricted, $missing, $expired), $this->all_workers($system, $filter));
-        $this->assertSame(
-            $ids($expired, $restricted, $missing),
-            $this->all_workers($system, $filter->with(['dir' => 'desc']))
-        );
+        $this->assertSame($ids($restricted, $missing, $expired), $this->all_workers($this->matrix($this->report($templateid))));
 
         // The control: with viewsensitive in the worker's context the stored 2024 date orders the worker.
         $this->setAdminUser();
@@ -271,12 +364,11 @@ final class hub_matrix_test extends \advanced_testcase {
         role_assign($roleid, $viewer->id, $usercontext->id);
         accesslib_clear_all_caches_for_unit_testing();
         $this->setUser($viewer);
-        $this->assertSame($ids($missing, $restricted, $expired), $this->all_workers($system, $filter));
+        $this->assertSame($ids($missing, $restricted, $expired), $this->all_workers($this->matrix($this->report($templateid))));
     }
 
     /**
-     * Pages of 25 add up to one page of 50, each worker once, with every worker tied on name and urgency:
-     * by id, in either sort and direction.
+     * Pages of 25 add up to one page of 50, each worker once, with every worker tied on name and urgency: by id.
      *
      * @return void
      */
@@ -290,47 +382,34 @@ final class hub_matrix_test extends \advanced_testcase {
         }
         // Rewrite the lowest ids' rows: PostgreSQL puts the new tuples at the end of the heap, so a scan no
         // longer meets the workers in id order and only the tie-break restores it. MariaDB clusters rows on
-        // the primary key, so this changes nothing there: test_every_sort_ends_in_the_worker_id covers it.
+        // the primary key, so this changes nothing there: test_the_order_ends_in_the_worker_id covers it.
         $later = time() + 60;
         foreach (array_slice($created, 0, 13) as $userid) {
             $DB->set_field('user', 'timemodified', $later, ['id' => $userid]);
             $DB->set_field('competency_plan', 'timemodified', $later, ['userid' => $userid]);
         }
-        $system = \context_system::instance();
-        $filter = $this->filter($templateid, ['perpage' => 25]);
-        $matrix = new hub_matrix($system, hub_scope::for_user());
+        $matrix = $this->matrix($this->report($templateid));
 
-        $paged = $this->all_workers($system, $filter);
-        $this->assertCount(25, $matrix->workers($filter));
+        $paged = $this->all_workers($matrix);
+        $this->assertCount(25, $matrix->workers(0, 25));
         $this->assertSame($created, $paged);
-        $this->assertSame($paged, $matrix->workers($filter->with(['perpage' => 50])));
-        $byname = $filter->with(['sort' => hub_filter::SORT_WORKER, 'dir' => 'desc']);
-        $this->assertSame($created, $this->all_workers($system, $byname));
+        $this->assertSame($paged, $matrix->workers(0, 50));
     }
 
     /**
-     * Every ORDER BY of step 1, by name and by urgency in either direction, ends in the worker's id, the
-     * one unique key of a row: ties never fall to the order a database happens to read rows in.
+     * Step 1's ORDER BY ends in the worker's id, the one unique key of a row: ties never fall to the order a database
+     * happens to read rows in.
      *
      * @return void
      */
-    public function test_every_sort_ends_in_the_worker_id(): void {
-        $filter = $this->filter($this->template($this->competencies(1)));
-        foreach ([hub_filter::SORT_WORKER, hub_filter::SORT_EXPIRY] as $sort) {
-            foreach (['asc', 'desc'] as $dir) {
-                [$sql] = hub_matrix::workers_sql(
-                    $filter->with(['sort' => $sort, 'dir' => $dir]),
-                    hub_scope::for_user(),
-                    \context_system::instance()
-                );
-                $this->assertMatchesRegularExpression('/\bORDER BY\b/', $sql);
-                $orderby = trim(preg_replace('/^.*\bORDER BY\b/s', '', $sql));
-                $keys = array_map('trim', explode(',', $orderby));
-                $this->assertSame('w.userid', end($keys), "Sort $sort $dir: $orderby");
-                // The control: the name, or the urgency, comes before the tie-break.
-                $this->assertGreaterThan(1, count($keys), "Sort $sort $dir: $orderby");
-            }
-        }
+    public function test_the_order_ends_in_the_worker_id(): void {
+        [$sql] = $this->matrix($this->report($this->template($this->competencies(1))))->workers_sql();
+        $this->assertMatchesRegularExpression('/\bORDER BY\b/', $sql);
+        $orderby = trim(preg_replace('/^.*\bORDER BY\b/s', '', $sql));
+        $keys = array_map('trim', explode(',', $orderby));
+        $this->assertSame('w.userid', end($keys), $orderby);
+        // The control: the urgency and the name come before the tie-break.
+        $this->assertSame('w.urgency', $keys[0], $orderby);
     }
 
     /**
@@ -386,19 +465,22 @@ final class hub_matrix_test extends \advanced_testcase {
         $templateid = $this->template([$c1]);
         $worker = $this->worker($templateid);
         $this->status_row((int) $worker->id, $c1, status::STATUS_EXPIRED, 20250101, 'aso');
-        $viewer = $this->viewer(['local/evidencehub:view', 'moodle/competency:userevidenceview']);
-        $system = \context_system::instance();
-        $filter = $this->filter($templateid);
-        $expired = $filter->with(['statuses' => [status::STATUS_EXPIRED]]);
-        $restricted = $filter->with(['statuses' => [status::EFFECTIVE_RESTRICTED]]);
+        $viewer = $this->viewer([
+            'local/evidencehub:view',
+            'moodle/competency:templateview',
+            'moodle/competency:userevidenceview',
+        ]);
         $today = 20260601;
+        $workers = fn(int $code): array => $this->all_workers(
+            $this->matrix($this->report($templateid, reportengine::SCOPE_ALL, self::status_is($code)))
+        );
 
         $this->setUser($viewer);
-        $cell = $this->cell($system, $filter, (int) $worker->id, $c1);
+        $cell = $this->matrix($this->report($templateid))->cells([(int) $worker->id])['cells'][$this->pair($worker, $c1)];
         $this->assertSame([status::EFFECTIVE_RESTRICTED, 0], [$cell->estatus, $cell->eexpiry]);
         $this->assertSame('', hub_matrix_page::cell_text($cell->estatus, $cell->eexpiry, $today));
-        $this->assertSame([], $this->all_workers($system, $expired));
-        $this->assertSame([(int) $worker->id], $this->all_workers($system, $restricted));
+        $this->assertSame([], $workers(status::STATUS_EXPIRED));
+        $this->assertSame([(int) $worker->id], $workers(status::EFFECTIVE_RESTRICTED));
 
         // The control: with viewsensitive in the worker's context the cell reads its status and its days.
         $this->setAdminUser();
@@ -407,19 +489,20 @@ final class hub_matrix_test extends \advanced_testcase {
         role_assign($roleid, $viewer->id, \context_user::instance($worker->id)->id);
         accesslib_clear_all_caches_for_unit_testing();
         $this->setUser($viewer);
-        $cell = $this->cell($system, $filter, (int) $worker->id, $c1);
+        $cell = $this->matrix($this->report($templateid))->cells([(int) $worker->id])['cells'][$this->pair($worker, $c1)];
         $this->assertSame([status::STATUS_EXPIRED, 20250101], [$cell->estatus, $cell->eexpiry]);
         $this->assertSame(
             get_string('hubmatrixdayssince', 'local_evidencehub', 516),
             hub_matrix_page::cell_text($cell->estatus, $cell->eexpiry, $today)
         );
-        $this->assertSame([(int) $worker->id], $this->all_workers($system, $expired));
-        $this->assertSame([], $this->all_workers($system, $restricted));
+        $this->assertSame([(int) $worker->id], $workers(status::STATUS_EXPIRED));
+        $this->assertSame([], $workers(status::EFFECTIVE_RESTRICTED));
     }
 
     /**
      * The short text of each cell: days left while due or critical, days since once expired, a dash when
-     * missing, nothing when compliant, awaiting verification or without a date.
+     * missing, nothing when compliant, awaiting verification or without a date (the "valid until" key of a pair
+     * valid with no end included).
      *
      * @return void
      */
@@ -440,16 +523,18 @@ final class hub_matrix_test extends \advanced_testcase {
         $this->assertSame('', hub_matrix_page::cell_text(status::STATUS_UNVERIFIED, 20300101, $today));
         $this->assertSame('', hub_matrix_page::cell_text(status::STATUS_DUE, 0, $today));
         $this->assertSame('', hub_matrix_page::cell_text(status::EFFECTIVE_RESTRICTED, 0, $today));
+        // A pair valid with no end carries the high "valid until" key, never printed as days.
+        $this->assertSame('', hub_matrix_page::cell_text(status::STATUS_VALID, hub_query::NO_EXPIRY, $today));
+        $this->assertSame('', hub_matrix_page::cell_text(status::STATUS_DUE, hub_query::NO_EXPIRY, $today));
     }
 
     /**
-     * The matrix and the list never disagree on a pair: with every status they hold the same pairs with
-     * the same statuses; under a status filter every pair the list keeps is in the matrix, and every worker
-     * the matrix keeps has one in the list.
+     * The matrix and the list never disagree on a pair: the cells of every worker are the hub's pair set, statuses
+     * included, and the workers are those the report's rows name.
      *
      * @return void
      */
-    public function test_the_cells_equal_the_list(): void {
+    public function test_the_cells_equal_the_pair_set(): void {
         [$c1, $c2, $c3] = $this->competencies(3);
         $templateid = $this->template([$c1, $c2, $c3]);
         $codes = [status::STATUS_VALID, status::STATUS_DUE, status::STATUS_EXPIRED, status::STATUS_UNVERIFIED];
@@ -463,39 +548,32 @@ final class hub_matrix_test extends \advanced_testcase {
                 $this->status_row((int) $worker->id, $competencyid, $codes[($i + $index) % 4], 20260101 + $i, $type);
             }
         }
-        $viewer = $this->viewer(['local/evidencehub:view', 'moodle/competency:userevidenceview']);
+        $viewer = $this->viewer([
+            'local/evidencehub:view',
+            'moodle/competency:templateview',
+            'moodle/competency:userevidenceview',
+        ]);
         $system = \context_system::instance();
-        // Validated as the administrator: the viewer reads the workers' evidence, not the template.
-        $all = $this->filter($templateid, ['perpage' => 25]);
         $this->setUser($viewer);
 
-        $list = $this->all_pages($system, $all);
+        $report = $this->report($templateid);
+        $list = $this->base_pairs($system, $this->filter($templateid));
         $this->assertContains(status::EFFECTIVE_RESTRICTED, $list);
         $this->assertContains(status::EFFECTIVE_MISSING, $list);
-        $matrix = $this->all_cells($system, $all);
+        $matrix = $this->all_cells($this->matrix($report));
         ksort($list);
         ksort($matrix);
         $this->assertSame($list, $matrix);
-
-        $narrow = $all->with(['statuses' => [status::STATUS_EXPIRED, status::EFFECTIVE_MISSING]]);
-        $list = $this->all_pages($system, $narrow);
-        $matrix = $this->all_cells($system, $narrow);
-        $this->assertNotEmpty($list);
-        $kept = array_intersect_key($matrix, $list);
-        ksort($list);
-        ksort($kept);
-        $this->assertSame($list, $kept);
-        $workers = array_unique(array_map('intval', array_keys($list)));
-        $this->assertEqualsCanonicalizing($workers, $this->all_workers($system, $narrow));
+        $this->assertSame($this->listed_workers($report), $this->sorted($this->all_workers($this->matrix($report))));
     }
 
     /**
-     * Without a status chip the pager counts the KPIs' workers and sends no statement; with one it counts
-     * the kept workers in a statement of its own, whatever the KPIs say.
+     * The worker count is the matching set's, counted on each load in a statement of its own, and follows the
+     * criteria as the rows do.
      *
      * @return void
      */
-    public function test_the_worker_count_comes_from_the_kpis_without_a_chip(): void {
+    public function test_the_worker_count_is_the_matching_sets(): void {
         global $DB;
         [$c1, $c2] = $this->competencies(2);
         $templateid = $this->template([$c1, $c2]);
@@ -503,23 +581,131 @@ final class hub_matrix_test extends \advanced_testcase {
             $worker = $this->worker($templateid);
             $this->status_row((int) $worker->id, $c1, $i ? status::STATUS_VALID : status::STATUS_EXPIRED, 20250101);
         }
-        $system = \context_system::instance();
-        $scope = hub_scope::for_user();
-        $matrix = new hub_matrix($system, $scope);
-        $all = $this->filter($templateid);
-        $kpis = hub_kpis::compute($all, $scope, $system);
-        $this->assertSame(3, $kpis['workers']);
-        $this->assertSame(3, $matrix->worker_count($all, $kpis));
-        $this->assertCount(3, $this->all_workers($system, $all));
-
+        $matrix = $this->matrix($this->report($templateid));
         $reads = $DB->perf_get_reads();
-        $this->assertSame(99, $matrix->worker_count($all, ['workers' => 99] + $kpis));
-        $this->assertSame($reads, $DB->perf_get_reads());
+        $this->assertSame(3, $matrix->worker_count());
+        $this->assertSame($reads + 1, $DB->perf_get_reads());
+        $this->assertCount(3, $this->all_workers($matrix));
 
-        // The control: a chip narrows the rows, and the count reads them, not the KPIs.
-        $expired = $all->with(['statuses' => [status::STATUS_EXPIRED]]);
-        $this->assertSame(1, $matrix->worker_count($expired, ['workers' => 99] + $kpis));
-        $this->assertGreaterThan($reads, $DB->perf_get_reads());
-        $this->assertCount(1, $this->all_workers($system, $expired));
+        // The control: a stored filter narrows the rows, and the count with them.
+        $matrix = $this->matrix($this->report($templateid, reportengine::SCOPE_ALL, self::status_is(status::STATUS_EXPIRED)));
+        $this->assertSame(1, $matrix->worker_count());
+        $this->assertCount(1, $this->all_workers($matrix));
+    }
+
+    /**
+     * A worker outside the reader's cut (no userevidenceview on them) stays out of the rows, the cells and the count
+     * although a stored filter and the "all" scope would otherwise list them.
+     *
+     * Changes that must make it fail: the matching set or the cells read without the reader's cut.
+     *
+     * @return void
+     */
+    public function test_a_worker_outside_the_readers_cut_stays_out_under_a_stored_filter(): void {
+        [$c1] = $this->competencies(1);
+        $templateid = $this->template([$c1]);
+        $inside = $this->worker($templateid);
+        $outside = $this->worker($templateid);
+        foreach ([$inside, $outside] as $worker) {
+            $this->status_row((int) $worker->id, $c1, status::STATUS_VALID, 20990101);
+        }
+        $both = [(int) $inside->id, (int) $outside->id];
+        $viewer = $this->viewer(['local/evidencehub:view', 'moodle/competency:templateview']);
+        $roleid = $this->getDataGenerator()->create_role();
+        assign_capability('moodle/competency:userevidenceview', CAP_ALLOW, $roleid, \context_user::instance($inside->id)->id, true);
+        role_assign($roleid, $viewer->id, \context_user::instance($inside->id)->id);
+        accesslib_clear_all_caches_for_unit_testing();
+        $report = fn(): hub_pairs => $this->report($templateid, reportengine::SCOPE_ALL, self::status_is(status::STATUS_VALID));
+
+        $this->setUser($viewer);
+        $matrix = $this->matrix($report());
+        $this->assertSame([(int) $inside->id], $this->all_workers($matrix));
+        $this->assertSame([(int) $inside->id], array_keys($matrix->cells($both)['workers']));
+        $this->assertSame(1, $matrix->worker_count());
+
+        // The control: the administrator lists both under the same filter and scope.
+        $this->setAdminUser();
+        $matrix = $this->matrix($report());
+        $this->assertEqualsCanonicalizing($both, $this->all_workers($matrix));
+        $this->assertSame(2, $matrix->worker_count());
+    }
+
+    /**
+     * A request that names core's dynamic table service leaves the matrix's matching set and the list's rows as they are
+     * without it.
+     *
+     * Changes that must make it fail: the table built without its report under that parameter (the read then fails).
+     *
+     * @return void
+     */
+    public function test_the_dynamic_table_parameter_does_not_unload_the_report(): void {
+        [$c1] = $this->competencies(1);
+        $templateid = $this->template([$c1]);
+        $worker = $this->worker($templateid);
+        $this->status_row((int) $worker->id, $c1, status::STATUS_EXPIRED, 20250101);
+        $without = $this->all_workers($this->matrix($this->report($templateid)));
+        $this->assertSame([(int) $worker->id], $without);
+
+        $_GET['info'] = 'core_table_get_dynamic_table_content';
+        try {
+            $this->assertSame($without, $this->all_workers($this->matrix($this->report($templateid))));
+            $this->assertSame(1, $this->matrix($this->report($templateid))->worker_count());
+        } finally {
+            unset($_GET['info']);
+        }
+    }
+
+    /**
+     * Parameter arrays of one statement are joined only when they share no name, and the real statements' sets are
+     * disjoint.
+     *
+     * Changes that must make it fail: a union that keeps the left value of a repeated name.
+     *
+     * @return void
+     */
+    public function test_statement_parameters_never_share_a_name(): void {
+        $this->assertSame(['a' => 1, 'b' => 2], hub_matrix::union_params(['a' => 1], ['b' => 2]));
+        $this->assertSame(['a' => 1], hub_matrix::union_params(['a' => 1], []));
+        try {
+            hub_matrix::union_params(['a' => 1, 'b' => 2], ['b' => 3]);
+            $this->fail('A shared name was accepted.');
+        } catch (\coding_exception $e) {
+            $this->assertStringContainsString('b', $e->getMessage());
+        }
+
+        [$c1] = $this->competencies(1);
+        $templateid = $this->template([$c1]);
+        $worker = $this->worker($templateid);
+        $this->status_row((int) $worker->id, $c1, status::STATUS_EXPIRED, 20250101);
+        $matrix = $this->matrix($this->report($templateid));
+        [, $params] = $matrix->workers_sql();
+        [, $cellparams] = $matrix->cells_sql([(int) $worker->id]);
+        // Joined without a throw, and nothing lost: every parameter of each set is in the statement's.
+        $this->assertNotSame([], $params);
+        $this->assertNotSame([], $cellparams);
+        $report = $this->report($templateid);
+        [$basesql, $baseparams] = hub_query::base_sql(
+            hub_filter::from_values(
+                ['templateid' => $templateid, 'suspended' => $report->includes_suspended()],
+                $report->get_context()
+            ),
+            $report->scope(),
+            $report->get_context()
+        );
+        $this->assertNotSame('', $basesql);
+        [, $matching] = reportengine::workers_sql($report);
+        $this->assertSame([], array_intersect_key($baseparams, $matching));
+        $this->assertCount(count($baseparams) + count($matching), $params);
+    }
+
+    /**
+     * Some user ids in ascending order.
+     *
+     * @param array $userids The ids.
+     * @return array
+     */
+    private function sorted(array $userids): array {
+        sort($userids);
+        return $userids;
     }
 }

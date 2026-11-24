@@ -9,7 +9,7 @@ import { Fragment, jsxDEV } from "react/jsx-dev-runtime";
  * and two panels: the pairs by status and the competencies with most open pairs. Each line of a panel is a
  * button that sets the report's status or competency filter, its number written as text beside its bar.
  * There is no compact band: every figure is already over the reader's own workers. A figure with no value
- * reads "–".
+ * reads "–". A status counting no pair is left out of the distribution unless it is the status filter in force.
  *
  * Every number is the server's (reportengine::summary()), over the report's own rows under every criterion
  * but the scope and the status filter.
@@ -23,28 +23,28 @@ const NONE = "\u2013";
 const Tile = /* @__PURE__ */ __name(({ label, value, sub }) => /* @__PURE__ */ jsxDEV("div", { className: "local-evidencehub-rview-tile", children: [
   /* @__PURE__ */ jsxDEV("div", { className: "local-evidencehub-rview-tile-label", children: label }, void 0, false, {
     fileName: "public/local/evidencehub/js/esm/src/hub/Band.tsx",
-    lineNumber: 61,
+    lineNumber: 63,
     columnNumber: 9
   }),
   /* @__PURE__ */ jsxDEV("div", { className: "local-evidencehub-rview-tile-value", children: value }, void 0, false, {
     fileName: "public/local/evidencehub/js/esm/src/hub/Band.tsx",
-    lineNumber: 62,
+    lineNumber: 64,
     columnNumber: 9
   }),
   /* @__PURE__ */ jsxDEV("div", { className: "local-evidencehub-rview-tile-sub", children: sub }, void 0, false, {
     fileName: "public/local/evidencehub/js/esm/src/hub/Band.tsx",
-    lineNumber: 63,
+    lineNumber: 65,
     columnNumber: 9
   })
 ] }, void 0, true, {
   fileName: "public/local/evidencehub/js/esm/src/hub/Band.tsx",
-  lineNumber: 60,
+  lineNumber: 62,
   columnNumber: 5
 }), "Tile");
 const BarRow = /* @__PURE__ */ __name(({ label, share, figure, title, disabled, onPress }) => /* @__PURE__ */ jsxDEV("li", { className: "local-evidencehub-rview-hitem", children: /* @__PURE__ */ jsxDEV("button", { type: "button", className: "local-evidencehub-rview-hrow", title, disabled, onClick: onPress, children: [
   /* @__PURE__ */ jsxDEV("span", { className: "local-evidencehub-rview-hrow-label", children: label }, void 0, false, {
     fileName: "public/local/evidencehub/js/esm/src/hub/Band.tsx",
-    lineNumber: 77,
+    lineNumber: 79,
     columnNumber: 13
   }),
   /* @__PURE__ */ jsxDEV("span", { className: "local-evidencehub-rview-track", "aria-hidden": "true", children: /* @__PURE__ */ jsxDEV(
@@ -57,66 +57,56 @@ const BarRow = /* @__PURE__ */ __name(({ label, share, figure, title, disabled, 
     false,
     {
       fileName: "public/local/evidencehub/js/esm/src/hub/Band.tsx",
-      lineNumber: 79,
+      lineNumber: 81,
       columnNumber: 17
     }
   ) }, void 0, false, {
     fileName: "public/local/evidencehub/js/esm/src/hub/Band.tsx",
-    lineNumber: 78,
+    lineNumber: 80,
     columnNumber: 13
   }),
   /* @__PURE__ */ jsxDEV("span", { className: "local-evidencehub-rview-hrow-n", children: figure }, void 0, false, {
     fileName: "public/local/evidencehub/js/esm/src/hub/Band.tsx",
-    lineNumber: 84,
+    lineNumber: 86,
     columnNumber: 13
   })
 ] }, void 0, true, {
   fileName: "public/local/evidencehub/js/esm/src/hub/Band.tsx",
-  lineNumber: 76,
+  lineNumber: 78,
   columnNumber: 9
 }) }, void 0, false, {
   fileName: "public/local/evidencehub/js/esm/src/hub/Band.tsx",
-  lineNumber: 75,
+  lineNumber: 77,
   columnNumber: 5
 }), "BarRow");
 const BandSkeleton = /* @__PURE__ */ __name(() => /* @__PURE__ */ jsxDEV("div", { "aria-hidden": "true", children: [
   /* @__PURE__ */ jsxDEV("div", { className: "local-evidencehub-rview-band", children: Array.from({ length: 4 }, (_, i) => /* @__PURE__ */ jsxDEV("div", { className: "local-evidencehub-rview-tile local-evidencehub-rview-sk", children: [
     /* @__PURE__ */ jsxDEV("span", { className: "local-evidencehub-rview-skb local-evidencehub-rview-skb--w60" }, void 0, false, {
       fileName: "public/local/evidencehub/js/esm/src/hub/Band.tsx",
-      lineNumber: 99,
+      lineNumber: 101,
       columnNumber: 21
     }),
     /* @__PURE__ */ jsxDEV("span", { className: "local-evidencehub-rview-skb local-evidencehub-rview-skb--big" }, void 0, false, {
       fileName: "public/local/evidencehub/js/esm/src/hub/Band.tsx",
-      lineNumber: 100,
+      lineNumber: 102,
       columnNumber: 21
     }),
     /* @__PURE__ */ jsxDEV("span", { className: "local-evidencehub-rview-skb local-evidencehub-rview-skb--w80" }, void 0, false, {
       fileName: "public/local/evidencehub/js/esm/src/hub/Band.tsx",
-      lineNumber: 101,
+      lineNumber: 103,
       columnNumber: 21
     })
   ] }, i, true, {
     fileName: "public/local/evidencehub/js/esm/src/hub/Band.tsx",
-    lineNumber: 98,
+    lineNumber: 100,
     columnNumber: 17
   })) }, void 0, false, {
     fileName: "public/local/evidencehub/js/esm/src/hub/Band.tsx",
-    lineNumber: 96,
+    lineNumber: 98,
     columnNumber: 9
   }),
   /* @__PURE__ */ jsxDEV("div", { className: "local-evidencehub-rview-dist", children: [0, 1].map((i) => /* @__PURE__ */ jsxDEV("div", { className: "local-evidencehub-rview-panel local-evidencehub-rview-sk", children: [
     /* @__PURE__ */ jsxDEV("span", { className: "local-evidencehub-rview-skb local-evidencehub-rview-skb--w40" }, void 0, false, {
-      fileName: "public/local/evidencehub/js/esm/src/hub/Band.tsx",
-      lineNumber: 108,
-      columnNumber: 21
-    }),
-    /* @__PURE__ */ jsxDEV("span", { className: "local-evidencehub-rview-skb" }, void 0, false, {
-      fileName: "public/local/evidencehub/js/esm/src/hub/Band.tsx",
-      lineNumber: 109,
-      columnNumber: 21
-    }),
-    /* @__PURE__ */ jsxDEV("span", { className: "local-evidencehub-rview-skb" }, void 0, false, {
       fileName: "public/local/evidencehub/js/esm/src/hub/Band.tsx",
       lineNumber: 110,
       columnNumber: 21
@@ -125,22 +115,33 @@ const BandSkeleton = /* @__PURE__ */ __name(() => /* @__PURE__ */ jsxDEV("div", 
       fileName: "public/local/evidencehub/js/esm/src/hub/Band.tsx",
       lineNumber: 111,
       columnNumber: 21
+    }),
+    /* @__PURE__ */ jsxDEV("span", { className: "local-evidencehub-rview-skb" }, void 0, false, {
+      fileName: "public/local/evidencehub/js/esm/src/hub/Band.tsx",
+      lineNumber: 112,
+      columnNumber: 21
+    }),
+    /* @__PURE__ */ jsxDEV("span", { className: "local-evidencehub-rview-skb" }, void 0, false, {
+      fileName: "public/local/evidencehub/js/esm/src/hub/Band.tsx",
+      lineNumber: 113,
+      columnNumber: 21
     })
   ] }, i, true, {
     fileName: "public/local/evidencehub/js/esm/src/hub/Band.tsx",
-    lineNumber: 107,
+    lineNumber: 109,
     columnNumber: 17
   })) }, void 0, false, {
     fileName: "public/local/evidencehub/js/esm/src/hub/Band.tsx",
-    lineNumber: 105,
+    lineNumber: 107,
     columnNumber: 9
   })
 ] }, void 0, true, {
   fileName: "public/local/evidencehub/js/esm/src/hub/Band.tsx",
-  lineNumber: 95,
+  lineNumber: 97,
   columnNumber: 5
 }), "BandSkeleton");
-const Band = /* @__PURE__ */ __name(({ labels, summary, loading, error, canfilter, onStatus, onCompetency, onRetry }) => {
+const Band = /* @__PURE__ */ __name((props) => {
+  const { labels, summary, loading, error, canfilter, chosenstatus, onStatus, onCompetency, onRetry } = props;
   let body;
   if (summary === null && error) {
     body = /* @__PURE__ */ jsxDEV("p", { className: "local-evidencehub-rview-error", children: [
@@ -148,34 +149,35 @@ const Band = /* @__PURE__ */ __name(({ labels, summary, loading, error, canfilte
       " ",
       /* @__PURE__ */ jsxDEV("button", { type: "button", className: "btn btn-sm btn-outline-secondary", onClick: onRetry, children: labels.retry }, void 0, false, {
         fileName: "public/local/evidencehub/js/esm/src/hub/Band.tsx",
-        lineNumber: 130,
+        lineNumber: 133,
         columnNumber: 17
       })
     ] }, void 0, true, {
       fileName: "public/local/evidencehub/js/esm/src/hub/Band.tsx",
-      lineNumber: 128,
+      lineNumber: 131,
       columnNumber: 13
     });
   } else if (summary === null) {
     body = /* @__PURE__ */ jsxDEV(Fragment, { children: [
       /* @__PURE__ */ jsxDEV(BandSkeleton, {}, void 0, false, {
         fileName: "public/local/evidencehub/js/esm/src/hub/Band.tsx",
-        lineNumber: 136,
+        lineNumber: 139,
         columnNumber: 17
       }),
       /* @__PURE__ */ jsxDEV("span", { className: "visually-hidden", role: "status", children: labels.loadband }, void 0, false, {
         fileName: "public/local/evidencehub/js/esm/src/hub/Band.tsx",
-        lineNumber: 137,
+        lineNumber: 140,
         columnNumber: 17
       })
     ] }, void 0, true, {
       fileName: "public/local/evidencehub/js/esm/src/hub/Band.tsx",
-      lineNumber: 135,
+      lineNumber: 138,
       columnNumber: 13
     });
   } else {
     const rate = summary.rate ?? null;
-    const statusmost = Math.max(1, ...summary.distribution.map((entry) => entry.count));
+    const distribution = summary.distribution.filter((entry) => entry.count > 0 || String(entry.status) === chosenstatus);
+    const statusmost = Math.max(1, ...distribution.map((entry) => entry.count));
     const worstmost = Math.max(1, ...summary.worst.map((entry) => entry.count));
     body = /* @__PURE__ */ jsxDEV("div", { className: "local-evidencehub-rview-dim", children: [
       error ? /* @__PURE__ */ jsxDEV("p", { className: "local-evidencehub-rview-error", children: [
@@ -183,12 +185,12 @@ const Band = /* @__PURE__ */ __name(({ labels, summary, loading, error, canfilte
         " ",
         /* @__PURE__ */ jsxDEV("button", { type: "button", className: "btn btn-sm btn-outline-secondary", onClick: onRetry, children: labels.retry }, void 0, false, {
           fileName: "public/local/evidencehub/js/esm/src/hub/Band.tsx",
-          lineNumber: 149,
+          lineNumber: 153,
           columnNumber: 25
         })
       ] }, void 0, true, {
         fileName: "public/local/evidencehub/js/esm/src/hub/Band.tsx",
-        lineNumber: 147,
+        lineNumber: 151,
         columnNumber: 21
       }) : null,
       /* @__PURE__ */ jsxDEV("div", { className: "local-evidencehub-rview-band", children: [
@@ -203,7 +205,7 @@ const Band = /* @__PURE__ */ __name(({ labels, summary, loading, error, canfilte
           false,
           {
             fileName: "public/local/evidencehub/js/esm/src/hub/Band.tsx",
-            lineNumber: 153,
+            lineNumber: 157,
             columnNumber: 21
           }
         ),
@@ -218,7 +220,7 @@ const Band = /* @__PURE__ */ __name(({ labels, summary, loading, error, canfilte
           false,
           {
             fileName: "public/local/evidencehub/js/esm/src/hub/Band.tsx",
-            lineNumber: 158,
+            lineNumber: 162,
             columnNumber: 21
           }
         ),
@@ -233,32 +235,32 @@ const Band = /* @__PURE__ */ __name(({ labels, summary, loading, error, canfilte
           false,
           {
             fileName: "public/local/evidencehub/js/esm/src/hub/Band.tsx",
-            lineNumber: 163,
+            lineNumber: 167,
             columnNumber: 21
           }
         ),
         /* @__PURE__ */ jsxDEV(Tile, { label: labels.expiring, value: num(summary.expiring), sub: labels.expiringsub }, void 0, false, {
           fileName: "public/local/evidencehub/js/esm/src/hub/Band.tsx",
-          lineNumber: 168,
+          lineNumber: 172,
           columnNumber: 21
         })
       ] }, void 0, true, {
         fileName: "public/local/evidencehub/js/esm/src/hub/Band.tsx",
-        lineNumber: 152,
+        lineNumber: 156,
         columnNumber: 17
       }),
       /* @__PURE__ */ jsxDEV("div", { className: "local-evidencehub-rview-dist", children: [
         /* @__PURE__ */ jsxDEV("div", { className: "local-evidencehub-rview-panel", children: [
           /* @__PURE__ */ jsxDEV("div", { className: "local-evidencehub-rview-panel-title", children: /* @__PURE__ */ jsxDEV("span", { children: labels.bystatus }, void 0, false, {
             fileName: "public/local/evidencehub/js/esm/src/hub/Band.tsx",
-            lineNumber: 172,
+            lineNumber: 176,
             columnNumber: 78
           }) }, void 0, false, {
             fileName: "public/local/evidencehub/js/esm/src/hub/Band.tsx",
-            lineNumber: 172,
+            lineNumber: 176,
             columnNumber: 25
           }),
-          /* @__PURE__ */ jsxDEV("ul", { className: "local-evidencehub-rview-hlist", children: summary.distribution.map((entry) => /* @__PURE__ */ jsxDEV(
+          /* @__PURE__ */ jsxDEV("ul", { className: "local-evidencehub-rview-hlist", children: distribution.map((entry) => /* @__PURE__ */ jsxDEV(
             BarRow,
             {
               label: entry.label,
@@ -272,27 +274,27 @@ const Band = /* @__PURE__ */ __name(({ labels, summary, loading, error, canfilte
             false,
             {
               fileName: "public/local/evidencehub/js/esm/src/hub/Band.tsx",
-              lineNumber: 175,
+              lineNumber: 179,
               columnNumber: 33
             }
           )) }, void 0, false, {
             fileName: "public/local/evidencehub/js/esm/src/hub/Band.tsx",
-            lineNumber: 173,
+            lineNumber: 177,
             columnNumber: 25
           })
         ] }, void 0, true, {
           fileName: "public/local/evidencehub/js/esm/src/hub/Band.tsx",
-          lineNumber: 171,
+          lineNumber: 175,
           columnNumber: 21
         }),
         /* @__PURE__ */ jsxDEV("div", { className: "local-evidencehub-rview-panel", children: [
           /* @__PURE__ */ jsxDEV("div", { className: "local-evidencehub-rview-panel-title", children: /* @__PURE__ */ jsxDEV("span", { children: labels.worst }, void 0, false, {
             fileName: "public/local/evidencehub/js/esm/src/hub/Band.tsx",
-            lineNumber: 188,
+            lineNumber: 192,
             columnNumber: 78
           }) }, void 0, false, {
             fileName: "public/local/evidencehub/js/esm/src/hub/Band.tsx",
-            lineNumber: 188,
+            lineNumber: 192,
             columnNumber: 25
           }),
           summary.worst.length > 0 ? /* @__PURE__ */ jsxDEV("ul", { className: "local-evidencehub-rview-hlist", children: summary.worst.map((entry) => /* @__PURE__ */ jsxDEV(
@@ -309,31 +311,31 @@ const Band = /* @__PURE__ */ __name(({ labels, summary, loading, error, canfilte
             false,
             {
               fileName: "public/local/evidencehub/js/esm/src/hub/Band.tsx",
-              lineNumber: 192,
+              lineNumber: 196,
               columnNumber: 37
             }
           )) }, void 0, false, {
             fileName: "public/local/evidencehub/js/esm/src/hub/Band.tsx",
-            lineNumber: 190,
+            lineNumber: 194,
             columnNumber: 29
           }) : /* @__PURE__ */ jsxDEV("p", { className: "local-evidencehub-rview-note", children: labels.noworst }, void 0, false, {
             fileName: "public/local/evidencehub/js/esm/src/hub/Band.tsx",
-            lineNumber: 203,
+            lineNumber: 207,
             columnNumber: 29
           })
         ] }, void 0, true, {
           fileName: "public/local/evidencehub/js/esm/src/hub/Band.tsx",
-          lineNumber: 187,
+          lineNumber: 191,
           columnNumber: 21
         })
       ] }, void 0, true, {
         fileName: "public/local/evidencehub/js/esm/src/hub/Band.tsx",
-        lineNumber: 170,
+        lineNumber: 174,
         columnNumber: 17
       })
     ] }, void 0, true, {
       fileName: "public/local/evidencehub/js/esm/src/hub/Band.tsx",
-      lineNumber: 145,
+      lineNumber: 149,
       columnNumber: 13
     });
   }
@@ -347,7 +349,7 @@ const Band = /* @__PURE__ */ __name(({ labels, summary, loading, error, canfilte
       children: [
         loading && summary !== null ? /* @__PURE__ */ jsxDEV("div", { className: "local-evidencehub-rview-progress" }, void 0, false, {
           fileName: "public/local/evidencehub/js/esm/src/hub/Band.tsx",
-          lineNumber: 217,
+          lineNumber: 221,
           columnNumber: 44
         }) : null,
         body
@@ -357,7 +359,7 @@ const Band = /* @__PURE__ */ __name(({ labels, summary, loading, error, canfilte
     true,
     {
       fileName: "public/local/evidencehub/js/esm/src/hub/Band.tsx",
-      lineNumber: 211,
+      lineNumber: 215,
       columnNumber: 9
     }
   );

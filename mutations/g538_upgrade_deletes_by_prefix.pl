@@ -1,0 +1,1 @@
+s/\$DB->delete_records\('user_preferences', \['name' => 'local_evidencehub_hubfilter'\]\);/\$DB->delete_records_select('user_preferences', \$DB->sql_like('name', '?'), ['local_evidencehub_hubfilter%']);/;

@@ -20,6 +20,9 @@ use core_reportbuilder\local\helpers\database;
 use core_reportbuilder\local\report\filter;
 use core_reportbuilder\system_report;
 use core_reportbuilder\table\system_report_table;
+use core_reportbuilder\table\system_report_table_filterset;
+use core_table\local\filter\integer_filter;
+use core_table\local\filter\string_filter;
 
 /**
  * Core's system report table for the hub's pairs, read without rendering it.
@@ -29,7 +32,8 @@ use core_reportbuilder\table\system_report_table;
  * formatters: the headless rows ({@see \local_evidencehub\local\reportengine}) cannot widen what the report
  * shows. Four additions only: a way to append a condition to the table's WHERE, which can only narrow it,
  * that WHERE rebuilt without one filter for the facet counts, a page read whose cost does not grow with
- * the page number, and a count of the rows that the page read can be given instead of counting again.
+ * the page number, and a count of the rows that the page read can be given instead of counting again. A
+ * table that is downloading ({@see \local_evidencehub\local\report_download}) reads its rows as core's does.
  *
  * A row is a pair (worker, competency), which has no id of its own: the page is keyed by both parts
  * ({@see hub_pairs::pair_key_sql()}), read in the base fields as userid and competencyid.
@@ -47,6 +51,28 @@ class headless_table extends system_report_table {
 
     /** @var int|null The rows' total when the caller already knows it ({@see self::know_total()}). */
     protected $knowntotal = null;
+
+    /**
+     * A table that holds its report whatever the request carries.
+     *
+     * Core's constructor leaves the report unloaded when the request names the dynamic table service
+     * (`info=core_table_get_dynamic_table_content`), expecting its filterset to load it; a download or a matrix read
+     * has no filterset, so it would find no report. Loading it through the filterset is what core's own exporter does.
+     *
+     * @param int $reportid The report's persistent id.
+     * @param array $parameters The report's parameters.
+     * @return self
+     */
+    public static function create(int $reportid, array $parameters): self {
+        $table = parent::create($reportid, $parameters);
+        if ($table->report === null) {
+            $filterset = new system_report_table_filterset();
+            $filterset->add_filter(new integer_filter('reportid', null, [$reportid]));
+            $filterset->add_filter(new string_filter('parameters', null, [json_encode($parameters)]));
+            $table->set_filterset($filterset);
+        }
+        return $table;
+    }
 
     /**
      * The report this table was built from.
@@ -196,6 +222,12 @@ class headless_table extends system_report_table {
      */
     public function query_db($pagesize, $useinitialsbar = true): void {
         global $DB;
+
+        if ($this->is_downloading()) {
+            // A download reads every row once, in the table's sort, as core's own table does.
+            parent::query_db($pagesize, $useinitialsbar);
+            return;
+        }
 
         $this->pagesize($pagesize, 0);
         $tablesql = $this->get_table_sql(false);

@@ -19,19 +19,15 @@ namespace local_evidencehub\local;
 use core_competency\plan;
 
 /**
- * The hub's KPI bar: how many pairs of the filter's base set have each effective status, how many
- * workers are ready, how many are hidden by permissions. The grid's pager count is the sum of the
- * shown statuses' counts, so the page never runs a count of its own and the tiles always add up to it.
+ * The pairs report's cached figures and the generations that retire them: the readiness statement, the hidden
+ * workers' count, the cache keys and the store.
  *
- * Cached in the application cache hubkpis, except for a search (free text would grow the cache without
- * bound). The key holds the filter's cuts (template, cohort, suspended: not its statuses, sort or
- * page), the page context, the viewer's scope, a signature of the template's competencies, and the
- * generation: a random value in the cache hubgeneration, replaced whenever the
- * base set or a status may have changed ({@see self::bump_generation()}). Never a time to live: a lost
- * generation (a cache purge) just starts a new one. The pairs report's summary has a cache and a generation of
- * its own (reportsummary, reportgeneration), because it reads more than these counts do: the expiry, and through
- * the stored filters the deciding evidence's type and verification. Whatever replaces the generation replaces the
- * report's too, and {@see self::bump_report_generation()} replaces the report's alone.
+ * The figures (the summary, and the rows' total, hidden workers and facet counts) are entries of the application
+ * cache reportsummary, keyed per reader and criteria ({@see self::report_summary_key()}, {@see self::report_rows_key()})
+ * and retired by a generation: a random value in the cache reportgeneration, replaced whenever something the figures
+ * read may have changed. Never a time to live: a lost generation (a cache purge) just starts a new one. A second
+ * generation, hubgeneration, is replaced only when the pair set itself or a status changes
+ * ({@see self::bump_generation()}), and every replacement of it replaces the report's too.
  *
  * @package    local_evidencehub
  * @copyright  2026 Anderson Blaine
@@ -60,7 +56,7 @@ final class hub_kpis {
     }
 
     /**
-     * Retire every cached KPI and report summary: a status row was written or deleted, or the base set changed.
+     * Retire every cached figure: a status row was written or deleted, or the pair set changed.
      *
      * @return void
      */
@@ -146,124 +142,11 @@ final class hub_kpis {
     }
 
     /**
-     * The KPIs of a filter for a viewer, from the cache when it holds them.
+     * Workers, and how many of them have every pair compliant, due or critical, of any set of pairs: the pairs
+     * report's summary reads it over its rows ({@see reportengine::summary()}).
      *
-     * @param hub_filter $filter The filter; only its template, cohort, search and suspended count.
-     * @param hub_scope $scope The viewer's capability cuts.
-     * @param \context $context The page context, which decides whether the search reads ID numbers.
-     * @return array counts (effective code => pairs, every code), pairs, workers, ready, hidden.
-     */
-    public static function get(hub_filter $filter, hub_scope $scope, \context $context): array {
-        if ($filter->search !== '') {
-            // Free text would grow the cache without bound: a search is counted every time.
-            return self::compute($filter, $scope, $context);
-        }
-        $key = sha1(json_encode([
-            $filter->templateid,
-            $filter->cohortid,
-            $context->id,
-            (int) $filter->suspended,
-            $scope->key(),
-            self::template_signature($filter->templateid),
-            self::generation(),
-        ]));
-        $cache = \cache::make('local_evidencehub', 'hubkpis');
-        $kpis = $cache->get($key);
-        if ($kpis === false) {
-            $kpis = self::compute($filter, $scope, $context);
-            $cache->set($key, $kpis);
-        }
-        return $kpis;
-    }
-
-    /**
-     * The KPIs of a filter for a viewer, from the database.
-     *
-     * @param hub_filter $filter The filter.
-     * @param hub_scope $scope The viewer's capability cuts.
-     * @param \context $context The page context.
-     * @return array As {@see self::get()} returns them.
-     */
-    public static function compute(hub_filter $filter, hub_scope $scope, \context $context): array {
-        $counts = self::distribution($filter, $scope, $context);
-        [$workers, $ready] = self::readiness($filter, $scope, $context);
-        return [
-            'counts' => $counts,
-            'pairs' => array_sum($counts),
-            'workers' => $workers,
-            'ready' => $ready,
-            'hidden' => self::hidden($filter, $scope),
-        ];
-    }
-
-    /**
-     * How many pairs the grid of a filter has: the sum of its shown statuses' counts.
-     *
-     * @param array $kpis The KPIs of the filter.
-     * @param hub_filter $filter The filter.
-     * @return int
-     */
-    public static function pager_count(array $kpis, hub_filter $filter): int {
-        $total = 0;
-        foreach ($filter->shown_statuses() as $code) {
-            $total += $kpis['counts'][$code] ?? 0;
-        }
-        return $total;
-    }
-
-    /**
-     * Pairs per effective status.
-     *
-     * @param hub_filter $filter The filter.
-     * @param hub_scope $scope The viewer's capability cuts.
-     * @param \context $context The page context.
-     * @return array Effective code => pairs, every code present.
-     */
-    public static function distribution(hub_filter $filter, hub_scope $scope, \context $context): array {
-        [$basesql, $params] = hub_query::base_sql($filter, $scope, $context);
-        return self::distribution_of($basesql, $params);
-    }
-
-    /**
-     * Pairs per effective status of any set of pairs: the statement of {@see self::distribution()}, over the
-     * hub's base set. The pairs report's summary reads its distribution in a grouped statement of its own
-     * ({@see reportengine::summary()}), beside the expiring and open pairs.
-     *
-     * @param string $basesql A SELECT of one row per pair with the column estatus (its effective code).
-     * @param array $params Its parameters.
-     * @return array Effective code => pairs, every code present.
-     */
-    public static function distribution_of(string $basesql, array $params): array {
-        global $DB;
-        $sql = "SELECT b.estatus, COUNT(1) AS pairs
-                  FROM ($basesql) b
-              GROUP BY b.estatus";
-        $counts = array_fill_keys(status::effective_codes(), 0);
-        foreach ($DB->get_records_sql_menu($sql, $params) as $code => $pairs) {
-            $counts[(int) $code] = (int) $pairs;
-        }
-        return $counts;
-    }
-
-    /**
-     * Workers, and how many of them have every pair compliant, due or critical.
-     *
-     * A restricted pair is not among those, so a worker whose readiness hangs on evidence the viewer
-     * may not see counts as not ready rather than revealing it.
-     *
-     * @param hub_filter $filter The filter.
-     * @param hub_scope $scope The viewer's capability cuts.
-     * @param \context $context The page context.
-     * @return array [workers, ready].
-     */
-    public static function readiness(hub_filter $filter, hub_scope $scope, \context $context): array {
-        [$basesql, $params] = hub_query::base_sql($filter, $scope, $context);
-        return self::readiness_of($basesql, $params);
-    }
-
-    /**
-     * Workers, and how many of them have every pair compliant, due or critical, of any set of pairs: the
-     * statement of {@see self::readiness()}, over the hub's base set or the pairs report's rows.
+     * A restricted pair is not among those, so a worker whose readiness hangs on evidence the viewer may not see
+     * counts as not ready rather than revealing it.
      *
      * @param string $basesql A SELECT of one row per pair with the columns userid and estatus.
      * @param array $params Its parameters; none may be named hubready*.
@@ -281,24 +164,12 @@ final class hub_kpis {
     }
 
     /**
-     * The template's workers the viewer may not see: every worker with an active plan from it, outside
-     * the viewer's userevidenceview fragment.
+     * The template's workers the viewer may not see: every worker with an active plan from it, outside the viewer's
+     * userevidenceview fragment.
      *
-     * None of the filter's cuts applies: a cohort, the suspended flag or a search would let the viewer
-     * learn something about workers they may not see (who is in a cohort, who is suspended, who bears
-     * a name) by watching the count change.
-     *
-     * @param hub_filter $filter The filter; only its template counts.
-     * @param hub_scope $scope The viewer's capability cuts.
-     * @return int
-     */
-    public static function hidden(hub_filter $filter, hub_scope $scope): int {
-        return self::hidden_workers($filter->templateid, $scope);
-    }
-
-    /**
-     * The template's workers the viewer may not see: {@see self::hidden()}'s statement, which takes the
-     * template alone, so no criterion a reader chose can reach it.
+     * It takes the template alone, so no criterion a reader chose can reach it: a cohort, the suspended flag or a
+     * search would let the viewer learn something about workers they may not see (who is in a cohort, who is
+     * suspended, who bears a name) by watching the count change.
      *
      * @param int $templateid The template.
      * @param hub_scope $scope The viewer's capability cuts.

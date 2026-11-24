@@ -21,7 +21,8 @@ use local_evidencehub\tests\hub_scenario;
 use PHPUnit\Framework\Attributes\CoversClass;
 
 /**
- * The hub's grid: the base set, the access cut, the effective restricted status, sorting and paging.
+ * The hub's pair set: the base set, the access cut, the effective restricted status, the "valid until" key, the search
+ * and the cohort.
  *
  * @package    local_evidencehub
  * @category   test
@@ -61,11 +62,11 @@ final class hub_query_test extends \advanced_testcase {
         $DB->set_field('user', 'deleted', 1, ['id' => $deleted->id]);
         $suspended = $this->worker($templateid, ['suspended' => 1]);
 
-        $pairs = $this->all_pages(\context_system::instance(), $this->filter($templateid));
+        $pairs = $this->base_pairs(\context_system::instance(), $this->filter($templateid));
         $this->assertEqualsCanonicalizing([$this->pair($active, $c1), $this->pair($active, $c2)], array_keys($pairs));
         $this->assertSame([status::EFFECTIVE_MISSING, status::EFFECTIVE_MISSING], array_values($pairs));
 
-        $pairs = $this->all_pages(\context_system::instance(), $this->filter($templateid, ['suspended' => 1]));
+        $pairs = $this->base_pairs(\context_system::instance(), $this->filter($templateid, ['suspended' => 1]));
         $this->assertEqualsCanonicalizing([
             $this->pair($active, $c1),
             $this->pair($active, $c2),
@@ -74,35 +75,10 @@ final class hub_query_test extends \advanced_testcase {
         ], array_keys($pairs));
 
         // The control: the other template's worker is in its own grid, with its own competencies.
-        $pairs = $this->all_pages(\context_system::instance(), $this->filter($other));
+        $pairs = $this->base_pairs(\context_system::instance(), $this->filter($other));
         $this->assertEqualsCanonicalizing([$this->pair($elsewhere, $c1), $this->pair($elsewhere, $c3)], array_keys($pairs));
         $this->assertNotContains((int) $draft->id, array_map('intval', array_keys($pairs)));
         $this->assertNotContains((int) $complete->id, array_map('intval', array_keys($pairs)));
-    }
-
-    /**
-     * A stored status shows as itself, with its expiry and the deciding evidence's type and issuer.
-     *
-     * @return void
-     */
-    public function test_a_page_carries_the_details_in_step_one_order(): void {
-        [$c1, $c2] = $this->competencies(2);
-        $templateid = $this->template([$c1, $c2]);
-        $worker = $this->worker($templateid, ['firstname' => 'Ana', 'lastname' => 'Souza']);
-        $this->status_row((int) $worker->id, $c1, status::STATUS_EXPIRED, 20260101, 'nrcertificate');
-        $this->status_row((int) $worker->id, $c2, status::STATUS_DUE, 20261201);
-
-        $query = new hub_query(\context_system::instance(), hub_scope::for_user());
-        $rows = $query->page($this->filter($templateid));
-        $this->assertCount(2, $rows);
-        // By expiry: the expired one first.
-        $this->assertSame([$c1, $c2], array_column($rows, 'competencyid'));
-        $this->assertSame([status::STATUS_EXPIRED, status::STATUS_DUE], array_column($rows, 'estatus'));
-        $this->assertSame('Souza', $rows[0]->lastname);
-        $this->assertSame('C1', $rows[0]->competencyname);
-        $this->assertSame('Issuer nrcertificate', $rows[0]->issuer);
-        $this->assertSame(20260101, (int) $rows[0]->effectiveexpiry);
-        $this->assertNull($rows[1]->issuer);
     }
 
     /**
@@ -124,10 +100,9 @@ final class hub_query_test extends \advanced_testcase {
         $filter = $this->filter($templateid, [], $catcontext);
 
         $this->setUser($manager);
-        $this->assertSame([], $this->all_pages($catcontext, $filter));
-        $kpis = hub_kpis::compute($filter, hub_scope::for_user(), $catcontext);
-        $this->assertSame(2, $kpis['hidden']);
-        $this->assertSame(0, $kpis['workers']);
+        $this->assertSame([], $this->base_pairs($catcontext, $filter));
+        $this->assertSame(2, hub_kpis::hidden_workers($templateid, hub_scope::for_user()));
+        $this->assertSame(0, $this->workers($filter, $catcontext));
 
         // Mentor role over the cohort's user contexts, as tool_cohortroles assigns it.
         $this->setAdminUser();
@@ -143,22 +118,21 @@ final class hub_query_test extends \advanced_testcase {
         accesslib_clear_all_caches_for_unit_testing();
 
         $this->setUser($manager);
-        $this->assertSame([$this->pair($team, $c1)], array_keys($this->all_pages($catcontext, $filter)));
-        $kpis = hub_kpis::compute($filter, hub_scope::for_user(), $catcontext);
-        $this->assertSame(1, $kpis['hidden']);
-        $this->assertSame(1, $kpis['workers']);
+        $this->assertSame([$this->pair($team, $c1)], array_keys($this->base_pairs($catcontext, $filter)));
+        $this->assertSame(1, hub_kpis::hidden_workers($templateid, hub_scope::for_user()));
+        $this->assertSame(1, $this->workers($filter, $catcontext));
 
         $this->setAdminUser();
         $this->assertEqualsCanonicalizing(
             [$this->pair($team, $c1), $this->pair($outsider, $c1)],
-            array_keys($this->all_pages($catcontext, $filter))
+            array_keys($this->base_pairs($catcontext, $filter))
         );
-        $this->assertSame(0, hub_kpis::compute($filter, hub_scope::for_user(), $catcontext)['hidden']);
+        $this->assertSame(0, hub_kpis::hidden_workers($templateid, hub_scope::for_user()));
     }
 
     /**
-     * A pair decided by a sensitive evidence reads "restricted" for a viewer without viewsensitive: in the
-     * grid, under the status filter and in the sort; with viewsensitive it reads its own status.
+     * A pair decided by a sensitive evidence reads "restricted" for a viewer without viewsensitive, its status and its
+     * "valid until" key alike; with viewsensitive it reads its own status and day.
      *
      * @return void
      */
@@ -173,18 +147,14 @@ final class hub_query_test extends \advanced_testcase {
         $plain = $this->pair($worker, $c2);
         $system = \context_system::instance();
         $all = $this->filter($templateid);
-        $expired = $this->filter($templateid, ['statuses' => [status::STATUS_EXPIRED]]);
 
         $this->setUser($viewer);
+        // Restricted sorts first, as if it had no date; its own date (2025) would put it second.
         $this->assertSame(
             [$sensitive => status::EFFECTIVE_RESTRICTED, $plain => status::STATUS_EXPIRED],
-            $this->all_pages($system, $all)
+            $this->base_pairs($system, $all)
         );
-        $this->assertSame([$plain], array_keys($this->all_pages($system, $expired)));
-        $rows = (new hub_query($system, hub_scope::for_user()))->page($all);
-        // Restricted sorts first, as if it had no date; its own date (2025) would put it second.
-        $this->assertSame([$c1, $c2], array_column($rows, 'competencyid'));
-        $this->assertSame(0, $rows[0]->eexpiry);
+        $this->assertSame([$sensitive => 0, $plain => 20240101], $this->keys($all, $system));
 
         // The control: with viewsensitive in the worker's context the same pair reads its status.
         $this->setAdminUser();
@@ -193,9 +163,11 @@ final class hub_query_test extends \advanced_testcase {
         role_assign($roleid, $viewer->id, \context_user::instance($worker->id)->id);
         accesslib_clear_all_caches_for_unit_testing();
         $this->setUser($viewer);
-        $this->assertEqualsCanonicalizing([$sensitive, $plain], array_keys($this->all_pages($system, $expired)));
-        $rows = (new hub_query($system, hub_scope::for_user()))->page($all);
-        $this->assertSame([$c2, $c1], array_column($rows, 'competencyid'));
+        $this->assertSame(
+            [$plain => status::STATUS_EXPIRED, $sensitive => status::STATUS_EXPIRED],
+            $this->base_pairs($system, $all)
+        );
+        $this->assertSame([$plain => 20240101, $sensitive => 20250101], $this->keys($all, $system));
     }
 
     /**
@@ -216,88 +188,49 @@ final class hub_query_test extends \advanced_testcase {
         $filter = $this->filter($templateid);
 
         $this->setUser($worker);
-        $pairs = $this->all_pages(\context_system::instance(), $filter);
+        $pairs = $this->base_pairs(\context_system::instance(), $filter);
         $this->assertSame([$this->pair($worker, $c1) => status::STATUS_VALID], $pairs);
     }
 
     /**
-     * Paging returns every pair once across pages, even when every sort value ties.
+     * The "valid until" key: a restricted and a missing pair read 0, the most urgent; a dated pair its day; a pair
+     * with a status and no expiry (valid with no end) sorts after every day, ascending, and first descending; and the
+     * day a reader prints is null for the three without one.
+     *
+     * Changes that must make it fail: the pair with no expiry keyed 0 (it would sort among the missing ones); a
+     * restricted or a missing pair keyed as one with no expiry (they would sort last).
      *
      * @return void
      */
-    public function test_paging_is_stable(): void {
-        [$c1, $c2] = $this->competencies(2);
-        // The template lists the higher id first, so a join order that is not the key's shows.
-        $templateid = $this->template([$c2, $c1]);
-        $expected = [];
-        for ($i = 0; $i < 30; $i++) {
-            $worker = $this->worker($templateid, ['lastname' => 'Same', 'firstname' => 'Name']);
-            $expected[] = $this->pair($worker, $c1);
-            $expected[] = $this->pair($worker, $c2);
-        }
-        foreach (hub_filter::SORTS as $sort) {
-            $filter = $this->filter($templateid, ['sort' => $sort, 'perpage' => 25]);
-            $pairs = $this->all_pages(\context_system::instance(), $filter);
-            $this->assertCount(60, $pairs, $sort);
-            $this->assertEqualsCanonicalizing($expected, array_keys($pairs), $sort);
-            // Ties end in the unique key: the order is the same on every run.
-            $this->assertSame(array_keys($pairs), array_keys($this->all_pages(\context_system::instance(), $filter)), $sort);
-        }
-        $first = array_keys($this->all_pages(\context_system::instance(), $this->filter($templateid, ['perpage' => 25])));
-        $sorted = $first;
-        $key = fn(string $pair): array => array_map('intval', explode(':', $pair));
-        usort($sorted, fn(string $a, string $b): int => $key($a) <=> $key($b));
-        $this->assertSame($sorted, $first);
-    }
-
-    /**
-     * Each sort orders by its value, then by the pair's key; desc reverses the value only.
-     *
-     * @return void
-     */
-    public function test_each_sort(): void {
-        [$c1, $c2] = $this->competencies(2);
-        $templateid = $this->template([$c2, $c1]);
-        $zeta = $this->worker($templateid, ['lastname' => 'Zeta', 'firstname' => 'Ana']);
-        $alfa = $this->worker($templateid, ['lastname' => 'Alfa', 'firstname' => 'Bia']);
-        $this->status_row((int) $zeta->id, $c1, status::STATUS_DUE, 20261001);
-        $this->status_row((int) $zeta->id, $c2, status::STATUS_VALID, 20290101);
-        $this->status_row((int) $alfa->id, $c1, status::STATUS_EXPIRED, 20250101);
+    public function test_a_pair_valid_with_no_end_sorts_as_the_least_urgent(): void {
+        [$c1, $c2, $c3, $c4] = $this->competencies(4);
+        $templateid = $this->template([$c1, $c2, $c3, $c4]);
+        $worker = $this->worker($templateid);
+        $this->status_row((int) $worker->id, $c1, status::STATUS_VALID);
+        $this->status_row((int) $worker->id, $c2, status::STATUS_VALID, 20990101);
+        $this->status_row((int) $worker->id, $c3, status::STATUS_EXPIRED, 20250101, 'aso');
+        $viewer = $this->viewer(['local/evidencehub:view', 'moodle/competency:userevidenceview']);
         $system = \context_system::instance();
-        $keys = fn(array $values): array => array_keys($this->all_pages($system, $this->filter($templateid, $values)));
+        // Validated as the administrator: the viewer reads the workers' evidence, not the template.
+        $filter = $this->filter($templateid);
+        [$noend, $dated, $restricted, $missing] = [
+            $this->pair($worker, $c1),
+            $this->pair($worker, $c2),
+            $this->pair($worker, $c3),
+            $this->pair($worker, $c4),
+        ];
 
-        $this->assertSame([
-            $this->pair($alfa, $c2),
-            $this->pair($alfa, $c1),
-            $this->pair($zeta, $c1),
-            $this->pair($zeta, $c2),
-        ], $keys(['sort' => 'expiry']));
-        $this->assertSame([
-            $this->pair($alfa, $c1),
-            $this->pair($alfa, $c2),
-            $this->pair($zeta, $c1),
-            $this->pair($zeta, $c2),
-        ], $keys(['sort' => 'worker']));
-        $this->assertSame([
-            $this->pair($zeta, $c1),
-            $this->pair($zeta, $c2),
-            $this->pair($alfa, $c1),
-            $this->pair($alfa, $c2),
-        ], $keys(['sort' => 'worker', 'dir' => 'desc']));
-        // Zeta was created first, so the lower user id comes first within a competency.
-        $this->assertSame([
-            $this->pair($zeta, $c1),
-            $this->pair($alfa, $c1),
-            $this->pair($zeta, $c2),
-            $this->pair($alfa, $c2),
-        ], $keys(['sort' => 'competency']));
-        // By status code: missing, then compliant, due and expired.
-        $this->assertSame([
-            $this->pair($alfa, $c2),
-            $this->pair($zeta, $c2),
-            $this->pair($zeta, $c1),
-            $this->pair($alfa, $c1),
-        ], $keys(['sort' => 'status']));
+        $this->setUser($viewer);
+        $keys = $this->keys($filter, $system);
+        $this->assertSame([$restricted => 0, $missing => 0, $dated => 20990101, $noend => hub_query::NO_EXPIRY], $keys);
+        // Descending, the pair valid with no end comes first, and the restricted and missing ones last.
+        $descending = array_keys($keys);
+        usort($descending, fn(string $a, string $b): int => [$keys[$b], $a] <=> [$keys[$a], $b]);
+        $this->assertSame([$noend, $dated, $restricted, $missing], $descending);
+        $this->assertSame(
+            [$restricted => null, $missing => null, $dated => 20990101, $noend => null],
+            array_map(fn(int $key): ?int => hub_query::expiry_day($key), $keys)
+        );
     }
 
     /**
@@ -312,7 +245,7 @@ final class hub_query_test extends \advanced_testcase {
         $ana = $this->worker($templateid, ['firstname' => 'Ana', 'lastname' => 'Pereira', 'idnumber' => 'EMP-1']);
         $bia = $this->worker($templateid, ['firstname' => 'Bia', 'lastname' => 'Souza', 'idnumber' => 'EMP-2']);
         $system = \context_system::instance();
-        $keys = fn(array $values): array => array_keys($this->all_pages($system, $this->filter($templateid, $values)));
+        $keys = fn(array $values): array => array_keys($this->base_pairs($system, $this->filter($templateid, $values)));
 
         $this->assertSame([$this->pair($ana, $c1)], $keys(['search' => 'ana']));
         $this->assertSame([$this->pair($bia, $c1)], $keys(['search' => 'SOUZA']));
@@ -344,14 +277,14 @@ final class hub_query_test extends \advanced_testcase {
 
         $this->setUser($blind);
         $this->assertSame([], \core_user\fields::get_identity_fields($system, false));
-        $this->assertSame([], $this->all_pages($system, $byidnumber));
-        $this->assertSame([$this->pair($worker, $c1)], array_keys($this->all_pages($system, $byname)));
-        $this->assertSame(0, hub_kpis::compute($byidnumber, hub_scope::for_user(), $system)['pairs']);
+        $this->assertSame([], $this->base_pairs($system, $byidnumber));
+        $this->assertSame([$this->pair($worker, $c1)], array_keys($this->base_pairs($system, $byname)));
+        $this->assertCount(0, $this->base_pairs($system, $byidnumber));
 
         // The control: a viewer shown the ID number finds the worker by it.
         $this->setUser($shown);
-        $this->assertSame([$this->pair($worker, $c1)], array_keys($this->all_pages($system, $byidnumber)));
-        $this->assertSame(1, hub_kpis::compute($byidnumber, hub_scope::for_user(), $system)['pairs']);
+        $this->assertSame([$this->pair($worker, $c1)], array_keys($this->base_pairs($system, $byidnumber)));
+        $this->assertCount(1, $this->base_pairs($system, $byidnumber));
     }
 
     /**
@@ -486,5 +419,38 @@ final class hub_query_test extends \advanced_testcase {
         $this->assertNotSame(array_keys($first->viewparams), array_keys($second->viewparams));
         $this->assertSame($first->key(), $second->key());
         $this->assertNotSame($first->key(), hub_scope::for_user((int) get_admin()->id)->key());
+    }
+
+    /**
+     * The "valid until" key of every pair of the base set, in the order the list sorts by it: the key, then the pair.
+     *
+     * @param hub_filter $filter The filter.
+     * @param \context $context The context.
+     * @return array "userid:competencyid" => eexpiry.
+     */
+    private function keys(hub_filter $filter, \context $context): array {
+        global $DB;
+        [$sql, $params] = hub_query::base_sql($filter, hub_scope::for_user(), $context);
+        $keys = [];
+        $records = $DB->get_recordset_sql("SELECT b.userid, b.competencyid, b.eexpiry
+                                             FROM ($sql) b
+                                         ORDER BY b.eexpiry, b.userid, b.competencyid", $params);
+        foreach ($records as $record) {
+            $keys[$record->userid . ':' . $record->competencyid] = (int) $record->eexpiry;
+        }
+        $records->close();
+        return $keys;
+    }
+
+    /**
+     * How many workers the base set holds, as the report's summary counts them ({@see hub_kpis::readiness_of()}).
+     *
+     * @param hub_filter $filter The filter.
+     * @param \context $context The context.
+     * @return int
+     */
+    private function workers(hub_filter $filter, \context $context): int {
+        [$sql, $params] = hub_query::base_sql($filter, hub_scope::for_user(), $context);
+        return hub_kpis::readiness_of($sql, $params)[0];
     }
 }

@@ -62,7 +62,7 @@ import {Cards} from './Cards';
 import {SIZING} from './cells';
 import {Dock} from './Dock';
 import {exportDossiers} from './export';
-import {COMPETENCY_FILTER, STATUS_FILTER, withChoice, without} from './filters';
+import {COMPETENCY_FILTER, STATUS_FILTER, chosen as chosenValue, withChoice, without} from './filters';
 import {Grid} from './Grid';
 import {getRows, getSummary, resetFilters, setFilters, setPreference} from './repository';
 import type {Target} from './repository';
@@ -133,6 +133,26 @@ const settingsOf = (rows: RowsAnswer | null): {allcolumns: Column[], usedefault:
         suspended: rows.preference.suspended,
         candecide: rows.candecide,
     });
+
+/**
+ * What the bar and the band read off the rows in force: the sort the server applied, whether a download is offered
+ * (rows have arrived and there are some), and the status the stored filter holds, which the band lists even at 0.
+ *
+ * @param {object|null} rows The last rows answer, or null before the first.
+ * @param {Array} filters The report's filters as the panel draws them.
+ * @returns {object} sort, direction, downloadable, chosenstatus.
+ */
+const listFacts = (rows: RowsAnswer | null, filters: Filter[]): {sort: string, direction: '' | 'asc' | 'desc',
+        downloadable: boolean, chosenstatus: string} => {
+    const statusfilter = filters.find((filter) => filter.name === STATUS_FILTER && filter.applied);
+
+    return {
+        sort: rows?.sort ?? '',
+        direction: rows?.direction ?? '',
+        downloadable: rows !== null && rows.total > 0,
+        chosenstatus: statusfilter ? chosenValue(statusfilter) : '',
+    };
+};
 
 /**
  * The hub's view.
@@ -640,7 +660,6 @@ const HubView = (props: ViewProps): ReactElement => {
             ...props.exportform,
             contextid: props.contextid,
             templateid: props.templateid,
-            suspended,
             pairs: chosen.map((row) => ({userid: row.userid, competencyid: row.competencyid})),
         });
     };
@@ -689,6 +708,8 @@ const HubView = (props: ViewProps): ReactElement => {
         fixed: key === 'worker',
     }));
     const workers = new Set(chosen.map((row) => row.userid)).size;
+    // Nothing acts on the rows before the first ones have arrived: no Download (listFacts()), no dock (below).
+    const facts = listFacts(rows, filters);
 
     return (
         <div className="local-evidencehub-rview-root" ref={root} data-region="local-evidencehub-hubview">
@@ -698,6 +719,7 @@ const HubView = (props: ViewProps): ReactElement => {
                 loading={bandloading}
                 error={banderror}
                 canfilter={rows !== null}
+                chosenstatus={facts.chosenstatus}
                 onStatus={(status) => setChoice(STATUS_FILTER, String(status))}
                 onCompetency={(competencyid) => setChoice(COMPETENCY_FILTER, String(competencyid))}
                 onRetry={() => loadBand(query.current)}
@@ -720,6 +742,12 @@ const HubView = (props: ViewProps): ReactElement => {
                 searching={rowsloading}
                 matrixurl={props.matrixurl}
                 tableurl={props.tableurl}
+                downloadurl={props.downloadurl}
+                formats={props.formats}
+                appliedsearch={current.search}
+                sort={facts.sort}
+                direction={facts.direction}
+                downloadable={facts.downloadable}
                 onScope={(scope: Scope) => run({scope, page: 0}, true)}
                 onSearch={onSearch}
                 onFilter={(filter, value) => writeFilters(() => setFilters(reportid, withChoice(filters, filter, value)))}
@@ -761,7 +789,7 @@ const HubView = (props: ViewProps): ReactElement => {
                 cards={cards}
                 narrow={narrow}
                 skeleton={{columns: skeleton, lead: 'worker', widths, sizing: SIZING}}
-                dock={decides && chosen.length > 0 ? (
+                dock={rows !== null && decides && chosen.length > 0 ? (
                     <Dock labels={labels} count={chosen.length} workers={workers} posting={posting} onExport={onExport} />
                 ) : null}
                 onRetry={() => loadRows(query.current, true)}

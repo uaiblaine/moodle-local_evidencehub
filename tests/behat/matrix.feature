@@ -50,12 +50,25 @@ Feature: The readiness matrix
     When I click on "Expired" "button" in the "Ana Souza" "table_row"
     Then "Ana Souza: Heights" "dialogue" should be visible
 
-  Scenario: The status chips keep the workers with a pair in the chosen statuses
+  Scenario: The matrix lists the workers of the list's rows under the stored filter, and says so
     Given I log in as "manager1"
-    And I am on the "Electricians" "local_evidencehub > Matrix" page
-    When I click on "Expired" "link" in the ".local-evidencehub-chips" "css_element"
+    And I am on the "Electricians" "local_evidencehub > Hub" page
+    And I click on "All" "button" in the "[data-region='local-evidencehub-bar']" "css_element"
+    And I should see "4 pairs" in the "[data-region='local-evidencehub-total']" "css_element"
+    And I press "Filters"
+    And I click on "Expired 1" "button" in the "[data-region='local-evidencehub-bar'] [role='dialog']" "css_element"
+    And I press "Show 1"
+    And I should see "Status: Expired" in the "[data-region='local-evidencehub-chips']" "css_element"
+    When I press "View"
+    And I click on "Matrix" "link" in the "[data-region='local-evidencehub-bar'] [role='menu'][aria-label='View']" "css_element"
     Then I should see "Ana Souza" in the ".local-evidencehub-matrix" "css_element"
     And I should not see "Bia Lima" in the ".local-evidencehub-matrix" "css_element"
+    And I should see "Every worker of the list" in the "[data-region='local-evidencehub-criteria']" "css_element"
+    And I should see "Status: Expired" in the "[data-region='local-evidencehub-criteria']" "css_element"
+    # Every competency of a listed worker is shown, the compliant one too.
+    And ".local-evidencehub-cell.bg-success" "css_element" should exist in the "Ana Souza" "table_row"
+    When I click on "Change them in the list" "link"
+    Then I should see "Status: Expired" in the "[data-region='local-evidencehub-chips']" "css_element"
 
   Scenario: Two hundred workers by twenty-five competencies render without layout shift
     Given the following "local_evidencehub > matrix seeds" exist:

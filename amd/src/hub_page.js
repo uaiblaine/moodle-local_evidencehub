@@ -14,10 +14,8 @@
 // along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
 
 /**
- * The evidence hub's grid and matrix: the checkbox in the heading selects or clears every row of the
- * page, and each row's button (each cell's, in the matrix) opens the pair's inspection drawer.
- *
- * The list's checkboxes post pairs[], the matrix's post workers[]; the heading checkbox ticks either.
+ * The evidence hub's matrix page: the checkbox in the heading selects or clears every worker of the page, and each
+ * cell's button opens the pair's inspection drawer. The workers' checkboxes post workers[] with the dossier export.
  *
  * @module     local_evidencehub/hub_page
  * @copyright  2026 Anderson Blaine
@@ -29,13 +27,13 @@ import Notification from 'core/notification';
 
 const REGION = '[data-region="local-evidencehub-hub"]';
 const SELECTALL = '[data-action="selectall"]';
-const ROW = '[data-region="pair"], [data-region="worker"]';
+const ROW = '[data-region="worker"]';
 const INSPECT = '[data-action="inspect"]';
 
 /**
  * Make the heading checkbox reflect the rows: ticked when all are, mixed when some are.
  *
- * @param {HTMLElement} region The hub.
+ * @param {HTMLElement} region The matrix page.
  */
 const reflect = (region) => {
     const all = region.querySelector(SELECTALL);
@@ -49,7 +47,7 @@ const reflect = (region) => {
 };
 
 /**
- * Bind the selection checkboxes and the drawer buttons of the page.
+ * Bind the selection checkboxes and the drawer buttons of the matrix page.
  */
 export const init = () => {
     const region = document.querySelector(REGION);

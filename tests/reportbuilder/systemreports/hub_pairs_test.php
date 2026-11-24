@@ -24,9 +24,10 @@ use core_reportbuilder\manager;
 use core_reportbuilder\table\system_report_table;
 use core_reportbuilder\tests\core_reportbuilder_testcase;
 use local_evidencehub\local\hub_access;
-use local_evidencehub\local\hub_download;
+use local_evidencehub\local\hub_filter;
 use local_evidencehub\local\hub_query;
 use local_evidencehub\local\hub_scope;
+use local_evidencehub\local\meta;
 use local_evidencehub\local\pairset;
 use local_evidencehub\local\status;
 use local_evidencehub\reportbuilder\datasource\validity as validity_datasource;
@@ -95,6 +96,44 @@ final class hub_pairs_test extends core_reportbuilder_testcase {
     }
 
     /**
+     * The report's records as the database returns them, before any column's callback, by pair.
+     *
+     * @param hub_pairs $report The report.
+     * @return array "userid:competencyid" => the record's fields by SQL alias, as strings.
+     */
+    private function raw_records(hub_pairs $report): array {
+        global $SESSION;
+        unset($SESSION->flextable);
+        $table = system_report_table::create((int) $report->get_report_persistent()->get('id'), []);
+        $table->define_baseurl(new \moodle_url('/local/evidencehub/index.php'));
+        $table->setup();
+        $table->query_db(1000, false);
+        $records = [];
+        foreach ($table->rawdata as $record) {
+            $records[$record->userid . ':' . $record->competencyid] = array_map('strval', (array) $record);
+        }
+        $table->close_recordset();
+        return $records;
+    }
+
+    /**
+     * The values of the fields a column's alias ends with, in one raw record.
+     *
+     * @param array $record A record from {@see self::raw_records()}.
+     * @param string $alias The field's own alias in its column, such as effectiveexpiry.
+     * @return array The values of every field of the record named c<index>_<alias>; never empty.
+     */
+    private function raw_fields(array $record, string $alias): array {
+        $values = array_values(array_filter(
+            $record,
+            static fn(string $name): bool => (bool) preg_match('/^c\d+_' . $alias . '$/', $name),
+            ARRAY_FILTER_USE_KEY
+        ));
+        $this->assertNotSame([], $values, "The record has a field $alias.");
+        return $values;
+    }
+
+    /**
      * The report's rows as core's table reads them, by pair, in the table's order.
      *
      * @param hub_pairs $report The report.
@@ -142,27 +181,30 @@ final class hub_pairs_test extends core_reportbuilder_testcase {
     }
 
     /**
-     * The hub's list of a template for the current user: every status, no cohort, no search, its default
-     * order, each pair's cells as the hub's grid and download show them.
+     * The hub's pair set of a template for the current user ({@see hub_query::base_sql()}, which the matrix, the
+     * dossier selection, the digest and the readiness service read): every pair with its status as the report labels
+     * it and its day, in the order of the "valid until" key, then the pair.
      *
      * @param int $templateid The template.
-     * @return array "userid:competencyid" => cells, keyed as COMPARED.
+     * @return array "userid:competencyid" => [status label, valid until as the report prints it].
      */
     private function hub_rows(int $templateid): array {
-        $system = \context_system::instance();
-        $query = new hub_query($system, hub_scope::for_user());
-        $download = new hub_download($system, $query);
+        global $DB;
+        [$sql, $params] = hub_query::base_sql(
+            hub_filter::from_values(['templateid' => $templateid], \context_system::instance()),
+            hub_scope::for_user(),
+            \context_system::instance()
+        );
         $rows = [];
-        $rs = $query->rows($this->filter($templateid));
+        $rs = $DB->get_recordset_sql("SELECT b.userid, b.competencyid, b.estatus, b.eexpiry
+                                        FROM ($sql) b
+                                    ORDER BY b.eexpiry, b.userid, b.competencyid", $params);
         foreach ($rs as $record) {
-            $cells = $download->row($record);
-            $rows[$record->userid . ':' . $record->competencyid] = array_combine(self::COMPARED, [
-                (string) $cells['status'],
-                (string) $cells['expiry'],
-                (string) $cells['evidencecount'],
-                (string) $cells['type'],
-                (string) $cells['issuer'],
-            ]);
+            $day = hub_query::expiry_day((int) $record->eexpiry);
+            $rows[$record->userid . ':' . $record->competencyid] = [
+                status::effective_label((int) $record->estatus),
+                $day === null ? '' : meta::iso_date($day),
+            ];
         }
         $rs->close();
         return $rows;
@@ -183,7 +225,7 @@ final class hub_pairs_test extends core_reportbuilder_testcase {
 
     /**
      * For a manager, a reader of one cohort's workers through tool_cohortroles and a reader without
-     * viewsensitive, the report lists the hub's pairs with the hub's values in the hub's order.
+     * viewsensitive, the report lists the hub's pair set with its statuses and days in its order.
      *
      * @return void
      */
@@ -220,9 +262,13 @@ final class hub_pairs_test extends core_reportbuilder_testcase {
         foreach ($readers as $name => $user) {
             $user === null ? $this->setAdminUser() : $this->setUser($user);
             $hub = $this->hub_rows($templateid);
-            $this->assertSame($hub, $this->compared($this->rows($this->report($templateid))), $name);
+            $report = array_map(
+                fn(array $cells): array => [$cells['validity:status'], $cells['validity:effectiveexpiry']],
+                $this->rows($this->report($templateid))
+            );
+            $this->assertSame($hub, $report, $name);
             // The control: the fixture holds missing pairs, and a restricted one for a reader without viewsensitive.
-            $statuses = array_column($hub, 'validity:status');
+            $statuses = array_column($hub, 0);
             $this->assertContains($missing, $statuses, $name);
             $this->assertSame($name !== 'manager', in_array($restricted, $statuses, true), $name);
         }
@@ -310,6 +356,44 @@ final class hub_pairs_test extends core_reportbuilder_testcase {
                 $this->assertSame('errorreportview', $e->errorcode);
             }
         }
+    }
+
+    /**
+     * What a restricted pair's record carries, before any callback: the real day, status, count and issuer never leave
+     * the database, so a column's callback is not what hides them. The controls: a manager's record of the same pair
+     * holds the real values, and so does the same reader's record of a pair that is not restricted.
+     *
+     * Changes that must make it fail: the "valid until" column's value, or the count's, read unmasked.
+     *
+     * @return void
+     */
+    public function test_a_restricted_pairs_raw_fields_hold_the_masked_values(): void {
+        [$c1, $c2] = $this->competencies(2);
+        $templateid = $this->template([$c1, $c2]);
+        $worker = $this->worker($templateid);
+        $this->status_row((int) $worker->id, $c1, status::STATUS_VALID, 20300101, 'aso');
+        $this->status_row((int) $worker->id, $c2, status::STATUS_EXPIRED, 20250101, 'nrcertificate');
+        [$sensitive, $plain] = [$this->pair($worker, $c1), $this->pair($worker, $c2)];
+        // Each alias, with the value a manager's record holds for the sensitive pair and the one a reader's does.
+        $fields = [
+            'effectiveexpiry' => ['20300101', '0'],
+            'expirysort' => ['20300101', '0'],
+            'status' => [(string) status::STATUS_VALID, (string) status::EFFECTIVE_RESTRICTED],
+            'evidencecount' => ['1', '0'],
+            'issuer' => ['Issuer aso', ''],
+        ];
+
+        $this->setAdminUser();
+        $manager = $this->raw_records($this->report($templateid));
+        $this->setUser($this->viewer(self::READER));
+        $reader = $this->raw_records($this->report($templateid));
+        $this->assertSame([$sensitive, $plain], array_keys($reader));
+        foreach ($fields as $alias => [$real, $masked]) {
+            $this->assertSame([$real], array_unique($this->raw_fields($manager[$sensitive], $alias)), "Manager, $alias");
+            $this->assertSame([$masked], array_unique($this->raw_fields($reader[$sensitive], $alias)), "Reader, $alias");
+        }
+        $this->assertSame(['20250101'], array_unique($this->raw_fields($reader[$plain], 'effectiveexpiry')));
+        $this->assertSame(['Issuer nrcertificate'], array_unique($this->raw_fields($reader[$plain], 'issuer')));
     }
 
     /**
@@ -711,5 +795,41 @@ final class hub_pairs_test extends core_reportbuilder_testcase {
         $this->assertArrayHasKey((int) $cohort->id, $report->get_filter('user:cohort')->get_options());
         $this->select($report, 'user:cohort', (int) $cohort->id);
         $this->assertSame([$this->pair($bia, $c1)], array_keys($this->rows($report)));
+    }
+
+    /**
+     * The report's "valid until" sort puts a pair valid with no end after every dated pair ascending, and first
+     * descending, while a restricted and a missing pair sort as the most urgent; the cell of the pair with no end is
+     * empty (the high key is the sort's only: the column's value and the "valid until" filter read 0 for it).
+     *
+     * Changes that must make it fail: the sort key of a pair with no expiry left 0 (it sorts among the missing ones);
+     * a restricted or missing pair keyed high; the high key put in the column's value (the cell would print it).
+     *
+     * @return void
+     */
+    public function test_a_pair_valid_with_no_end_sorts_as_the_least_urgent(): void {
+        [$c1, $c2, $c3, $c4] = $this->competencies(4);
+        $templateid = $this->template([$c1, $c2, $c3, $c4]);
+        $worker = $this->worker($templateid);
+        $this->status_row((int) $worker->id, $c1, status::STATUS_VALID);
+        $this->status_row((int) $worker->id, $c2, status::STATUS_VALID, 20990101);
+        $this->status_row((int) $worker->id, $c3, status::STATUS_EXPIRED, 20250101, 'aso');
+        [$noend, $dated, $restricted, $missing] = [
+            $this->pair($worker, $c1),
+            $this->pair($worker, $c2),
+            $this->pair($worker, $c3),
+            $this->pair($worker, $c4),
+        ];
+
+        $this->setUser($this->viewer(self::READER));
+        $report = $this->report($templateid);
+        $ascending = $this->rows($report, 'validity:effectiveexpiry', SORT_ASC);
+        $this->assertSame([$restricted, $missing, $dated, $noend], array_keys($ascending));
+        $descending = $this->rows($report, 'validity:effectiveexpiry', SORT_DESC);
+        // The tie of the restricted and the missing pair goes by the pair's key, in the sort's direction too.
+        $this->assertSame([$noend, $dated, $missing, $restricted], array_keys($descending));
+        $this->assertSame('', $ascending[$noend]['validity:effectiveexpiry']);
+        // The report's own order, its default sort, is the same as the pair set's.
+        $this->assertSame(array_keys($this->hub_rows($templateid)), array_keys($this->rows($report)));
     }
 }

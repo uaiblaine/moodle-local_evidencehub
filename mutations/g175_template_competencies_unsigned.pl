@@ -1,1 +1,1 @@
-s/\n\s*self::template_signature\(\$filter->templateid\),\n/\n/;
+s/\n\s*self::template_signature\(\$templateid\),\n/\n/;

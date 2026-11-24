@@ -40,8 +40,8 @@ class behat_local_evidencehub extends behat_base {
     /**
      * The URL of a page about one thing: "Evidence" takes a username, "Policies" a framework's idnumber,
      * "Hub" a site-level plan template's short name (its list, the data report, which opens on the
-     * pairs needing attention), "Matrix" likewise, the matrix view at 100 workers a page and every
-     * status shown, "Dossier verification" a username: the public page of the latest
+     * pairs needing attention), "Matrix" likewise, the matrix at 100 workers a page in the scope "All",
+     * under the reader's stored filters, "Dossier verification" a username: the public page of the latest
      * dossier issued about that user.
      *
      * @param string $type The page type.
@@ -61,13 +61,12 @@ class behat_local_evidencehub extends behat_base {
             'hub' => new moodle_url('/local/evidencehub/index.php', [
                 'contextid' => context_system::instance()->id,
                 'templateid' => $DB->get_field('competency_template', 'id', ['shortname' => $identifier], MUST_EXIST),
-                'statusfilter' => 1,
             ]),
             'matrix' => new moodle_url('/local/evidencehub/index.php', [
                 'contextid' => context_system::instance()->id,
                 'templateid' => $DB->get_field('competency_template', 'id', ['shortname' => $identifier], MUST_EXIST),
-                'statusfilter' => 1,
                 'view' => 'matrix',
+                'scope' => 'all',
                 'perpage' => 100,
             ]),
             'dossier verification' => new moodle_url('/local/evidencehub/verify.php', [

@@ -161,30 +161,30 @@ trait hub_scenario {
     }
 
     /**
-     * Every pair of a filter, page after page, as "userid:competencyid" => effective status.
+     * Every pair of the hub's base set under a filter, as "userid:competencyid" => effective status, in the order of
+     * its "valid until" key, then the pair's key: the order the pairs report's default sort gives.
      *
-     * @param \context $context The page context.
-     * @param hub_filter $filter The filter; its page is replaced.
-     * @return array In grid order.
+     * @param \context $context The context.
+     * @param hub_filter $filter The filter.
+     * @return array In that order.
      */
-    protected function all_pages(\context $context, hub_filter $filter): array {
-        $query = new hub_query($context, hub_scope::for_user());
+    protected function base_pairs(\context $context, hub_filter $filter): array {
+        global $DB;
+        [$sql, $params] = hub_query::base_sql($filter, hub_scope::for_user(), $context);
         $pairs = [];
-        for ($page = 0; $page < 100; $page++) {
-            $rows = $query->page($filter->with(['page' => $page]));
-            if (!$rows) {
-                break;
-            }
-            foreach ($rows as $row) {
-                $this->assertArrayNotHasKey($row->userid . ':' . $row->competencyid, $pairs, 'A pair came twice.');
-                $pairs[$row->userid . ':' . $row->competencyid] = $row->estatus;
-            }
+        $records = $DB->get_recordset_sql("SELECT b.userid, b.competencyid, b.estatus
+                                             FROM ($sql) b
+                                         ORDER BY b.eexpiry, b.userid, b.competencyid", $params);
+        foreach ($records as $row) {
+            $this->assertArrayNotHasKey($row->userid . ':' . $row->competencyid, $pairs, 'A pair came twice.');
+            $pairs[$row->userid . ':' . $row->competencyid] = (int) $row->estatus;
         }
+        $records->close();
         return $pairs;
     }
 
     /**
-     * A filter on a template showing every status, validated in the system context.
+     * A filter on a template, validated in the system context.
      *
      * @param int $templateid The template.
      * @param array $values More values, as hub_filter::from_values() reads them.
@@ -192,10 +192,7 @@ trait hub_scenario {
      * @return hub_filter
      */
     protected function filter(int $templateid, array $values = [], ?\context $context = null): hub_filter {
-        return hub_filter::from_values(
-            $values + ['templateid' => $templateid, 'statuses' => []],
-            $context ?? \context_system::instance()
-        );
+        return hub_filter::from_values($values + ['templateid' => $templateid], $context ?? \context_system::instance());
     }
 
     /**

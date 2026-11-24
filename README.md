@@ -491,10 +491,14 @@ Data stored
   file in the requester's user context (component `local_evidencehub`, file area `export`), deleted after
   `exportretentiondays` days or with the requester's data.
 
-The user preference `local_evidencehub_hubfilter` keeps the last filter a user applied on the hub
-(template, cohort, statuses, search, sort, page size); a data request exports it. The hub's counts
-are cached in the application caches `hubkpis` and `hubgeneration`, which hold counts only, no
-names; a filter with a search is counted every time and never cached.
+The user preference `local_evidencehub_report` keeps a reader's choices on the hub's list (the columns and their
+widths, the view, and whether suspended accounts are listed); a data request exports it. The values of the filters a
+reader applies to the list (status, cohort, competency, type of evidence, verification, valid until) are kept in
+core's table `reportbuilder_user_filter`, one row per reader and report, until the reader resets them, the account is
+deleted, or the plugin is uninstalled. Core's privacy provider covers custom reports only, so this plugin exports and
+deletes those rows through the Privacy API itself, in the reader's own user context. The hub's figures are cached in
+the application caches `hubgeneration`, `reportgeneration` and `reportsummary`, which hold counts, codes and ids only,
+never a name; a request with a search is counted every time and never cached.
 
 A data request exports, in the worker's user context, the details of the worker's evidence, the
 trail, the dossiers about the worker and the validity of each competency; an actor (a verifier, a

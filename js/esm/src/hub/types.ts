@@ -33,6 +33,9 @@ export type {Column, FilterOption, ViewMode};
 /** Which pairs: every status but compliant, or every pair. */
 export type Scope = 'attention' | 'all';
 
+/** One download format: the dataformat's name and its label. */
+export type Format = {value: string, label: string};
+
 /** Where the dossier export posts: index.php's own branch, with the page's sesskey (dossier_export::posted_workers()). */
 export type ExportForm = {action: string, sesskey: string};
 
@@ -47,6 +50,10 @@ export type ViewProps = {
     searchmin: number,
     matrixurl: string,
     tableurl: string,
+    /** Index.php's download branch with the context, the template and the sesskey (the bar adds the criteria). */
+    downloadurl: string,
+    /** The site's enabled download formats. */
+    formats: Format[],
     /** The dossier export's form, or null for a reader who may not export (the dock is then never drawn). */
     exportform: ExportForm | null,
     labels: Record<string, string>,

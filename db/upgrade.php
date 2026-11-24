@@ -60,5 +60,13 @@ function xmldb_local_evidencehub_upgrade($oldversion) {
         upgrade_plugin_savepoint(true, 2026100507, 'local', 'evidencehub');
     }
 
+    if ($oldversion < 2026100519) {
+        // The old list's last filter, kept per reader, is not carried over (data report study, decision 1): the
+        // list's filters live in core's report store now, and every reader starts on the report's defaults. By
+        // its exact name, so the pairs report's own preference stays.
+        $DB->delete_records('user_preferences', ['name' => 'local_evidencehub_hubfilter']);
+        upgrade_plugin_savepoint(true, 2026100519, 'local', 'evidencehub');
+    }
+
     return true;
 }

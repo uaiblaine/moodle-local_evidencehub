@@ -176,7 +176,7 @@ final class digest {
                             'shortname' => $record->shortname,
                             'contextid' => (int) $record->contextid,
                             'code' => (int) $record->estatus,
-                            'expiry' => (int) $record->eexpiry ?: null,
+                            'expiry' => hub_query::expiry_day((int) $record->eexpiry),
                         ];
                     }
                 }
@@ -283,7 +283,7 @@ final class digest {
     }
 
     /**
-     * The validated filter of a template showing every status, or null when the hub does not offer it.
+     * The validated filter of a template, or null when the hub does not offer it.
      *
      * Validated in the system context with the current (cron) user's rights: that only checks that the
      * template exists; report() then requires the mentor to read it, and the pairs are cut by the mentor's scope.
@@ -295,7 +295,7 @@ final class digest {
         if (!array_key_exists($templateid, $this->filters)) {
             try {
                 $this->filters[$templateid] = hub_filter::from_values(
-                    ['templateid' => $templateid, 'statuses' => []],
+                    ['templateid' => $templateid],
                     \context_system::instance()
                 );
             } catch (\moodle_exception $e) {

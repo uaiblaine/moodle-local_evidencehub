@@ -17,20 +17,27 @@
 {{!
     @template local_evidencehub/hub_matrix
 
-    The hub's readiness matrix: the legend, one page of workers by the template's competencies, the pager.
-    Rendered in full by the server with a fixed table layout, so nothing reflows after load.
+    The hub's readiness matrix of a template, its own page: the heading with the template picker, the criteria in
+    force (the list's, read from the pairs report) with the way back to the list, the legend, one page of workers by
+    the template's competencies, the pager and the dossier export. Rendered in full by the server with a fixed table
+    layout, so nothing reflows after load.
 
     Classes required for JS:
     * none
 
     Data attributes required for JS:
+    * data-region="local-evidencehub-hub" on the root, with data-contextid and data-templateid
     * data-action="selectall" on the checkbox that selects every worker of the page
     * data-region="worker" on each worker's checkbox, which posts the worker's id as workers[]
     * data-action="inspect" on each cell's button, with data-userid, data-competencyid and data-title
 
     Context variables required for this template:
-    * contextid, actionurl, sesskey, filterfields (name, value) - Where the selection of workers posts, with the
-      filter it was made in.
+    * title - the page's heading.
+    * picker - core's single select of the templates on offer, HTML.
+    * locked, contextname - entered from a category: the page says it offers that category's templates only.
+    * contextid, templateid, scope - the matrix's page, which the export posts back to return to it.
+    * scopetext, criteria (text) - which workers are listed, as plain text; listurl - the list, to change them.
+    * actionurl, sesskey - where the selection of workers posts.
     * canexport - Whether the viewer may export dossiers here: the "Export dossiers" button.
     * total - The worker count, as text.
     * legend - label, badgeclass of each effective status.
@@ -41,10 +48,18 @@
 
     Example context (json):
     {
+        "title": "Readiness matrix",
+        "picker": "<form method=\"get\"><select name=\"templateid\"><option>Electricians</option></select></form>",
+        "locked": false,
+        "contextname": "System",
         "contextid": 1,
+        "templateid": 5,
+        "scope": "attention",
+        "scopetext": "Workers with a pair needing attention",
+        "criteria": [{"text": "Status: Expired"}, {"text": "Cohort: Night shift"}],
+        "listurl": "https://example.com/local/evidencehub/index.php?contextid=1&templateid=5",
         "actionurl": "https://example.com/local/evidencehub/index.php",
         "sesskey": "abc123",
-        "filterfields": [{"name": "templateid", "value": 5}, {"name": "view", "value": "matrix"}],
         "canexport": true,
         "total": "2 workers",
         "legend": [
@@ -72,84 +87,97 @@
         "pagingbar": ""
     }
 }}
-<div class="local-evidencehub-matrix-view" data-region="local-evidencehub-matrix">
-    <div class="local-evidencehub-legend d-flex flex-wrap align-items-center gap-3 mb-2" role="group"
-        aria-label="{{#str}} hubmatrixlegend, local_evidencehub {{/str}}">
-        {{#legend}}
-        <span class="local-evidencehub-legend-item"><span class="local-evidencehub-swatch {{badgeclass}}"></span>{{label}}</span>
-        {{/legend}}
-        <span class="local-evidencehub-legend-kinds">{{#str}} hubmatrixkinds, local_evidencehub {{/str}}</span>
+<div class="local-evidencehub-hub local-evidencehub-rview" data-region="local-evidencehub-hub" data-contextid="{{contextid}}" data-templateid="{{templateid}}">
+    <div class="local-evidencehub-rview-pagehead">
+        <h2 class="local-evidencehub-rview-title">{{title}}</h2>
+        <div class="local-evidencehub-rview-picker">{{{picker}}}</div>
     </div>
-    <form method="post" action="{{actionurl}}" class="local-evidencehub-matrix-form">
-        <input type="hidden" name="contextid" value="{{contextid}}">
-        <input type="hidden" name="sesskey" value="{{sesskey}}">
-        {{#filterfields}}
-        <input type="hidden" name="{{name}}" value="{{value}}">
-        {{/filterfields}}
-        <p class="local-evidencehub-total">{{total}}</p>
-        {{#hasrows}}
-        <div class="local-evidencehub-matrix-scroll">
-            <table class="table local-evidencehub-matrix" style="--local-evidencehub-matrix-columns: {{columncount}};">
-                <thead>
-                    <tr>
-                        <th scope="col" class="local-evidencehub-matrix-worker">
-                            <input type="checkbox" class="form-check-input me-2" data-action="selectall"
-                                aria-label="{{#str}} hubmatrixselectall, local_evidencehub {{/str}}">
-                            {{#str}} worker, local_evidencehub {{/str}}
-                        </th>
-                        {{#columns}}
-                        <th scope="col" class="local-evidencehub-matrix-competency" data-competencyid="{{id}}">
-                            <span class="local-evidencehub-matrix-name">{{name}}</span>
-                            <abbr class="local-evidencehub-kind" title="{{kindlabel}}">{{kind}}</abbr>
-                        </th>
-                        {{/columns}}
-                    </tr>
-                </thead>
-                <tbody>
-                    {{#rows}}
-                    <tr data-userid="{{userid}}">
-                        <th scope="row" class="local-evidencehub-matrix-worker">
-                            <div class="d-flex align-items-start">
-                                <input type="checkbox" class="form-check-input me-2 flex-shrink-0" data-region="worker"
-                                    name="workers[]" value="{{userid}}" aria-label="{{selectlabel}}">
-                                <div class="local-evidencehub-matrix-who">
-                                    <a href="{{workerurl}}">{{workername}}</a>
-                                    {{#identity}}
-                                    <small class="d-block local-evidencehub-matrix-identity">{{value}}</small>
-                                    {{/identity}}
+    {{#locked}}
+    <p class="local-evidencehub-rview-locked">{{#str}} hublocked, local_evidencehub, {{contextname}} {{/str}}</p>
+    {{/locked}}
+    <p class="local-evidencehub-matrix-criteria" data-region="local-evidencehub-criteria">
+        <span>{{scopetext}}</span>{{#criteria}}<span class="local-evidencehub-matrix-criterion">{{text}}</span>{{/criteria}}
+        <a href="{{listurl}}" class="local-evidencehub-matrix-change">{{#str}} hubmatrixchange, local_evidencehub {{/str}}</a>
+    </p>
+    <div class="local-evidencehub-matrix-view" data-region="local-evidencehub-matrix">
+        <div class="local-evidencehub-legend d-flex flex-wrap align-items-center gap-3 mb-2" role="group"
+            aria-label="{{#str}} hubmatrixlegend, local_evidencehub {{/str}}">
+            {{#legend}}
+            <span class="local-evidencehub-legend-item"><span class="local-evidencehub-swatch {{badgeclass}}"></span>{{label}}</span>
+            {{/legend}}
+            <span class="local-evidencehub-legend-kinds">{{#str}} hubmatrixkinds, local_evidencehub {{/str}}</span>
+        </div>
+        <form method="post" action="{{actionurl}}" class="local-evidencehub-matrix-form">
+            <input type="hidden" name="contextid" value="{{contextid}}">
+            <input type="hidden" name="sesskey" value="{{sesskey}}">
+            <input type="hidden" name="templateid" value="{{templateid}}">
+            <input type="hidden" name="view" value="matrix">
+            <input type="hidden" name="scope" value="{{scope}}">
+            <p class="local-evidencehub-total">{{total}}</p>
+            {{#hasrows}}
+            <div class="local-evidencehub-matrix-scroll">
+                <table class="table local-evidencehub-matrix" style="--local-evidencehub-matrix-columns: {{columncount}};">
+                    <thead>
+                        <tr>
+                            <th scope="col" class="local-evidencehub-matrix-worker">
+                                <input type="checkbox" class="form-check-input me-2" data-action="selectall"
+                                    aria-label="{{#str}} hubmatrixselectall, local_evidencehub {{/str}}">
+                                {{#str}} worker, local_evidencehub {{/str}}
+                            </th>
+                            {{#columns}}
+                            <th scope="col" class="local-evidencehub-matrix-competency" data-competencyid="{{id}}">
+                                <span class="local-evidencehub-matrix-name">{{name}}</span>
+                                <abbr class="local-evidencehub-kind" title="{{kindlabel}}">{{kind}}</abbr>
+                            </th>
+                            {{/columns}}
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {{#rows}}
+                        <tr data-userid="{{userid}}">
+                            <th scope="row" class="local-evidencehub-matrix-worker">
+                                <div class="d-flex align-items-start">
+                                    <input type="checkbox" class="form-check-input me-2 flex-shrink-0" data-region="worker"
+                                        name="workers[]" value="{{userid}}" aria-label="{{selectlabel}}">
+                                    <div class="local-evidencehub-matrix-who">
+                                        <a href="{{workerurl}}">{{workername}}</a>
+                                        {{#identity}}
+                                        <small class="d-block local-evidencehub-matrix-identity">{{value}}</small>
+                                        {{/identity}}
+                                    </div>
                                 </div>
-                            </div>
-                        </th>
-                        {{#cells}}
-                        <td class="local-evidencehub-matrix-cell">
-                            {{^empty}}
-                            <button type="button" class="local-evidencehub-cell {{badgeclass}}" data-action="inspect" data-status="{{code}}"
-                                data-userid="{{userid}}" data-competencyid="{{competencyid}}" data-title="{{drawertitle}}"
-                                aria-label="{{celllabel}}">
-                                <span class="visually-hidden">{{statuslabel}}</span>
-                                {{#restricted}}{{#pix}} t/locked, core {{/pix}}{{/restricted}}
-                                {{text}}
-                            </button>
-                            {{/empty}}
-                        </td>
-                        {{/cells}}
-                    </tr>
-                    {{/rows}}
-                </tbody>
-            </table>
-        </div>
-        <p class="form-text">{{#str}} hubmatrixhelp, local_evidencehub {{/str}}</p>
-        {{{pagingbar}}}
-        {{#canexport}}
-        <div class="d-flex flex-wrap gap-2 align-items-center">
-            <button type="submit" name="action" value="exportdossiers" class="btn btn-primary"
-                data-action="exportdossiers">{{#str}} dossierexport, local_evidencehub {{/str}}</button>
-            <span class="form-text">{{#str}} dossierexporthelp, local_evidencehub {{/str}}</span>
-        </div>
-        {{/canexport}}
-        {{/hasrows}}
-        {{^hasrows}}
-        <p class="text-muted">{{#str}} hubmatrixnorows, local_evidencehub {{/str}}</p>
-        {{/hasrows}}
-    </form>
+                            </th>
+                            {{#cells}}
+                            <td class="local-evidencehub-matrix-cell">
+                                {{^empty}}
+                                <button type="button" class="local-evidencehub-cell {{badgeclass}}" data-action="inspect" data-status="{{code}}"
+                                    data-userid="{{userid}}" data-competencyid="{{competencyid}}" data-title="{{drawertitle}}"
+                                    aria-label="{{celllabel}}">
+                                    <span class="visually-hidden">{{statuslabel}}</span>
+                                    {{#restricted}}{{#pix}} t/locked, core {{/pix}}{{/restricted}}
+                                    {{text}}
+                                </button>
+                                {{/empty}}
+                            </td>
+                            {{/cells}}
+                        </tr>
+                        {{/rows}}
+                    </tbody>
+                </table>
+            </div>
+            <p class="form-text">{{#str}} hubmatrixhelp, local_evidencehub {{/str}}</p>
+            {{{pagingbar}}}
+            {{#canexport}}
+            <div class="d-flex flex-wrap gap-2 align-items-center">
+                <button type="submit" name="action" value="exportdossiers" class="btn btn-primary"
+                    data-action="exportdossiers">{{#str}} dossierexport, local_evidencehub {{/str}}</button>
+                <span class="form-text">{{#str}} dossierexporthelp, local_evidencehub {{/str}}</span>
+            </div>
+            {{/canexport}}
+            {{/hasrows}}
+            {{^hasrows}}
+            <p class="text-muted">{{#str}} hubmatrixnorows, local_evidencehub {{/str}}</p>
+            {{/hasrows}}
+        </form>
+    </div>
 </div>

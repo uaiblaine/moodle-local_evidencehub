@@ -92,6 +92,9 @@ class hub_pairs extends system_report {
     /** @var bool Whether the reader may see full names in the report's context. */
     private bool $viewfullnames = false;
 
+    /** @var validity|null The validity entity of this build, whose sort key the "valid until" column sorts by. */
+    private ?validity $validity = null;
+
     /**
      * The report of a template's pairs in a hub context, for the current user.
      *
@@ -263,6 +266,7 @@ class hub_pairs extends system_report {
         $this->add_entity($userentity);
         $this->add_entity($competencyentity);
         $validity = (new validity($restricted, true))->set_table_alias(status_repository::TABLE, $s);
+        $this->validity = $validity;
         $this->add_entity($validity);
         $this->add_entity((new evidence_details($restricted, true))
             ->set_table_alias(details::TABLE, $m)
@@ -519,12 +523,14 @@ class hub_pairs extends system_report {
         $catalogue = $this->column_catalogue();
         foreach (array_keys($this->chosen_keys()) as $key) {
             $column = match ($key) {
-                // The hub's default order: restricted and missing first (their key is 0), then the earliest day,
-                // then the pair's key, so tied rows keep one order across pages.
+                // The hub's default order: restricted and missing first (their key is 0), then the earliest day, then
+                // a pair valid with no end ({@see validity::expiry_sort_sql()}), then the pair's key, so tied rows keep
+                // one order across pages. The cell still prints the column's own value, empty for no day.
                 'expiry' => $this->add_column_from_entity('validity:effectiveexpiry')
+                    ->add_field($this->validity->expiry_sort_sql(), 'expirysort')
                     ->add_field("{$p}.userid", 'pairuserid')
                     ->add_field("{$tc}.competencyid", 'paircompetencyid')
-                    ->set_is_sortable(true, ['effectiveexpiry', 'pairuserid', 'paircompetencyid']),
+                    ->set_is_sortable(true, ['expirysort', 'pairuserid', 'paircompetencyid']),
                 'competencyidnumber' => $this->add_column($this->competency_idnumber_column($c)),
                 'framework' => $this->add_column($this->framework_column()),
                 default => $this->add_column_from_entity($catalogue[$key]['identifier']),
