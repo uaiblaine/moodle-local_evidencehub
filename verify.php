@@ -44,22 +44,7 @@ $PAGE->set_title($title);
 $CFG->additionalhtmlhead = ($CFG->additionalhtmlhead ?? '') . '<meta name="robots" content="noindex" />';
 
 // Before the code is read, so a visitor who may not verify learns nothing about it.
-if (!\local_evidencehub\local\dossier::can_verify()) {
-    // An account may hold what the guest role does not: the login page brings the visitor back here, with the
-    // code it came with (the page's own URL leaves it out), when it has the shape of one.
-    $back = new moodle_url('/local/evidencehub/verify.php', preg_match('/^[0-9a-f]{32}$/', $code) ? ['code' => $code] : []);
-    if (isguestuser()) {
-        // Require_login() lets the guest user through, so it is sent to the login page directly.
-        $SESSION->wantsurl = $back->out(false);
-        redirect(get_login_url());
-    }
-    if (!isloggedin()) {
-        // Never logged in as guest automatically: the guest role was just refused.
-        $SESSION->wantsurl = $back->out(false);
-        require_login(null, false, null, false);
-    }
-    throw new moodle_exception('errorverifydossier', 'local_evidencehub');
-}
+\local_evidencehub\local\dossier::require_verify($code);
 
 $dossier = \local_evidencehub\local\dossier::find_by_code($code);
 $page = new \local_evidencehub\output\verify_page(
