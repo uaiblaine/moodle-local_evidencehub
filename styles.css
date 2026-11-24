@@ -204,3 +204,1606 @@
     overflow-wrap: anywhere;
     font-variant-numeric: tabular-nums;
 }
+
+/* The hub's list of pairs as a data report (stage E3, Moodle 5.3; js/esm/src/hub and js/esm/src/datareport),
+   copied from enrol_apply's course report and its approval queue (the Design System's data-report.md) under this
+   plugin's prefix. Its root is the shell's wrapper, .local-evidencehub-rview, which declares every token the view
+   paints with (tokens.md): each the family name theme_dimensions declares, then Bootstrap's, then Bootstrap 5.3's
+   light default. Every layer the view opens (menus, the panel, the dock) is drawn inside this root, so no other
+   root is needed; the inspection drawer is the plugin's own core/modal and declares its own. Dark mode is
+   Bootstrap's data-bs-theme, which moves the --bs-* links; the plugin redeclares only the values it authors. */
+.local-evidencehub-rview {
+    --local-evidencehub-surface: var(--dimensions-surface, var(--bs-body-bg, #fff));
+    --local-evidencehub-surface-alt: var(--dimensions-surface-alt, var(--bs-tertiary-bg, #f8f9fa));
+    --local-evidencehub-surface-inset: var(--dimensions-surface-inset, var(--bs-secondary-bg, #e9ecef));
+    --local-evidencehub-hover: var(--dimensions-hover, var(--bs-primary-bg-subtle, #cfe2ff));
+    --local-evidencehub-pressed: var(--dimensions-pressed, var(--bs-primary-bg-subtle, #cfe2ff));
+    --local-evidencehub-line: var(--dimensions-line, var(--bs-border-color, #dee2e6));
+    --local-evidencehub-control-line: var(--dimensions-control-line, var(--bs-gray-500, #8f959e));
+    --local-evidencehub-ink: var(--dimensions-ink, var(--bs-body-color, #212529));
+    --local-evidencehub-ink-strong: var(--dimensions-ink-strong, var(--bs-emphasis-color, #000));
+    --local-evidencehub-ink-muted: var(--dimensions-ink-muted, var(--bs-secondary-color, rgba(33, 37, 41, .75)));
+    --local-evidencehub-ink-faint: var(--dimensions-ink-faint, var(--bs-tertiary-color, rgba(33, 37, 41, .5)));
+    --local-evidencehub-accent: var(--dimensions-accent, var(--bs-link-color, #0f6cbf));
+    --local-evidencehub-brand-fill: var(--dimensions-brand-fill, var(--bs-primary, #0f6cbf));
+    --local-evidencehub-on-brand-fill: var(--dimensions-on-brand-fill, #fff);
+    --local-evidencehub-brand-ink: var(--dimensions-brand-ink, var(--bs-primary-text-emphasis, #052c65));
+    --local-evidencehub-brand-tint: var(--dimensions-brand-tint, var(--bs-primary-bg-subtle, #cfe2ff));
+    --local-evidencehub-brand-edge: var(--dimensions-brand-edge, var(--bs-primary-border-subtle, #9ec5fe));
+    --local-evidencehub-success-ink: var(--dimensions-success-ink, var(--bs-success-text-emphasis, #0a3622));
+    --local-evidencehub-success-tint: var(--dimensions-success-tint, var(--bs-success-bg-subtle, #d1e7dd));
+    --local-evidencehub-success-edge: var(--dimensions-success-edge, var(--bs-success-border-subtle, #a3cfbb));
+    --local-evidencehub-warning-ink: var(--dimensions-warning-ink, var(--bs-warning-text-emphasis, #664d03));
+    --local-evidencehub-warning-tint: var(--dimensions-warning-tint, var(--bs-warning-bg-subtle, #fff3cd));
+    --local-evidencehub-warning-edge: var(--dimensions-warning-edge, var(--bs-warning-border-subtle, #ffe69c));
+    --local-evidencehub-danger-ink: var(--dimensions-danger-ink, var(--bs-danger-text-emphasis, #58151c));
+    --local-evidencehub-danger-tint: var(--dimensions-danger-tint, var(--bs-danger-bg-subtle, #f8d7da));
+    --local-evidencehub-danger-edge: var(--dimensions-danger-edge, var(--bs-danger-border-subtle, #f1aeb5));
+    --local-evidencehub-info-ink: var(--dimensions-info-ink, var(--bs-info-text-emphasis, #055160));
+    --local-evidencehub-info-tint: var(--dimensions-info-tint, var(--bs-info-bg-subtle, #cff4fc));
+    --local-evidencehub-info-edge: var(--dimensions-info-edge, var(--bs-info-border-subtle, #9eeaf9));
+    --local-evidencehub-neutral-ink: var(--dimensions-neutral-ink, var(--bs-secondary-text-emphasis, #2b2f32));
+    --local-evidencehub-neutral-tint: var(--dimensions-neutral-tint, var(--bs-secondary-bg-subtle, #e2e3e5));
+    --local-evidencehub-neutral-edge: var(--dimensions-neutral-edge, var(--bs-secondary-border-subtle, #c4c8cb));
+    --local-evidencehub-focus-ring: var(--dimensions-focus-ring, var(--bs-emphasis-color, #000));
+    --local-evidencehub-focus-width: var(--dimensions-focus-width, 2px);
+    --local-evidencehub-shadow: var(--dimensions-shadow, rgb(0 0 0 / 10%));
+    --local-evidencehub-radius-xs: var(--dimensions-radius-xs, 4px);
+    --local-evidencehub-radius-sm: var(--dimensions-radius-sm, 6px);
+    --local-evidencehub-radius-md: var(--dimensions-radius-md, 8px);
+    --local-evidencehub-radius-lg: var(--dimensions-radius-lg, 12px);
+    --local-evidencehub-radius-xl: var(--dimensions-radius-xl, 16px);
+    /* The elevation's literal default on its own line, so the chain fits the line length. */
+    --local-evidencehub-elevation-sm-default: 0 1px 2px rgba(7, 0, 147, .08), 0 1px 3px rgba(7, 0, 147, .06);
+    --local-evidencehub-elevation-sm: var(--dimensions-elevation-sm, var(--local-evidencehub-elevation-sm-default));
+    --local-evidencehub-elevation-md: var(--dimensions-elevation-md, 0 4px 12px rgba(7, 0, 147, .10));
+    --local-evidencehub-motion-fast: var(--dimensions-motion-fast, 150ms);
+    --local-evidencehub-motion-base: var(--dimensions-motion-base, 250ms);
+    --local-evidencehub-motion-ease: var(--dimensions-motion-ease, cubic-bezier(.4, 0, .2, 1));
+    --local-evidencehub-bar-inner: 2rem;
+    color: var(--local-evidencehub-ink);
+}
+
+/* The values the plugin authors itself, black-based in the dark mode (tokens.md, D46). */
+body[data-bs-theme="dark"] .local-evidencehub-rview,
+[data-bs-theme="dark"] body .local-evidencehub-rview {
+    --local-evidencehub-shadow: var(--dimensions-shadow, rgb(0 0 0 / 50%));
+    --local-evidencehub-elevation-sm-default: 0 1px 2px rgba(0, 0, 0, .5);
+    --local-evidencehub-elevation-md: var(--dimensions-elevation-md, 0 4px 12px rgba(0, 0, 0, .55));
+}
+
+@media (pointer: coarse) {
+    .local-evidencehub-rview {
+        --local-evidencehub-bar-inner: 2.25rem;
+    }
+}
+
+.local-evidencehub-rview .local-evidencehub-rview-tablelink {
+    font-size: 0.875rem;
+    margin: 0 0 0.75rem;
+}
+
+/* The shell's first paint: a skeleton until React commits, and after about 10 s the one sentence
+   that says the view did not load (block_compass's preload step, copied). Without JavaScript
+   neither shows: the noscript beside them carries core's report. */
+.local-evidencehub-rview .local-evidencehub-rview-preload,
+.local-evidencehub-rview .local-evidencehub-rview-failed {
+    display: none;
+}
+
+body.jsenabled .local-evidencehub-rview .local-evidencehub-rview-preload {
+    animation: local-evidencehub-rview-preload-out 100ms step-start 10s forwards;
+    display: block;
+}
+
+body.jsenabled .local-evidencehub-rview .local-evidencehub-rview-preload + .local-evidencehub-rview-failed {
+    animation: local-evidencehub-rview-preload-in 100ms step-start 10s forwards;
+    display: block;
+    position: absolute;
+    visibility: hidden;
+}
+
+@keyframes local-evidencehub-rview-preload-out {
+    from,
+    to {
+        position: absolute;
+        visibility: hidden;
+    }
+}
+
+@keyframes local-evidencehub-rview-preload-in {
+    from,
+    to {
+        position: static;
+        visibility: visible;
+    }
+}
+
+.local-evidencehub-rview .local-evidencehub-rview-icon {
+    flex: none;
+    height: 1rem;
+    width: 1rem;
+}
+
+.local-evidencehub-rview :focus-visible {
+    outline: var(--local-evidencehub-focus-width) solid var(--local-evidencehub-focus-ring);
+    outline-offset: 2px;
+}
+
+.local-evidencehub-rview .local-evidencehub-rview-num,
+.local-evidencehub-rview .local-evidencehub-rview-tile-value,
+.local-evidencehub-rview .local-evidencehub-rview-pager button {
+    font-variant-numeric: tabular-nums;
+}
+
+.local-evidencehub-rview .local-evidencehub-rview-note,
+.local-evidencehub-rview .local-evidencehub-rview-hint {
+    color: var(--local-evidencehub-ink-muted);
+    font-size: 0.8125rem;
+    margin: 0.25rem 0;
+}
+
+.local-evidencehub-rview .local-evidencehub-rview-error {
+    color: var(--local-evidencehub-danger-ink);
+    font-size: 0.875rem;
+}
+
+.local-evidencehub-rview .local-evidencehub-rview-linkbtn {
+    padding: 0;
+}
+
+/* Skeleton (skeleton.md): blocks in the shape of what they stand for, one 1.3 s pulse. */
+.local-evidencehub-rview .local-evidencehub-rview-skb {
+    background: var(--local-evidencehub-surface-inset);
+    border-radius: var(--local-evidencehub-radius-xs);
+    display: block;
+    height: 0.75rem;
+    margin: 0.375rem 0;
+}
+
+.local-evidencehub-rview .local-evidencehub-rview-skb--big {
+    height: 1.5rem;
+    width: 60%;
+}
+
+.local-evidencehub-rview .local-evidencehub-rview-skb--w40 {
+    width: 40%;
+}
+
+.local-evidencehub-rview .local-evidencehub-rview-skb--w60 {
+    width: 60%;
+}
+
+.local-evidencehub-rview .local-evidencehub-rview-skb--w80 {
+    width: 80%;
+}
+
+.local-evidencehub-rview .local-evidencehub-rview-skgrid {
+    border: 1px solid var(--local-evidencehub-line);
+    border-radius: var(--local-evidencehub-radius-lg);
+    padding: 0.75rem;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+    .local-evidencehub-rview .local-evidencehub-rview-sk {
+        animation: local-evidencehub-rview-pulse 1300ms ease-in-out infinite;
+    }
+}
+
+@keyframes local-evidencehub-rview-pulse {
+    0%,
+    100% {
+        opacity: 1;
+    }
+
+    50% {
+        opacity: .45;
+    }
+}
+
+/* A region loading again: the old content stays, dimmed, under a 2 px line. */
+.local-evidencehub-rview .local-evidencehub-rview-region {
+    margin-bottom: 0.75rem;
+    position: relative;
+}
+
+.local-evidencehub-rview .local-evidencehub-rview-region[aria-busy="true"] .local-evidencehub-rview-dim {
+    opacity: .55;
+    transition: opacity var(--local-evidencehub-motion-fast) var(--local-evidencehub-motion-ease);
+}
+
+.local-evidencehub-rview .local-evidencehub-rview-progress {
+    border-radius: 2px;
+    height: 2px;
+    left: 0;
+    overflow: hidden;
+    position: absolute;
+    right: 0;
+    top: 0;
+    z-index: 6;
+}
+
+.local-evidencehub-rview .local-evidencehub-rview-progress::before {
+    background: var(--local-evidencehub-brand-fill);
+    bottom: 0;
+    content: "";
+    left: 0;
+    position: absolute;
+    top: 0;
+    width: 30%;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+    .local-evidencehub-rview .local-evidencehub-rview-progress::before {
+        animation: local-evidencehub-rview-indeterminate 1100ms var(--local-evidencehub-motion-ease) infinite;
+    }
+}
+
+@keyframes local-evidencehub-rview-indeterminate {
+    from {
+        transform: translateX(-100%);
+    }
+
+    to {
+        transform: translateX(340%);
+    }
+}
+
+.local-evidencehub-rview .local-evidencehub-rview-band {
+    display: grid;
+    gap: 0.5rem;
+    grid-template-columns: repeat(auto-fit, minmax(9.5rem, 1fr));
+    margin-bottom: 0.5rem;
+}
+
+.local-evidencehub-rview .local-evidencehub-rview-tile,
+.local-evidencehub-rview .local-evidencehub-rview-panel {
+    color: var(--local-evidencehub-ink);
+    background: var(--local-evidencehub-surface);
+    border: 1px solid var(--local-evidencehub-line);
+    border-radius: var(--local-evidencehub-radius-lg);
+    min-width: 0;
+    padding: 0.75rem;
+}
+
+.local-evidencehub-rview .local-evidencehub-rview-tile-label {
+    color: var(--local-evidencehub-ink-muted);
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+
+.local-evidencehub-rview .local-evidencehub-rview-tile-value {
+    color: var(--local-evidencehub-ink-strong);
+    font-size: 1.5rem;
+    font-weight: 700;
+    line-height: 1.2;
+}
+
+.local-evidencehub-rview .local-evidencehub-rview-tile-sub {
+    color: var(--local-evidencehub-ink-muted);
+    font-size: 0.75rem;
+}
+
+.local-evidencehub-rview .local-evidencehub-rview-dist {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+.local-evidencehub-rview .local-evidencehub-rview-dist > .local-evidencehub-rview-panel {
+    flex: 1 1 45%;
+    min-width: 17.5rem;
+}
+
+.local-evidencehub-rview .local-evidencehub-rview-panel-title {
+    align-items: center;
+    display: flex;
+    flex-wrap: wrap;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    gap: 0.5rem;
+    justify-content: space-between;
+    margin-bottom: 0.5rem;
+}
+
+/* A panel's line is a button that sets a filter: its label, its bar, its number as text (never colour alone). */
+.local-evidencehub-rview .local-evidencehub-rview-hlist {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.local-evidencehub-rview .local-evidencehub-rview-hrow {
+    align-items: center;
+    background: transparent;
+    border: 0;
+    border-radius: var(--local-evidencehub-radius-xs);
+    color: var(--local-evidencehub-ink);
+    display: grid;
+    font-size: 0.8125rem;
+    gap: 0.5rem;
+    grid-template-columns: minmax(0, 11rem) minmax(0, 1fr) 4.5rem;
+    margin: 0.125rem 0;
+    padding: 0.125rem 0.25rem;
+    text-align: start;
+    transition: background-color var(--local-evidencehub-motion-base) var(--local-evidencehub-motion-ease);
+    width: 100%;
+}
+
+.local-evidencehub-rview .local-evidencehub-rview-hrow:not(:disabled):hover {
+    background: var(--local-evidencehub-hover);
+    transition-duration: var(--local-evidencehub-motion-fast);
+}
+
+.local-evidencehub-rview .local-evidencehub-rview-hrow-label {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.local-evidencehub-rview .local-evidencehub-rview-hrow-n {
+    color: var(--local-evidencehub-ink-muted);
+    text-align: end;
+    white-space: nowrap;
+}
+
+.local-evidencehub-rview .local-evidencehub-rview-track {
+    background: var(--local-evidencehub-surface-inset);
+    border-radius: var(--local-evidencehub-radius-xs);
+    display: block;
+    height: 0.5rem;
+    overflow: hidden;
+}
+
+.local-evidencehub-rview .local-evidencehub-rview-fill {
+    background: var(--local-evidencehub-brand-fill);
+    border-radius: var(--local-evidencehub-radius-xs);
+    display: block;
+    height: 100%;
+}
+
+.local-evidencehub-rview .local-evidencehub-rview-input {
+    margin-top: 0.375rem;
+}
+
+/* Segmented control (segmented-control.md). */
+.local-evidencehub-rview .local-evidencehub-rview-seg {
+    color: var(--local-evidencehub-ink-muted);
+    background: var(--local-evidencehub-surface-inset);
+    border: 1px solid transparent;
+    border-radius: var(--local-evidencehub-radius-lg);
+    display: inline-flex;
+    flex-wrap: wrap;
+    gap: 0.125rem;
+    padding: 0.1875rem;
+}
+
+.local-evidencehub-rview .local-evidencehub-rview-seg-cell {
+    align-items: center;
+    background: transparent;
+    border: 0;
+    border-radius: var(--local-evidencehub-radius-md);
+    color: var(--local-evidencehub-ink-muted);
+    display: inline-flex;
+    font-size: 0.875rem;
+    font-weight: 500;
+    gap: 0.375rem;
+    height: var(--local-evidencehub-bar-inner);
+    padding: 0 0.75rem;
+    transition:
+        background-color var(--local-evidencehub-motion-base) var(--local-evidencehub-motion-ease),
+        color var(--local-evidencehub-motion-base) var(--local-evidencehub-motion-ease);
+}
+
+.local-evidencehub-rview .local-evidencehub-rview-seg-cell:hover {
+    color: var(--local-evidencehub-ink);
+    transition-duration: var(--local-evidencehub-motion-fast);
+}
+
+.local-evidencehub-rview .local-evidencehub-rview-seg-cell[aria-checked="true"] {
+    background: var(--local-evidencehub-surface);
+    box-shadow: var(--local-evidencehub-elevation-sm);
+    color: var(--local-evidencehub-ink);
+    font-weight: 600;
+}
+
+.local-evidencehub-rview .local-evidencehub-rview-seg--small .local-evidencehub-rview-seg-cell {
+    font-size: 0.8125rem;
+    height: 1.75rem;
+    padding: 0 0.5rem;
+}
+
+/* Filter bar (filter-bar.md, icon-button.md, counter.md, tooltip.md). */
+.local-evidencehub-rview .local-evidencehub-rview-bar {
+    align-items: center;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-bottom: 0.75rem;
+    position: relative;
+}
+
+.local-evidencehub-rview .local-evidencehub-rview-bar-spacer {
+    flex: 1 1 0;
+}
+
+/* The row of controls (the cluster, then the search's capsule) is the panel's anchor, so the panel
+   hangs under the controls and never under the chips row below them. */
+.local-evidencehub-rview .local-evidencehub-rview-bar-controls {
+    align-items: center;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    justify-content: flex-end;
+    margin-inline-start: auto;
+    position: relative;
+}
+
+/* A button that opens a menu and its menu: the menu hangs under the button, at its end. */
+.local-evidencehub-rview .local-evidencehub-rview-anchor {
+    display: inline-flex;
+    position: relative;
+}
+
+.local-evidencehub-rview .local-evidencehub-rview-bar-cluster {
+    color: var(--local-evidencehub-ink-muted);
+    align-items: center;
+    background: var(--local-evidencehub-surface-inset);
+    border-radius: var(--local-evidencehub-radius-lg);
+    display: inline-flex;
+}
+
+.local-evidencehub-rview .local-evidencehub-rview-bar-count {
+    color: var(--local-evidencehub-ink-muted);
+    font-size: 0.875rem;
+    font-variant-numeric: tabular-nums;
+    font-weight: 600;
+    padding: 0 0.5rem 0 0.75rem;
+    white-space: nowrap;
+}
+
+.local-evidencehub-rview .local-evidencehub-rview-capsule {
+    color: var(--local-evidencehub-ink-muted);
+    align-items: center;
+    background: var(--local-evidencehub-surface);
+    border: 1px solid var(--local-evidencehub-line);
+    border-radius: var(--local-evidencehub-radius-lg);
+    box-shadow: var(--local-evidencehub-elevation-sm);
+    display: inline-flex;
+    gap: 0.125rem;
+    padding: 0.1875rem;
+    position: relative;
+}
+
+.local-evidencehub-rview .local-evidencehub-rview-iconbtn {
+    align-items: center;
+    background: transparent;
+    border: 0;
+    border-radius: var(--local-evidencehub-radius-md);
+    color: var(--local-evidencehub-ink-muted);
+    display: inline-flex;
+    gap: 0.125rem;
+    height: var(--local-evidencehub-bar-inner);
+    justify-content: center;
+    min-width: var(--local-evidencehub-bar-inner);
+    padding: 0 0.375rem;
+    position: relative;
+    transition:
+        background-color var(--local-evidencehub-motion-base) var(--local-evidencehub-motion-ease),
+        color var(--local-evidencehub-motion-base) var(--local-evidencehub-motion-ease);
+}
+
+.local-evidencehub-rview .local-evidencehub-rview-iconbtn:hover {
+    background: var(--local-evidencehub-surface-alt);
+    color: var(--local-evidencehub-ink);
+    transition-duration: var(--local-evidencehub-motion-fast);
+}
+
+.local-evidencehub-rview .local-evidencehub-rview-iconbtn[aria-expanded="true"] {
+    background: var(--local-evidencehub-brand-tint);
+    color: var(--local-evidencehub-brand-ink);
+}
+
+.local-evidencehub-rview .local-evidencehub-rview-chevron {
+    height: 0.75rem;
+    width: 0.75rem;
+}
+
+/* The tooltip naming an icon button or the eraser after 100 ms of rest on hover or keyboard focus
+   (tooltip.md): the balloon above the host, wrapping at 260 px, with its arrow; the host's aria-label is
+   the name. Never while the host's own menu or panel is open. */
+.local-evidencehub-rview [data-local-evidencehub-tip]::after,
+.local-evidencehub-rview [data-local-evidencehub-tip]::before {
+    left: 50%;
+    opacity: 0;
+    pointer-events: none;
+    position: absolute;
+    transition: opacity var(--local-evidencehub-motion-fast) ease;
+}
+
+.local-evidencehub-rview [data-local-evidencehub-tip]::after {
+    background: var(--local-evidencehub-ink);
+    border-radius: var(--local-evidencehub-radius-sm);
+    bottom: calc(100% + 0.5rem);
+    box-shadow: 0 0.5rem 1rem var(--local-evidencehub-shadow);
+    color: var(--local-evidencehub-surface);
+    content: attr(data-local-evidencehub-tip);
+    font-size: 0.75rem;
+    font-weight: 400;
+    line-height: 1.35;
+    max-width: 16.25rem;
+    padding: 0.35rem 0.55rem;
+    text-align: center;
+    transform: translateX(-50%);
+    white-space: normal;
+    width: max-content;
+    z-index: 20;
+}
+
+.local-evidencehub-rview [data-local-evidencehub-tip]::before {
+    border: 5px solid transparent;
+    border-top-color: var(--local-evidencehub-ink);
+    bottom: calc(100% - 0.125rem);
+    content: "";
+    margin-left: -5px;
+    z-index: 21;
+}
+
+.local-evidencehub-rview [data-local-evidencehub-tip]:not([aria-expanded="true"]):hover::after,
+.local-evidencehub-rview [data-local-evidencehub-tip]:not([aria-expanded="true"]):hover::before,
+.local-evidencehub-rview [data-local-evidencehub-tip]:not([aria-expanded="true"]):focus-visible::after,
+.local-evidencehub-rview [data-local-evidencehub-tip]:not([aria-expanded="true"]):focus-visible::before {
+    opacity: 1;
+    transition-delay: 100ms;
+}
+
+/* The search's capsule ends the bar: the balloons of its button and of the eraser line up with their
+   host's end edge, so they stay over the bar, the arrow still over the host's middle. */
+.local-evidencehub-rview .local-evidencehub-rview-searchcap [data-local-evidencehub-tip]::after {
+    left: auto;
+    right: 0;
+    transform: none;
+}
+
+.local-evidencehub-rview .local-evidencehub-rview-badge {
+    background: var(--local-evidencehub-brand-fill);
+    border-radius: 50rem;
+    color: var(--local-evidencehub-on-brand-fill);
+    font-size: 0.75rem;
+    font-variant-numeric: tabular-nums;
+    font-weight: 700;
+    height: 1rem;
+    line-height: 1rem;
+    min-width: 1rem;
+    padding: 0 0.25rem;
+    position: absolute;
+    right: -0.25rem;
+    text-align: center;
+    top: -0.25rem;
+}
+
+.local-evidencehub-rview .local-evidencehub-rview-search {
+    align-items: center;
+    background: var(--local-evidencehub-surface-inset);
+    border-radius: var(--local-evidencehub-radius-md);
+    color: var(--local-evidencehub-ink-muted);
+    display: inline-flex;
+    gap: 0.375rem;
+    height: var(--local-evidencehub-bar-inner);
+    padding: 0 0.5rem;
+}
+
+.local-evidencehub-rview .local-evidencehub-rview-search:focus-within {
+    outline: var(--local-evidencehub-focus-width) solid var(--local-evidencehub-focus-ring);
+    outline-offset: 2px;
+}
+
+.local-evidencehub-rview .local-evidencehub-rview-search input {
+    appearance: none;
+    background: transparent;
+    border: 0;
+    color: var(--local-evidencehub-ink);
+    font-size: 0.875rem;
+    min-width: 60px;
+    outline: none;
+    width: 190px;
+}
+
+/* The browser's own clear button goes: the eraser is the one control that clears, and never a cross. */
+.local-evidencehub-rview .local-evidencehub-rview-search input::-webkit-search-cancel-button {
+    display: none;
+}
+
+.local-evidencehub-rview .local-evidencehub-rview-eraser {
+    align-items: center;
+    background: transparent;
+    border: 0;
+    border-radius: var(--local-evidencehub-radius-xs);
+    color: var(--local-evidencehub-ink-muted);
+    display: inline-flex;
+    flex: none;
+    height: 1.5rem;
+    justify-content: center;
+    margin-inline-end: -0.25rem;
+    padding: 0;
+    position: relative;
+    transition:
+        background-color var(--local-evidencehub-motion-base) var(--local-evidencehub-motion-ease),
+        color var(--local-evidencehub-motion-base) var(--local-evidencehub-motion-ease);
+    width: 1.5rem;
+}
+
+.local-evidencehub-rview .local-evidencehub-rview-eraser:hover {
+    background: var(--local-evidencehub-surface-alt);
+    color: var(--local-evidencehub-ink);
+    transition-duration: var(--local-evidencehub-motion-fast);
+}
+
+.local-evidencehub-rview .local-evidencehub-rview-eraser:focus-visible {
+    outline: var(--local-evidencehub-focus-width) solid var(--local-evidencehub-focus-ring);
+    outline-offset: 0.125rem;
+}
+
+.local-evidencehub-rview .local-evidencehub-rview-spin {
+    border: 2px solid var(--local-evidencehub-line);
+    border-radius: 50%;
+    border-top-color: var(--local-evidencehub-brand-fill);
+    flex: none;
+    height: 0.875rem;
+    width: 0.875rem;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+    .local-evidencehub-rview .local-evidencehub-rview-spin {
+        animation: local-evidencehub-rview-spin 700ms linear infinite;
+    }
+}
+
+@keyframes local-evidencehub-rview-spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+/* Chips (chip.md). */
+.local-evidencehub-rview .local-evidencehub-rview-chips {
+    align-items: center;
+    display: flex;
+    flex: 1 0 100%;
+    flex-wrap: wrap;
+    gap: 0.375rem;
+}
+
+.local-evidencehub-rview .local-evidencehub-rview-chips[hidden] {
+    display: none;
+}
+
+.local-evidencehub-rview .local-evidencehub-rview-chip {
+    align-items: center;
+    background: var(--local-evidencehub-brand-tint);
+    border: 1px solid var(--local-evidencehub-brand-edge);
+    border-radius: var(--local-evidencehub-radius-sm);
+    color: var(--local-evidencehub-brand-ink);
+    display: inline-flex;
+    font-size: 0.8125rem;
+    font-weight: 500;
+    gap: 0.375rem;
+    height: 1.75rem;
+    max-width: 100%;
+    padding: 0 0.375rem 0 0.5rem;
+}
+
+.local-evidencehub-rview .local-evidencehub-rview-chip span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.local-evidencehub-rview .local-evidencehub-rview-chip .local-evidencehub-rview-icon {
+    height: 0.75rem;
+    width: 0.75rem;
+}
+
+.local-evidencehub-rview .local-evidencehub-rview-clearall {
+    background: none;
+    border: 0;
+    color: var(--local-evidencehub-ink);
+    font-size: 0.8125rem;
+    font-weight: 600;
+    padding: 0 0.25rem;
+    text-decoration: underline;
+}
+
+/* Menus (menu.md) and the filter panel (filter-panel.md, panel-popover-sheet.md). A menu hangs under
+   its own button (its anchor), the panel under the row of controls; both at that box's end. */
+.local-evidencehub-rview .local-evidencehub-rview-menu,
+.local-evidencehub-rview .local-evidencehub-rview-fpanel {
+    color: var(--local-evidencehub-ink);
+    background: var(--local-evidencehub-surface);
+    border: 1px solid var(--local-evidencehub-line);
+    box-shadow: var(--local-evidencehub-elevation-md);
+    max-height: 70vh;
+    position: absolute;
+    right: 0;
+    top: calc(100% + 0.375rem);
+    z-index: 20;
+}
+
+.local-evidencehub-rview .local-evidencehub-rview-menu {
+    border-radius: var(--local-evidencehub-radius-md);
+    min-width: 13.75rem;
+    overflow: auto;
+    padding: 0.25rem;
+}
+
+.local-evidencehub-rview .local-evidencehub-rview-menu[hidden],
+.local-evidencehub-rview .local-evidencehub-rview-fpanel[hidden] {
+    display: none;
+}
+
+.local-evidencehub-rview .local-evidencehub-rview-menu-sep {
+    background: var(--local-evidencehub-line);
+    height: 1px;
+    margin: 0.25rem 0;
+}
+
+.local-evidencehub-rview .local-evidencehub-rview-menu-item {
+    align-items: center;
+    background: transparent;
+    border: 0;
+    border-radius: var(--local-evidencehub-radius-xs);
+    color: var(--local-evidencehub-ink);
+    display: flex;
+    font-size: 0.875rem;
+    gap: 0.5rem;
+    min-height: 2rem;
+    padding: 0.25rem 0.5rem;
+    text-align: start;
+    text-decoration: none;
+    transition:
+        background-color var(--local-evidencehub-motion-base) var(--local-evidencehub-motion-ease),
+        color var(--local-evidencehub-motion-base) var(--local-evidencehub-motion-ease);
+    width: 100%;
+}
+
+.local-evidencehub-rview .local-evidencehub-rview-menu-item:hover {
+    background: var(--local-evidencehub-hover);
+    color: var(--local-evidencehub-brand-ink);
+    transition-duration: var(--local-evidencehub-motion-fast);
+}
+
+.local-evidencehub-rview .local-evidencehub-rview-menu-item:active {
+    background: var(--local-evidencehub-pressed);
+    color: var(--local-evidencehub-brand-ink);
+}
+
+.local-evidencehub-rview .local-evidencehub-rview-menu-item:focus-visible {
+    outline-offset: -2px;
+}
+
+.local-evidencehub-rview .local-evidencehub-rview-menu-item[aria-disabled="true"] {
+    background: transparent;
+    color: var(--local-evidencehub-ink-faint);
+    cursor: default;
+}
+
+.local-evidencehub-rview .local-evidencehub-rview-menu-item[aria-checked="true"] {
+    font-weight: 600;
+}
+
+.local-evidencehub-rview .local-evidencehub-rview-menu-item > .local-evidencehub-rview-icon:first-child {
+    color: var(--local-evidencehub-ink-muted);
+    transition:
+        color var(--local-evidencehub-motion-base) var(--local-evidencehub-motion-ease),
+        transform var(--local-evidencehub-motion-base) var(--local-evidencehub-motion-ease);
+}
+
+/* On hover the leading icon takes the item's ink and moves 2 px towards the label (hover.md). */
+.local-evidencehub-rview-menu-item:not([aria-disabled="true"]):hover > .local-evidencehub-rview-icon:first-child {
+    color: var(--local-evidencehub-brand-ink);
+    transform: translateX(0.125rem);
+    transition-duration: var(--local-evidencehub-motion-fast);
+}
+
+/* RTLCSS does not mirror transform, so the shift towards the label needs its own direction. */
+.dir-rtl .local-evidencehub-rview-menu-item:not([aria-disabled="true"]):hover > .local-evidencehub-rview-icon:first-child {
+    transform: translateX(-0.125rem);
+}
+
+.local-evidencehub-rview .local-evidencehub-rview-menu-label {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.local-evidencehub-rview .local-evidencehub-rview-menu-hint {
+    color: var(--local-evidencehub-ink-muted);
+    font-size: 0.75rem;
+    font-weight: 400;
+}
+
+.local-evidencehub-rview .local-evidencehub-rview-tick {
+    color: var(--local-evidencehub-brand-ink);
+    visibility: hidden;
+}
+
+.local-evidencehub-rview .local-evidencehub-rview-menu-item[aria-checked="true"] .local-evidencehub-rview-tick {
+    visibility: visible;
+}
+
+.local-evidencehub-rview .local-evidencehub-rview-box {
+    align-items: center;
+    border: 1px solid var(--local-evidencehub-control-line);
+    border-radius: var(--local-evidencehub-radius-xs);
+    display: inline-flex;
+    flex: none;
+    height: 1rem;
+    justify-content: center;
+    width: 1rem;
+}
+
+.local-evidencehub-rview .local-evidencehub-rview-box .local-evidencehub-rview-icon {
+    color: var(--local-evidencehub-on-brand-fill);
+    height: 0.75rem;
+    visibility: hidden;
+    width: 0.75rem;
+}
+
+.local-evidencehub-rview [aria-checked="true"] > .local-evidencehub-rview-box,
+.local-evidencehub-rview [aria-pressed="true"] > .local-evidencehub-rview-box {
+    color: var(--local-evidencehub-on-brand-fill);
+    background: var(--local-evidencehub-brand-fill);
+    border-color: var(--local-evidencehub-brand-fill);
+}
+
+.local-evidencehub-rview [aria-checked="true"] > .local-evidencehub-rview-box .local-evidencehub-rview-icon,
+.local-evidencehub-rview [aria-pressed="true"] > .local-evidencehub-rview-box .local-evidencehub-rview-icon {
+    visibility: visible;
+}
+
+.local-evidencehub-rview .local-evidencehub-rview-fpanel {
+    border-radius: var(--local-evidencehub-radius-lg);
+    display: flex;
+    flex-direction: column;
+    max-width: 100%;
+    min-width: 18.75rem;
+    width: 24rem;
+}
+
+/* The groups scroll; the foot stays in view under them. */
+.local-evidencehub-rview .local-evidencehub-rview-fpanel-body {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    padding: 0.75rem;
+}
+
+.local-evidencehub-rview .local-evidencehub-rview-fgroup {
+    margin-bottom: 0.75rem;
+}
+
+.local-evidencehub-rview .local-evidencehub-rview-fpanel-head {
+    color: var(--local-evidencehub-ink-muted);
+    display: block;
+    font-size: 0.75rem;
+    font-weight: 600;
+    padding: 0 0 0.375rem;
+}
+
+.local-evidencehub-rview .local-evidencehub-rview-fpanel-opts {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.375rem;
+}
+
+.local-evidencehub-rview .local-evidencehub-rview-fpanel-opt {
+    align-items: center;
+    background: var(--local-evidencehub-surface);
+    border: 1px solid var(--local-evidencehub-control-line);
+    border-radius: var(--local-evidencehub-radius-sm);
+    color: var(--local-evidencehub-ink);
+    display: inline-flex;
+    font-size: 0.8125rem;
+    font-weight: 500;
+    gap: 0.375rem;
+    line-height: 1.25;
+    /* A minimum, not a height: an admission route's label is a sentence, and wraps in the panel. */
+    min-height: 1.75rem;
+    padding: 0.1875rem 0.5rem;
+    text-align: left;
+}
+
+.local-evidencehub-rview .local-evidencehub-rview-fpanel-opt[aria-checked="true"] {
+    background: var(--local-evidencehub-brand-tint);
+    border-color: var(--local-evidencehub-brand-edge);
+    color: var(--local-evidencehub-brand-ink);
+}
+
+.local-evidencehub-rview .local-evidencehub-rview-optlist {
+    border: 1px solid var(--local-evidencehub-line);
+    border-radius: var(--local-evidencehub-radius-md);
+    display: flex;
+    flex-direction: column;
+    gap: 0.125rem;
+    margin-top: 0.375rem;
+    max-height: 15rem;
+    overflow-y: auto;
+    padding: 0.25rem;
+}
+
+.local-evidencehub-rview .local-evidencehub-rview-optrow {
+    align-items: center;
+    background: transparent;
+    border: 0;
+    border-radius: var(--local-evidencehub-radius-xs);
+    color: var(--local-evidencehub-ink);
+    display: flex;
+    font-size: 0.8125rem;
+    gap: 0.5rem;
+    min-height: 2rem;
+    padding: 0 0.5rem;
+    text-align: start;
+}
+
+.local-evidencehub-rview .local-evidencehub-rview-optrow:hover {
+    color: var(--local-evidencehub-brand-ink);
+    background: var(--local-evidencehub-hover);
+}
+
+.local-evidencehub-rview .local-evidencehub-rview-optrow[aria-pressed="true"] {
+    font-weight: 600;
+}
+
+/* An option's quiet count (counter.md): beside its label in an option, at the row's end in a searched list. */
+.local-evidencehub-rview .local-evidencehub-rview-optcount {
+    color: var(--local-evidencehub-ink-muted);
+    font-size: 0.75rem;
+    font-variant-numeric: tabular-nums;
+    font-weight: 600;
+}
+
+.local-evidencehub-rview .local-evidencehub-rview-optrow .local-evidencehub-rview-optcount {
+    margin-inline-start: auto;
+}
+
+/* A searched list's field and, for the groups, the grouping select beside it (RP-D23). */
+.local-evidencehub-rview .local-evidencehub-rview-find {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.375rem;
+}
+
+.local-evidencehub-rview .local-evidencehub-rview-find .local-evidencehub-rview-input {
+    flex: 1 1 10rem;
+}
+
+.local-evidencehub-rview .local-evidencehub-rview-grouping {
+    flex: 0 1 auto;
+    margin-top: 0.375rem;
+    width: auto;
+}
+
+/* A menu's heading (menu.md): the Columns menu's sets. */
+.local-evidencehub-rview .local-evidencehub-rview-menu-head {
+    color: var(--local-evidencehub-ink-muted);
+    font-size: 0.75rem;
+    font-weight: 600;
+    padding: 0.375rem 0.5rem 0.125rem;
+}
+
+.local-evidencehub-rview .local-evidencehub-rview-fpanel-foot {
+    border-top: 1px solid var(--local-evidencehub-line);
+    display: flex;
+    flex: none;
+    gap: 0.5rem;
+    justify-content: space-between;
+    padding: 0.75rem;
+}
+
+.local-evidencehub-rview .local-evidencehub-rview-fpanel-foot .btn {
+    min-height: 2rem;
+}
+
+/* The bar's narrow step (filter-line contract, section 2), written by Bar.tsx while the view's own
+   container is under 576 px: the controls on a line of their own, the scope on the next one with its
+   cells sharing the width, the chips after it. The menus hang from the controls' end, not from their
+   button (220 px under a button near the start would leave the screen), and the panel is a sheet from
+   the bottom of the screen. While the search is open the cluster hides and the field takes the line. */
+.local-evidencehub-rview .local-evidencehub-rview-bar--narrow > .local-evidencehub-rview-bar-spacer {
+    display: none;
+}
+
+.local-evidencehub-rview .local-evidencehub-rview-bar--narrow > .local-evidencehub-rview-bar-controls {
+    flex: 1 0 100%;
+}
+
+.local-evidencehub-rview .local-evidencehub-rview-bar--narrow > .local-evidencehub-rview-seg {
+    display: flex;
+    flex: 1 0 100%;
+    order: 1;
+}
+
+.local-evidencehub-rview .local-evidencehub-rview-bar--narrow > .local-evidencehub-rview-seg .local-evidencehub-rview-seg-cell {
+    flex: 1 1 0;
+    justify-content: center;
+    min-width: 0;
+}
+
+.local-evidencehub-rview .local-evidencehub-rview-bar--narrow > .local-evidencehub-rview-chips {
+    order: 2;
+}
+
+.local-evidencehub-rview .local-evidencehub-rview-bar--narrow .local-evidencehub-rview-capsule,
+.local-evidencehub-rview .local-evidencehub-rview-bar--narrow .local-evidencehub-rview-anchor {
+    position: static;
+}
+
+.local-evidencehub-rview-bar--narrow.local-evidencehub-rview-bar--searching .local-evidencehub-rview-bar-cluster {
+    display: none;
+}
+
+.local-evidencehub-rview-bar--narrow.local-evidencehub-rview-bar--searching .local-evidencehub-rview-searchcap,
+.local-evidencehub-rview-bar--narrow.local-evidencehub-rview-bar--searching .local-evidencehub-rview-search {
+    flex: 1 1 0;
+    min-width: 0;
+}
+
+.local-evidencehub-rview .local-evidencehub-rview-bar--narrow .local-evidencehub-rview-search input {
+    flex: 1 1 auto;
+    width: auto;
+}
+
+.local-evidencehub-rview .local-evidencehub-rview-bar--narrow .local-evidencehub-rview-fpanel {
+    border-radius: var(--local-evidencehub-radius-xl) var(--local-evidencehub-radius-xl) 0 0;
+    bottom: 0;
+    left: 0;
+    max-height: 80vh;
+    position: fixed;
+    right: 0;
+    top: auto;
+    width: auto;
+    z-index: 1050;
+}
+
+/* The bounded grid (data-report.md): the frame scrolls both ways, the heading row and the Worker
+   column stay, every cell is one line ending in an ellipsis. */
+.local-evidencehub-rview .local-evidencehub-rview-gridframe {
+    border: 1px solid var(--local-evidencehub-line);
+    border-radius: var(--local-evidencehub-radius-lg);
+    max-height: 34rem;
+    overflow: auto;
+    overscroll-behavior-x: contain;
+    position: relative;
+}
+
+.local-evidencehub-rview table.local-evidencehub-rview-grid {
+    border-collapse: separate;
+    border-spacing: 0;
+    font-size: 0.875rem;
+    margin: 0;
+    table-layout: fixed;
+}
+
+.local-evidencehub-rview .local-evidencehub-rview-grid thead th {
+    background: var(--local-evidencehub-surface-alt);
+    border-bottom: 1px solid var(--local-evidencehub-line);
+    color: var(--local-evidencehub-ink-muted);
+    font-size: 0.8125rem;
+    font-weight: 600;
+    padding: 0;
+    position: sticky;
+    text-align: start;
+    top: 0;
+    white-space: nowrap;
+    z-index: 2;
+}
+
+.local-evidencehub-rview .local-evidencehub-rview-grid thead th[aria-sort="ascending"],
+.local-evidencehub-rview .local-evidencehub-rview-grid thead th[aria-sort="descending"] {
+    color: var(--local-evidencehub-ink);
+}
+
+.local-evidencehub-rview .local-evidencehub-rview-sortbtn,
+.local-evidencehub-rview .local-evidencehub-rview-plain {
+    align-items: center;
+    background: none;
+    border: 0;
+    color: inherit;
+    display: flex;
+    font: inherit;
+    gap: 0.25rem;
+    overflow: hidden;
+    padding: 0.5rem 0.75rem;
+    text-align: start;
+    width: 100%;
+}
+
+.local-evidencehub-rview .local-evidencehub-rview-sortbtn:hover {
+    color: var(--local-evidencehub-ink);
+}
+
+.local-evidencehub-rview .local-evidencehub-rview-sortbtn:focus-visible {
+    outline-offset: -2px;
+}
+
+.local-evidencehub-rview .local-evidencehub-rview-th-title {
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.local-evidencehub-rview .local-evidencehub-rview-arrow {
+    color: var(--local-evidencehub-brand-ink);
+    flex: none;
+    font-size: 0.75rem;
+}
+
+.local-evidencehub-rview .local-evidencehub-rview-resize {
+    cursor: col-resize;
+    height: 100%;
+    position: absolute;
+    right: -4px;
+    top: 0;
+    touch-action: none;
+    width: 9px;
+    z-index: 3;
+}
+
+.local-evidencehub-rview .local-evidencehub-rview-resize::after {
+    background: var(--local-evidencehub-line);
+    bottom: 25%;
+    content: "";
+    left: 4px;
+    position: absolute;
+    top: 25%;
+    width: 1px;
+}
+
+.local-evidencehub-rview .local-evidencehub-rview-resize:hover::after,
+.local-evidencehub-rview .local-evidencehub-rview-resize:focus-visible::after,
+.local-evidencehub-rview .local-evidencehub-rview-resize.is-active::after {
+    background: var(--local-evidencehub-brand-fill);
+    bottom: 0;
+    left: 3px;
+    top: 0;
+    width: 3px;
+}
+
+.local-evidencehub-rview .local-evidencehub-rview-resize:focus-visible {
+    outline: none;
+}
+
+.local-evidencehub-rview .local-evidencehub-rview-grid td,
+.local-evidencehub-rview .local-evidencehub-rview-grid tbody th {
+    color: var(--local-evidencehub-ink);
+    background: var(--local-evidencehub-surface);
+    border-bottom: 1px solid var(--local-evidencehub-line);
+    padding: 0.5rem 0.75rem;
+    vertical-align: top;
+}
+
+.local-evidencehub-rview .local-evidencehub-rview-grid tbody th {
+    font-size: inherit;
+    font-weight: inherit;
+    text-align: start;
+}
+
+.local-evidencehub-rview .local-evidencehub-rview-grid tbody tr:last-child td,
+.local-evidencehub-rview .local-evidencehub-rview-grid tbody tr:last-child th {
+    border-bottom: 0;
+}
+
+.local-evidencehub-rview .local-evidencehub-rview-grid tbody tr:hover td,
+.local-evidencehub-rview .local-evidencehub-rview-grid tbody tr:hover th {
+    color: var(--local-evidencehub-ink);
+    background: var(--local-evidencehub-hover);
+}
+
+.local-evidencehub-rview .local-evidencehub-rview-grid .local-evidencehub-rview-fixed {
+    left: 0;
+    position: sticky;
+    z-index: 1;
+}
+
+.local-evidencehub-rview .local-evidencehub-rview-grid thead th.local-evidencehub-rview-fixed {
+    z-index: 4;
+}
+
+.local-evidencehub-rview .local-evidencehub-rview-gridframe.is-scrolled .local-evidencehub-rview-fixed {
+    box-shadow: 6px 0 8px -6px var(--local-evidencehub-shadow);
+}
+
+.local-evidencehub-rview .local-evidencehub-rview-c,
+.local-evidencehub-rview .local-evidencehub-rview-sub {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.local-evidencehub-rview .local-evidencehub-rview-sub {
+    color: var(--local-evidencehub-ink-muted);
+    font-size: 0.8125rem;
+}
+
+.local-evidencehub-rview .local-evidencehub-rview-who {
+    align-items: flex-start;
+    display: flex;
+    gap: 0.5rem;
+    justify-content: space-between;
+}
+
+.local-evidencehub-rview .local-evidencehub-rview-who-text {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.local-evidencehub-rview .local-evidencehub-rview-who-text a,
+.local-evidencehub-rview .local-evidencehub-rview-card-name a {
+    font-weight: 600;
+}
+
+.local-evidencehub-rview .local-evidencehub-rview-inspect {
+    flex: none;
+}
+
+/* Cards (AR-D9): a grid of 17.5rem cards on a wide screen, one column on a narrow one. */
+.local-evidencehub-rview .local-evidencehub-rview-cards {
+    display: grid;
+    gap: 0.5rem;
+    grid-template-columns: repeat(auto-fill, minmax(17.5rem, 1fr));
+}
+
+.local-evidencehub-rview .local-evidencehub-rview-cards--single {
+    grid-template-columns: minmax(0, 1fr);
+}
+
+.local-evidencehub-rview .local-evidencehub-rview-card {
+    color: var(--local-evidencehub-ink);
+    background: var(--local-evidencehub-surface);
+    border: 1px solid var(--local-evidencehub-line);
+    border-radius: var(--local-evidencehub-radius-lg);
+    min-width: 0;
+    padding: 0.75rem;
+}
+
+.local-evidencehub-rview .local-evidencehub-rview-card-l1 {
+    align-items: flex-start;
+    display: flex;
+    gap: 0.5rem;
+    justify-content: space-between;
+}
+
+.local-evidencehub-rview .local-evidencehub-rview-card-who {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+
+.local-evidencehub-rview .local-evidencehub-rview-card-line {
+    font-size: 0.8125rem;
+    margin-top: 0.25rem;
+    overflow-wrap: anywhere;
+}
+
+.local-evidencehub-rview .local-evidencehub-rview-inline + .local-evidencehub-rview-inline {
+    margin-left: 0.375rem;
+}
+
+.local-evidencehub-rview .local-evidencehub-rview-card-more {
+    margin-top: 0.375rem;
+}
+
+.local-evidencehub-rview .local-evidencehub-rview-card-list {
+    border-top: 1px solid var(--local-evidencehub-line);
+    font-size: 0.8125rem;
+    margin: 0.5rem 0 0;
+    padding-top: 0.5rem;
+}
+
+.local-evidencehub-rview .local-evidencehub-rview-card-item {
+    display: grid;
+    gap: 0.25rem 0.5rem;
+    grid-template-columns: minmax(0, 7rem) minmax(0, 1fr);
+}
+
+.local-evidencehub-rview .local-evidencehub-rview-card-item dt {
+    color: var(--local-evidencehub-ink-muted);
+    font-weight: 400;
+}
+
+.local-evidencehub-rview .local-evidencehub-rview-card-item dd {
+    margin: 0;
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+
+.local-evidencehub-rview .local-evidencehub-rview-card-item dd .local-evidencehub-rview-c,
+.local-evidencehub-rview .local-evidencehub-rview-card-item dd .local-evidencehub-rview-sub {
+    white-space: normal;
+}
+
+/* The empty state (empty-state.md, the full form without an icon). */
+.local-evidencehub-rview .local-evidencehub-rview-empty {
+    border: 1px dashed var(--local-evidencehub-line);
+    border-radius: var(--local-evidencehub-radius-lg);
+    padding: 2rem 1.25rem;
+    text-align: center;
+}
+
+.local-evidencehub-rview .local-evidencehub-rview-empty-title {
+    font-size: 1rem;
+    font-weight: 600;
+    margin: 0;
+}
+
+.local-evidencehub-rview .local-evidencehub-rview-empty-text {
+    color: var(--local-evidencehub-ink-muted);
+    font-size: 0.875rem;
+    margin: 0.25rem 0 0;
+}
+
+/* The foot: the range, the pages, the page size. */
+.local-evidencehub-rview .local-evidencehub-rview-foot {
+    align-items: center;
+    color: var(--local-evidencehub-ink-muted);
+    display: flex;
+    flex-wrap: wrap;
+    font-size: 0.8125rem;
+    gap: 0.5rem;
+    justify-content: space-between;
+}
+
+.local-evidencehub-rview .local-evidencehub-rview-pager {
+    align-items: center;
+    display: inline-flex;
+    flex-wrap: wrap;
+    gap: 0.125rem;
+}
+
+.local-evidencehub-rview .local-evidencehub-rview-pager button {
+    background: transparent;
+    border: 0;
+    border-radius: var(--local-evidencehub-radius-md);
+    color: var(--local-evidencehub-ink);
+    font-size: 0.8125rem;
+    min-height: 2rem;
+    min-width: 2rem;
+    padding: 0 0.5rem;
+}
+
+.local-evidencehub-rview .local-evidencehub-rview-pager button:hover {
+    color: var(--local-evidencehub-brand-ink);
+    background: var(--local-evidencehub-hover);
+}
+
+.local-evidencehub-rview .local-evidencehub-rview-pager button[aria-current="page"] {
+    background: var(--local-evidencehub-brand-tint);
+    color: var(--local-evidencehub-brand-ink);
+    font-weight: 700;
+}
+
+.local-evidencehub-rview .local-evidencehub-rview-pager button[disabled] {
+    background: transparent;
+    color: var(--local-evidencehub-ink-faint);
+}
+
+.local-evidencehub-rview .local-evidencehub-rview-pager-gap {
+    padding: 0 0.25rem;
+}
+
+.local-evidencehub-rview .local-evidencehub-rview-perpage {
+    align-items: center;
+    display: inline-flex;
+    gap: 0.375rem;
+}
+
+.local-evidencehub-rview .local-evidencehub-rview-perpage .form-select {
+    width: auto;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .local-evidencehub-rview .local-evidencehub-rview-hrow,
+    .local-evidencehub-rview .local-evidencehub-rview-seg-cell,
+    .local-evidencehub-rview .local-evidencehub-rview-iconbtn,
+    .local-evidencehub-rview .local-evidencehub-rview-eraser,
+    .local-evidencehub-rview .local-evidencehub-rview-menu-item,
+    .local-evidencehub-rview .local-evidencehub-rview-menu-item > .local-evidencehub-rview-icon:first-child,
+    .local-evidencehub-rview [data-local-evidencehub-tip]::after,
+    .local-evidencehub-rview [data-local-evidencehub-tip]::before {
+        transition: none;
+    }
+}
+
+/* The selection variant (data-report.md, D129 to D132; copied from enrol_apply's queue): a box leading the
+   worker's heading and cells, and each card's first line. The label around the box carries its name in visually
+   hidden text; a row that may not be selected keeps the box's place empty, so the names stay aligned. The box
+   is the browser's own, coloured by accent-color, as the reference draws it (an Open item of the Design System). */
+.local-evidencehub-rview .local-evidencehub-rview-lead {
+    align-items: flex-start;
+    display: flex;
+    gap: 0.5rem;
+    min-width: 0;
+}
+
+.local-evidencehub-rview .local-evidencehub-rview-lead > :last-child {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.local-evidencehub-rview thead th .local-evidencehub-rview-lead {
+    align-items: center;
+    gap: 0;
+    padding-inline-start: 0.75rem;
+}
+
+.local-evidencehub-rview .local-evidencehub-rview-pickwrap {
+    display: inline-flex;
+    flex: none;
+    margin: 0;
+    padding-top: 0.125rem;
+    width: 1rem;
+}
+
+.local-evidencehub-rview thead th .local-evidencehub-rview-pickwrap {
+    padding-top: 0;
+}
+
+.local-evidencehub-rview .local-evidencehub-rview-pick {
+    accent-color: var(--local-evidencehub-brand-fill);
+    cursor: pointer;
+    height: 1rem;
+    margin: 0;
+    width: 1rem;
+}
+
+.local-evidencehub-rview .local-evidencehub-rview-pick:disabled {
+    cursor: default;
+}
+
+.local-evidencehub-rview .local-evidencehub-rview-grid tr.local-evidencehub-rview-row--selected td,
+.local-evidencehub-rview .local-evidencehub-rview-grid tr.local-evidencehub-rview-row--selected th,
+.local-evidencehub-rview .local-evidencehub-rview-card--selected {
+    color: var(--local-evidencehub-ink);
+    background: var(--local-evidencehub-brand-tint);
+}
+
+.local-evidencehub-rview .local-evidencehub-rview-card--selected {
+    border-color: var(--local-evidencehub-brand-edge);
+}
+
+/* The bulk dock (D133 to D135): the selection's count and "Export dossiers", under the rows and on screen while
+   the rows scroll by, never fixed. Drawn only while something is selected. Padding 8 by 12 px and z-index 5 are
+   the reference's (Open items of the Design System). */
+.local-evidencehub-rview .local-evidencehub-rview-dock {
+    align-items: center;
+    background: var(--local-evidencehub-surface);
+    border: 1px solid var(--local-evidencehub-line);
+    border-radius: var(--local-evidencehub-radius-lg);
+    bottom: 0.75rem;
+    box-shadow: var(--local-evidencehub-elevation-md);
+    color: var(--local-evidencehub-ink);
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem 1rem;
+    justify-content: space-between;
+    margin-bottom: 0.75rem;
+    padding: 0.5rem 0.75rem;
+    position: sticky;
+    z-index: 5;
+}
+
+.local-evidencehub-rview .local-evidencehub-rview-dockcount {
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+}
+
+.local-evidencehub-rview .local-evidencehub-rview-dockactions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+.local-evidencehub-rview .local-evidencehub-rview-dockworkers {
+    color: var(--local-evidencehub-ink-muted);
+    font-weight: 400;
+}
+
+/* The heading with the template picker beside it (core's single select), and the shell's lines under it. */
+.local-evidencehub-rview .local-evidencehub-rview-pagehead {
+    align-items: flex-end;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem 1rem;
+    justify-content: space-between;
+    margin-bottom: 0.75rem;
+}
+
+.local-evidencehub-rview .local-evidencehub-rview-title {
+    margin: 0;
+}
+
+.local-evidencehub-rview .local-evidencehub-rview-picker {
+    max-width: 100%;
+    min-width: 0;
+}
+
+.local-evidencehub-rview .local-evidencehub-rview-picker select {
+    max-width: 100%;
+}
+
+.local-evidencehub-rview .local-evidencehub-rview-locked {
+    color: var(--local-evidencehub-ink-muted);
+    font-size: 0.875rem;
+    margin: 0 0 0.5rem;
+}
+
+/* A scope's count, quiet after its label (counter.md). */
+.local-evidencehub-rview .local-evidencehub-rview-seg-count {
+    color: var(--local-evidencehub-ink-muted);
+    font-size: 0.75rem;
+    font-variant-numeric: tabular-nums;
+    font-weight: 600;
+}
+
+/* The status label (status-label.md): the cell's words in the status's tone (study, decision 15), a lock before a
+   restricted one; 6 px, a 1 px edge, 0.75rem at 600, every fill's ink in the same rule. */
+.local-evidencehub-rview .local-evidencehub-rview-status {
+    align-items: center;
+    background-color: var(--local-evidencehub-neutral-tint);
+    border: 1px solid var(--local-evidencehub-neutral-edge);
+    border-radius: var(--local-evidencehub-radius-sm);
+    color: var(--local-evidencehub-neutral-ink);
+    display: inline-flex;
+    font-size: 0.75rem;
+    font-weight: 600;
+    gap: 0.25rem;
+    line-height: 1.4;
+    max-width: 100%;
+    padding: 0.125rem 0.5rem;
+    white-space: nowrap;
+}
+
+.local-evidencehub-rview .local-evidencehub-rview-status > span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.local-evidencehub-rview .local-evidencehub-rview-status .local-evidencehub-rview-icon {
+    height: 0.75rem;
+    width: 0.75rem;
+}
+
+.local-evidencehub-rview .local-evidencehub-rview-status--success {
+    background-color: var(--local-evidencehub-success-tint);
+    border-color: var(--local-evidencehub-success-edge);
+    color: var(--local-evidencehub-success-ink);
+}
+
+.local-evidencehub-rview .local-evidencehub-rview-status--info {
+    background-color: var(--local-evidencehub-info-tint);
+    border-color: var(--local-evidencehub-info-edge);
+    color: var(--local-evidencehub-info-ink);
+}
+
+.local-evidencehub-rview .local-evidencehub-rview-status--warning {
+    background-color: var(--local-evidencehub-warning-tint);
+    border-color: var(--local-evidencehub-warning-edge);
+    color: var(--local-evidencehub-warning-ink);
+}
+
+.local-evidencehub-rview .local-evidencehub-rview-status--danger {
+    background-color: var(--local-evidencehub-danger-tint);
+    border-color: var(--local-evidencehub-danger-edge);
+    color: var(--local-evidencehub-danger-ink);
+}
+
+/* A card's keyed line: the column's title, then its value. */
+.local-evidencehub-rview .local-evidencehub-rview-card-key {
+    color: var(--local-evidencehub-ink-muted);
+    margin-inline-end: 0.375rem;
+}
+
+.local-evidencehub-rview .local-evidencehub-rview-card-line .local-evidencehub-rview-status {
+    margin-inline-start: 0.375rem;
+}

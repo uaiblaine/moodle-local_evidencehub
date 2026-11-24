@@ -34,7 +34,7 @@ Feature: The evidence hub
       | worker1 | NR35       | 5      | 20250101        |
       | worker2 | NR35       | 2      | 20300101        |
 
-  Scenario: A manager opens the hub from a category's More menu and filters by status
+  Scenario: A manager opens the hub from a category's More menu and widens it to every status
     Given I log in as "manager1"
     And I am on the "OPS" "category" page
     When I navigate to "Evidence hub" in current page administration
@@ -43,12 +43,12 @@ Feature: The evidence hub
     And "(//ol[contains(concat(' ', normalize-space(@class), ' '), ' breadcrumb ')]/li[normalize-space()='Evidence hub'])[2]" "xpath_element" should not exist
     When I set the field "Learning plan template" to "Electricians (Operations)"
     And I press "Apply"
-    Then I should see "Expired" in the ".local-evidencehub-kpis" "css_element"
-    And I should see "Ana Souza" in the ".local-evidencehub-grid" "css_element"
-    And I should not see "Bia Lima" in the ".local-evidencehub-grid" "css_element"
-    When I click on "Compliant" "link" in the ".local-evidencehub-chips" "css_element"
-    Then I should see "Bia Lima" in the ".local-evidencehub-grid" "css_element"
-    And I should see "Ana Souza" in the ".local-evidencehub-grid" "css_element"
+    Then I should see "Expired" in the "[data-region='local-evidencehub-band']" "css_element"
+    And I should see "Ana Souza" in the "[data-region='local-evidencehub-rows']" "css_element"
+    And I should not see "Bia Lima" in the "[data-region='local-evidencehub-rows']" "css_element"
+    When I click on "All" "button" in the "[data-region='local-evidencehub-bar']" "css_element"
+    Then I should see "Bia Lima" in the "[data-region='local-evidencehub-rows']" "css_element"
+    And I should see "Ana Souza" in the "[data-region='local-evidencehub-rows']" "css_element"
 
   Scenario: The hub and the policies list name themselves once in the breadcrumb
     Given I log in as "admin"

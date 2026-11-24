@@ -39,8 +39,9 @@ use Moodle\BehatExtension\Exception\SkippedException;
 class behat_local_evidencehub extends behat_base {
     /**
      * The URL of a page about one thing: "Evidence" takes a username, "Policies" a framework's idnumber,
-     * "Hub" a site-level plan template's short name (every status shown), "Matrix" likewise, the matrix
-     * view at 100 workers a page, "Dossier verification" a username: the public page of the latest
+     * "Hub" a site-level plan template's short name (its list, the data report, which opens on the
+     * pairs needing attention), "Matrix" likewise, the matrix view at 100 workers a page and every
+     * status shown, "Dossier verification" a username: the public page of the latest
      * dossier issued about that user.
      *
      * @param string $type The page type.
@@ -78,6 +79,26 @@ class behat_local_evidencehub extends behat_base {
             ]),
             default => throw new Exception('Unrecognised local_evidencehub page type "' . $type . '."'),
         };
+    }
+
+    /**
+     * Scroll the page so that an element sits in the middle of the window.
+     *
+     * The bulk dock is sticky at the bottom of the window while the rows below it are still to scroll by, so
+     * an element near the window's bottom edge can sit under it; a person scrolls it away, and so does this.
+     *
+     * @When /^I scroll "(?P<element_string>(?:[^"]|\\")*)" "(?P<selector_string>[^"]*)" to the middle of the window$/
+     * @param string $element The element's locator.
+     * @param string $selectortype The selector type.
+     * @return void
+     */
+    public function i_scroll_to_the_middle_of_the_window(string $element, string $selectortype): void {
+        $node = $this->get_selected_node($selectortype, $element);
+        $this->execute_script('(function () {
+            var node = document.evaluate(' . json_encode($node->getXpath()) . ', document, null,
+                XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue;
+            node.scrollIntoView({block: "center"});
+        })()');
     }
 
     /**

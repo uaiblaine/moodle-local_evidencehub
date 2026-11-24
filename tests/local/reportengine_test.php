@@ -711,6 +711,28 @@ final class reportengine_test extends core_reportbuilder_testcase {
     }
 
     /**
+     * A competency named with a "<" and an "&" reaches the drawer's title and the Inspect action's name in the
+     * plain spelling, which the client prints as text: neither entity-escaped nor doubly escaped.
+     *
+     * Changes that must make it fail: the competency's name passed to the strings as format_string() returns it.
+     *
+     * @return void
+     */
+    public function test_the_titles_carry_a_competency_name_in_the_plain_spelling(): void {
+        global $DB;
+        $DB->set_field('competency', 'shortname', 'A < B & C', ['id' => $this->c[0]]);
+        $rows = array_values(array_filter(
+            $this->rows()['rows'],
+            fn(array $row): bool => $row['userid'] === $this->id('ana') && $row['competencyid'] === $this->c[0]
+        ));
+        $this->assertCount(1, $rows);
+        $this->assertSame('Ana Souza: A < B & C', $rows[0]['drawertitle']);
+        $this->assertSame('Inspect Ana Souza: A < B & C', $rows[0]['inspectlabel']);
+        // The control: the cells keep core's escaped spelling, which the client inserts as HTML.
+        $this->assertStringContainsString('A &lt; B &amp; C', implode('', array_column($rows[0]['cells'], 'html')));
+    }
+
+    /**
      * The inspection drawer is offered where its own fragment would open: a reader who may not read the
      * competency's framework is not offered it.
      *

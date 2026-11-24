@@ -37,7 +37,11 @@ Feature: The readiness matrix
   Scenario: A manager switches to the matrix and opens a pair from its cell
     Given I log in as "manager1"
     And I am on the "Electricians" "local_evidencehub > Hub" page
-    When I click on "Matrix" "link" in the ".local-evidencehub-tabs" "css_element"
+    # The matrix follows the list's scope: "All" first, so the worker whose every pair is compliant is listed too.
+    And I click on "All" "button" in the "[data-region='local-evidencehub-bar']" "css_element"
+    And I should see "4 pairs" in the "[data-region='local-evidencehub-total']" "css_element"
+    When I press "View"
+    And I click on "Matrix" "link" in the "[data-region='local-evidencehub-bar'] [role='menu'][aria-label='View']" "css_element"
     Then I should see "Pending, no evidence" in the ".local-evidencehub-legend" "css_element"
     And I should see "Ana Souza" in the ".local-evidencehub-matrix" "css_element"
     And I should see "Bia Lima" in the ".local-evidencehub-matrix" "css_element"
