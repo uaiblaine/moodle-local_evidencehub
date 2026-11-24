@@ -27,6 +27,6 @@ defined('MOODLE_INTERNAL') || die();
 $plugin->component = 'local_evidencehub';
 $plugin->version = 2026100516;
 $plugin->requires = 2026100500;
-$plugin->maturity = MATURITY_ALPHA;
+$plugin->maturity = MATURITY_BETA;
 $plugin->release = 'v5.3-r0';
 $plugin->supported = [503, 503];
