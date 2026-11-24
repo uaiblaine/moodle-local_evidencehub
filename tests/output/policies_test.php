@@ -121,6 +121,47 @@ final class policies_test extends \advanced_testcase {
     }
 
     /**
+     * The framework's own policy shows the same settings as a competency's row: minimum hours, grace days and
+     * cycle months included.
+     *
+     * @return void
+     */
+    public function test_the_framework_policy_shows_every_setting(): void {
+        global $PAGE;
+        $this->resetAfterTest();
+        $this->setAdminUser();
+        $framework = $this->getDataGenerator()->get_plugin_generator('core_competency')->create_framework();
+        $frameworkid = (int) $framework->get('id');
+        policy::save((object) [
+            'frameworkid' => $frameworkid,
+            'competencyid' => 0,
+            'kind' => policy::KIND_TECHNICAL,
+            'requireverified' => 1,
+            'requireproficiency' => 0,
+            'minhours' => 16,
+            'alert1' => 60,
+            'alert2' => 30,
+            'gracedays' => 45,
+            'cyclemonths' => 18,
+            'onexpiry' => policy::ONEXPIRY_LOG,
+        ]);
+        $output = $PAGE->get_renderer('core');
+        $export = (new framework_policies($frameworkid))->export_for_template($output);
+        $html = $output->render_from_template('local_evidencehub/framework_policies', $export);
+
+        // Only the framework's own block: the competency table below repeats the labels in its header.
+        $this->assertSame(1, preg_match('~<dl class="row local-evidencehub-policy">(.*?)</dl>~s', $html, $block));
+        foreach (['minhours' => $export['policy']['minhours'], 'gracedays' => '45', 'cyclemonths' => '18'] as $label => $value) {
+            $this->assertMatchesRegularExpression(
+                '~<dt[^>]*>' . preg_quote(get_string($label, 'local_evidencehub'), '~') . '</dt>\s*<dd[^>]*>'
+                    . preg_quote($value, '~') . '</dd>~',
+                $block[1],
+                $label
+            );
+        }
+    }
+
+    /**
      * Framework, category and competency names leave the exports plain and render escaped once.
      *
      * @return void
@@ -184,5 +225,86 @@ final class policies_test extends \advanced_testcase {
         }
         $this->assertStringContainsString('Work at height', $html);
         $this->assertStringContainsString('data-region="local-evidencehub-policies"', $html);
+    }
+
+    /**
+     * Removing a competency's override takes a POST: the same request sent as a GET leaves the policy in place.
+     *
+     * @return void
+     */
+    public function test_removing_an_override_needs_a_post(): void {
+        global $DB;
+        $this->resetAfterTest();
+        $this->setAdminUser();
+        $competencies = $this->getDataGenerator()->get_plugin_generator('core_competency');
+        $framework = $competencies->create_framework();
+        $competency = $competencies->create_competency(['competencyframeworkid' => $framework->get('id')]);
+        policy::save((object) [
+            'frameworkid' => (int) $framework->get('id'),
+            'competencyid' => (int) $competency->get('id'),
+            'kind' => policy::KIND_TECHNICAL,
+            'requireverified' => 0,
+            'requireproficiency' => 0,
+            'minhours' => null,
+            'alert1' => 60,
+            'alert2' => 30,
+            'gracedays' => 0,
+            'cyclemonths' => 0,
+            'onexpiry' => policy::ONEXPIRY_LOG,
+        ]);
+        $key = ['frameworkid' => $framework->get('id'), 'competencyid' => $competency->get('id')];
+        $params = $key + ['action' => 'removeoverride', 'sesskey' => sesskey()];
+
+        try {
+            $this->run_policies('GET', $params);
+            $this->fail('A GET must not remove an override.');
+        } catch (\moodle_exception $e) {
+            $this->assertSame('errorpostonly', $e->errorcode);
+        }
+        $this->assertTrue($DB->record_exists(policy::TABLE, $key));
+
+        // The control: the page's own form posts it and the override goes.
+        try {
+            $this->run_policies('POST', $params);
+            $this->fail('The removal ends in a redirect.');
+        } catch (\moodle_exception $e) {
+            // Under PHPUnit (a CLI script) redirect() throws instead of redirecting.
+            $this->assertSame('redirecterrordetected', $e->errorcode);
+        }
+        $this->assertFalse($DB->record_exists(policy::TABLE, $key));
+    }
+
+    /**
+     * Run policies.php with a request method and parameters.
+     *
+     * @param string $method GET or POST.
+     * @param array $params The parameters, sent in the query or in the body.
+     * @return string The HTML.
+     */
+    private function run_policies(string $method, array $params): string {
+        // The page script reads these from the global scope.
+        global $CFG, $DB, $PAGE, $OUTPUT, $USER, $SITE;
+        $PAGE = new \moodle_page();
+        $OUTPUT = new \bootstrap_renderer();
+        $_SERVER['REQUEST_METHOD'] = $method;
+        if ($method === 'POST') {
+            $_POST = $params;
+        } else {
+            $_GET = $params;
+        }
+        $level = ob_get_level();
+        ob_start();
+        try {
+            require($CFG->dirroot . '/local/evidencehub/policies.php');
+        } finally {
+            $html = '';
+            while (ob_get_level() > $level) {
+                $html = ob_get_clean() . $html;
+            }
+            $_GET = [];
+            $_POST = [];
+            unset($_SERVER['REQUEST_METHOD']);
+        }
+        return $html;
     }
 }

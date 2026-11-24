@@ -104,7 +104,10 @@ final class hook_callbacks_test extends \advanced_testcase {
     public function test_the_list_page_counts_the_missing_details(): void {
         $args = $this->prompt(hook_callbacks::PAGETYPE_LIST, $this->ctx(), ['userid' => $this->worker->id]);
         $this->assertNotNull($args);
-        $this->assertSame(1, $args['missing']);
+        // The module reads these three only: the count reaches it inside the message.
+        $keys = array_keys($args);
+        sort($keys);
+        $this->assertSame(['linktext', 'message', 'url'], $keys);
         $this->assertSame(get_string('promptlist', 'local_evidencehub', 1), $args['message']);
         $expected = new \moodle_url('/local/evidencehub/evidence.php', ['userid' => $this->worker->id]);
         $this->assertSame($expected->out(false), $args['url']);

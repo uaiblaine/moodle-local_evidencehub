@@ -72,6 +72,40 @@ final class upgrade_test extends \advanced_testcase {
     }
 
     /**
+     * Upgrading from 2026100503 adds the sensitive flag's column where it is missing, then fills it.
+     *
+     * @return void
+     */
+    public function test_the_sensitive_flag_column_is_added(): void {
+        global $DB;
+        $this->resetAfterTest();
+        $this->setAdminUser();
+        [$c1, $c2] = $this->competencies(2);
+        $worker = $this->getDataGenerator()->create_user();
+        $this->status_row((int) $worker->id, $c1, status::STATUS_VALID, 20300101, 'aso');
+        $this->status_row((int) $worker->id, $c2, status::STATUS_VALID, 20300101, 'nrcertificate');
+        $dbman = $DB->get_manager();
+        $table = new \xmldb_table('local_evidencehub_status');
+        $field = new \xmldb_field('issensitive');
+        // As a 2026100503 site holds the table: no column.
+        $dbman->drop_field($table, $field);
+        $this->assertFalse($dbman->field_exists($table, $field));
+        set_config('version', 2026100503, 'local_evidencehub');
+
+        $this->assertTrue(xmldb_local_evidencehub_upgrade(2026100503));
+
+        $this->assertTrue($dbman->field_exists($table, $field));
+        $this->assertTrue($DB->get_columns('local_evidencehub_status')['issensitive']->not_null);
+        $flags = $DB->get_records_menu(
+            'local_evidencehub_status',
+            ['userid' => $worker->id],
+            'competencyid',
+            'competencyid, issensitive'
+        );
+        $this->assertSame([$c1 => 1, $c2 => 0], array_map('intval', $flags));
+    }
+
+    /**
      * Upgrading from 2026100506 adds the export's hub context, null on the rows already there.
      *
      * @return void

@@ -57,6 +57,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- Version 2026100516: the public verification page sends the guest user, logged in as guest, to the login
+  page when the guest role may not verify, as it does a visitor; and with `autologinguests` on, a visitor the
+  guest role may not verify is no longer logged in as guest and then refused. Either way the login brings them
+  back to the dossier they opened: the return carries its code, which the page's own URL leaves out.
+- Version 2026100516: a framework's own policy on its policy page shows minimum hours, grace days and cycle
+  months, as each competency's row does.
+- Version 2026100516: removing a competency's policy override from the framework's policy page takes a POST;
+  a GET with the session key is refused.
+- Version 2026100516: the privacy metadata declares every column of the plugin's tables, including the links
+  between them (`status.metaid`, `audit.metaid`, `dossier.exportid`, `export.contextid`) and the times
+  (`status.nexttransition`, `status.timemodified`, `export.timecompleted`), and links to `core_message` for the
+  alerts, digests and export notices the plugin sends.
+- Version 2026100516: the evidence prompt on core's evidence pages no longer passes its unused count to the
+  browser.
 - Version 2026100514: a recomputation retired the hub's cached KPIs whenever it rewrote a status row, even when
   the row's status and sensitivity stayed the same, so the weekly reconcile emptied every cached count once per
   pair. They are now retired only when a row appears, goes, or changes its status or its sensitive flag.

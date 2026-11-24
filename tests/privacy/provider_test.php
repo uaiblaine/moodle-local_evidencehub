@@ -161,9 +161,10 @@ final class provider_test extends \core_privacy\tests\provider_testcase {
     }
 
     /**
-     * Every table with a user column is declared, and every declared field is a real column.
+     * Every table with a user column is declared with all its columns, and every declared field is a real column.
      *
-     * The second half catches a renamed column that the metadata still names.
+     * The first check catches a column added without its declaration, the second a renamed column that the
+     * metadata still names.
      *
      * @return void
      */
@@ -179,6 +180,13 @@ final class provider_test extends \core_privacy\tests\provider_testcase {
                 foreach (array_keys($item->get_privacy_fields()) as $field) {
                     $this->assertArrayHasKey($field, $columns, $item->get_name() . '.' . $field);
                 }
+                // And the other way: every column but the id is declared, links to other rows included, so
+                // an administrator reads the whole row from the metadata.
+                foreach (array_keys($columns) as $column) {
+                    if ($column !== 'id') {
+                        $this->assertArrayHasKey($column, $item->get_privacy_fields(), $item->get_name() . '.' . $column);
+                    }
+                }
             } else if ($item instanceof \core_privacy\local\metadata\types\subsystem_link) {
                 $links[] = $item->get_name();
             }
@@ -191,7 +199,7 @@ final class provider_test extends \core_privacy\tests\provider_testcase {
             'local_evidencehub_meta',
             'local_evidencehub_status',
         ], $declared);
-        $this->assertSame(['core_competency', 'core_files'], $links);
+        $this->assertSame(['core_competency', 'core_files', 'core_message'], $links);
 
         // The two tables left out hold configuration only: no column refers to a user.
         foreach (['local_evidencehub_type', 'local_evidencehub_policy'] as $table) {
