@@ -101,7 +101,7 @@ final class verify_page_test extends \advanced_testcase {
      */
     private function run_page(?string $code): string {
         // The page script reads these from the global scope.
-        global $CFG, $DB, $PAGE, $OUTPUT, $USER, $SITE;
+        global $CFG, $DB, $PAGE, $OUTPUT, $USER, $SITE, $SESSION;
         $PAGE = new \moodle_page();
         $OUTPUT = new \bootstrap_renderer();
         $_GET = $code === null ? [] : ['code' => $code];
@@ -268,6 +268,112 @@ final class verify_page_test extends \advanced_testcase {
             'local/evidencehub:verifydossier',
             CAP_PREVENT,
             (int) $CFG->guestroleid,
+            \context_system::instance(),
+            true
+        );
+        $this->assertFalse(dossier::can_verify());
+    }
+
+    /**
+     * The guest user, logged in as guest, whom the guest role does not let in is sent to log in, like a visitor:
+     * require_login() would let it through, and the refusal would leave it no way to use an account.
+     *
+     * @return void
+     */
+    public function test_the_guest_user_is_sent_to_log_in(): void {
+        global $CFG;
+        $this->setGuestUser();
+        $this->assertStringContainsString('J*** P***', $this->run_page($this->dossier->code), 'Control: the guest verifies.');
+
+        assign_capability(
+            'local/evidencehub:verifydossier',
+            CAP_PREVENT,
+            (int) $CFG->guestroleid,
+            \context_system::instance(),
+            true
+        );
+        try {
+            $this->run_page($this->dossier->code);
+            $this->fail('The guest user the guest role does not let in must be sent to the login page.');
+        } catch (\moodle_exception $e) {
+            // Under PHPUnit (a CLI script) redirect() throws instead of redirecting.
+            $this->assertSame('redirecterrordetected', $e->errorcode);
+        }
+        // The login page brings it back to the dossier it opened.
+        $this->assert_returns_to($this->dossier->code);
+    }
+
+    /**
+     * Assert where the login page sends the visitor back: the page with the code, or without a malformed one.
+     *
+     * @param string|null $code The code the return carries, or null for none.
+     * @return void
+     */
+    private function assert_returns_to(?string $code): void {
+        global $SESSION;
+        $expected = new \moodle_url('/local/evidencehub/verify.php', $code === null ? [] : ['code' => $code]);
+        $this->assertSame($expected->out(false), $SESSION->wantsurl);
+    }
+
+    /**
+     * With autologinguests on, a visitor the guest role does not let in is sent to log in, not logged in as
+     * the guest user and then refused.
+     *
+     * @return void
+     */
+    public function test_a_refused_visitor_is_not_logged_in_as_guest(): void {
+        global $CFG;
+        set_config('autologinguests', 1);
+        assign_capability(
+            'local/evidencehub:verifydossier',
+            CAP_PREVENT,
+            (int) $CFG->guestroleid,
+            \context_system::instance(),
+            true
+        );
+        try {
+            $this->run_page($this->dossier->code);
+            $this->fail('A visitor the guest role does not let in must be sent to the login page.');
+        } catch (\moodle_exception $e) {
+            $this->assertSame('redirecterrordetected', $e->errorcode);
+        }
+        $this->assertFalse(isloggedin(), 'The visitor was logged in as the guest user.');
+        $this->assert_returns_to($this->dossier->code);
+
+        // A value without a code's shape is not carried through the login.
+        try {
+            $this->run_page('not-a-code');
+            $this->fail('A visitor the guest role does not let in must be sent to the login page.');
+        } catch (\moodle_exception $e) {
+            $this->assertSame('redirecterrordetected', $e->errorcode);
+        }
+        $this->assert_returns_to(null);
+    }
+
+    /**
+     * A site with no guest account checks a visitor through the role of users who are not logged in, which
+     * core refuses everything under forcelogin.
+     *
+     * @return void
+     */
+    public function test_without_a_site_guest_a_visitor_is_checked_as_not_logged_in(): void {
+        global $CFG, $USER;
+        $CFG->siteguest = '';
+        $CFG->forcelogin = 0;
+        // As a visitor's request starts: no access data loaded for the user who is not logged in.
+        unset($USER->access);
+        accesslib_clear_all_caches_for_unit_testing();
+        $this->assertTrue(dossier::can_verify(), 'Control: the role of users not logged in holds it by default.');
+
+        // Core refuses every capability to a user who is not logged in under forcelogin: the visitor is asked to log in.
+        $CFG->forcelogin = 1;
+        $this->assertFalse(dossier::can_verify());
+        $CFG->forcelogin = 0;
+
+        assign_capability(
+            'local/evidencehub:verifydossier',
+            CAP_PREVENT,
+            (int) $CFG->notloggedinroleid,
             \context_system::instance(),
             true
         );

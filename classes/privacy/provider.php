@@ -66,6 +66,7 @@ class provider implements
     public static function get_metadata(collection $collection): collection {
         $collection->add_subsystem_link('core_competency', [], 'privacy:metadata:core_competency');
         $collection->add_subsystem_link('core_files', [], 'privacy:metadata:core_files');
+        $collection->add_subsystem_link('core_message', [], 'privacy:metadata:core_message');
 
         $collection->add_database_table('local_evidencehub_meta', [
             'userevidenceid' => 'privacy:metadata:local_evidencehub_meta:userevidenceid',
@@ -89,12 +90,17 @@ class provider implements
             'userid' => 'privacy:metadata:local_evidencehub_status:userid',
             'competencyid' => 'privacy:metadata:local_evidencehub_status:competencyid',
             'status' => 'privacy:metadata:local_evidencehub_status:status',
+            'metaid' => 'privacy:metadata:local_evidencehub_status:metaid',
             'effectiveexpiry' => 'privacy:metadata:local_evidencehub_status:effectiveexpiry',
             'evidencecount' => 'privacy:metadata:local_evidencehub_status:evidencecount',
+            'issensitive' => 'privacy:metadata:local_evidencehub_status:issensitive',
+            'nexttransition' => 'privacy:metadata:local_evidencehub_status:nexttransition',
             'timechanged' => 'privacy:metadata:local_evidencehub_status:timechanged',
+            'timemodified' => 'privacy:metadata:timemodified',
         ], 'privacy:metadata:local_evidencehub_status');
 
         $collection->add_database_table('local_evidencehub_audit', [
+            'metaid' => 'privacy:metadata:local_evidencehub_audit:metaid',
             'userevidenceid' => 'privacy:metadata:local_evidencehub_audit:userevidenceid',
             'relateduserid' => 'privacy:metadata:local_evidencehub_audit:relateduserid',
             'userid' => 'privacy:metadata:local_evidencehub_audit:userid',
@@ -107,6 +113,7 @@ class provider implements
             'code' => 'privacy:metadata:local_evidencehub_dossier:code',
             'userid' => 'privacy:metadata:local_evidencehub_dossier:userid',
             'templateid' => 'privacy:metadata:local_evidencehub_dossier:templateid',
+            'exportid' => 'privacy:metadata:local_evidencehub_dossier:exportid',
             'createdby' => 'privacy:metadata:local_evidencehub_dossier:createdby',
             'snapshot' => 'privacy:metadata:local_evidencehub_dossier:snapshot',
             'pdfhash' => 'privacy:metadata:local_evidencehub_dossier:pdfhash',
@@ -118,9 +125,11 @@ class provider implements
         $collection->add_database_table('local_evidencehub_export', [
             'requestedby' => 'privacy:metadata:local_evidencehub_export:requestedby',
             'templateid' => 'privacy:metadata:local_evidencehub_export:templateid',
+            'contextid' => 'privacy:metadata:local_evidencehub_export:contextid',
             'subjectcount' => 'privacy:metadata:local_evidencehub_export:subjectcount',
             'status' => 'privacy:metadata:local_evidencehub_export:status',
             'timecreated' => 'privacy:metadata:timecreated',
+            'timecompleted' => 'privacy:metadata:local_evidencehub_export:timecompleted',
             'timeexpires' => 'privacy:metadata:local_evidencehub_export:timeexpires',
         ], 'privacy:metadata:local_evidencehub_export');
 

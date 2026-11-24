@@ -70,6 +70,8 @@ if (!$frameworkid) {
 policy::require_manage($frameworkid, 0);
 
 if (optional_param('action', '', PARAM_ALPHA) === 'removeoverride') {
+    // The page's own form posts it; a link or a prefetched GET never removes a policy.
+    \local_evidencehub\local\dossier_export::require_post();
     require_sesskey();
     $competencyid = required_param('competencyid', PARAM_INT);
     if (!$competencyid) {

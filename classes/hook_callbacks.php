@@ -77,7 +77,6 @@ final class hook_callbacks {
             'url' => (new \moodle_url('/local/evidencehub/evidence.php', ['userid' => $userid]))->out(false),
             'message' => $message,
             'linktext' => get_string('promptlink', 'local_evidencehub'),
-            'missing' => $missing,
         ]]);
     }
 

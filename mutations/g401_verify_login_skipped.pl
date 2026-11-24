@@ -1,1 +1,1 @@
-s/^        require_login\(\);\n//m;
+s/^        require_login\(null, false, null, false\);\n//m;

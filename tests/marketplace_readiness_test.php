@@ -22,12 +22,10 @@ use PHPUnit\Framework\Attributes\CoversNothing;
  * Pins the Moodle plugins directory requirements no other gate checks.
  *
  * Each test is one rule of the plugin submission guidelines (Licensing,
- * Strings, Settings storage, CSS styles, Boilerplate, Privacy). They read files
- * only, so they run wherever the PHPUnit suite runs. The class is meant to be
- * copied between plugins: only COMPONENT and the core write map change.
- *
- * This copy also differs from the template: the settings check accepts a
- * settings.php that stores no setting at all and only adds an admin page.
+ * Strings, Settings storage, CSS styles, Boilerplate, Privacy) or one finding
+ * a directory reviewer raised on this fleet. They read files only, so they run
+ * wherever the PHPUnit suite runs. The class is meant to be copied between
+ * plugins: only COMPONENT and the core write map change.
  *
  * @package    local_evidencehub
  * @copyright  2026 Anderson Blaine
@@ -274,12 +272,7 @@ final class marketplace_readiness_test extends \basic_testcase {
             return;
         }
         $pattern = '/new\s+\\\\?admin_setting_(\w+)\s*\(\s*([\'"])([^\'"]*)\2/';
-        $source = file_get_contents($file);
-        if (!str_contains($source, 'admin_setting_')) {
-            $this->assertStringContainsString('new admin_externalpage(', $source, 'settings.php adds no page and no setting.');
-            return;
-        }
-        preg_match_all($pattern, $source, $matches, PREG_SET_ORDER);
+        preg_match_all($pattern, file_get_contents($file), $matches, PREG_SET_ORDER);
         $this->assertNotEmpty($matches, 'No admin setting was recognised in settings.php.');
         foreach ($matches as [, $type, , $name]) {
             if (in_array($type, ['heading', 'description'], true)) {
@@ -369,6 +362,10 @@ final class marketplace_readiness_test extends \basic_testcase {
      * Every shipped source file carries the GPL boilerplate and a copyright
      * line (Boilerplate, Copyrights).
      *
+     * A Mustache template carries the whole block core's templates open with and no copyright line,
+     * as core's do: a directory reviewer found templates whose comment held only the block's first
+     * line, or no block at all.
+     *
      * @return void
      */
     public function test_source_files_carry_the_boilerplate(): void {
@@ -382,6 +379,22 @@ final class marketplace_readiness_test extends \basic_testcase {
             $this->assertStringContainsString('GNU General Public License', $source, "$path lacks the boilerplate.");
             if (!str_starts_with($path, 'lang/')) {
                 $this->assertStringContainsString('@copyright', $source, "$path lacks @copyright.");
+            }
+        }
+
+        // Whitespace is collapsed first, so a block wrapped or indented differently still matches; the
+        // URLs are left out because core's own templates spell them with http and with https.
+        $block = [
+            'This file is part of Moodle',
+            'Moodle is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License',
+            'either version 3 of the License, or (at your option) any later version.',
+            'WITHOUT ANY WARRANTY',
+            'along with Moodle. If not, see',
+        ];
+        foreach ($this->shipped_files(['templates'], ['mustache']) as $path) {
+            $source = preg_replace('/\s+/', ' ', file_get_contents($this->root() . '/' . $path));
+            foreach ($block as $line) {
+                $this->assertStringContainsString($line, $source, "$path lacks the boilerplate: '$line'.");
             }
         }
     }

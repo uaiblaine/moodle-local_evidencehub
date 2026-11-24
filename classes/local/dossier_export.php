@@ -39,7 +39,8 @@ final class dossier_export {
     public const string FILEAREA = 'export';
 
     /**
-     * Refuse anything but a POST: an export or a revocation changes state, so a link must never trigger it.
+     * Refuse anything but a POST: an export, a revocation or a policy removal changes state, so a link must
+     * never trigger it.
      *
      * @return void
      * @throws \moodle_exception On another method.

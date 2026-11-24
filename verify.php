@@ -17,8 +17,9 @@
 /**
  * The public verification page of a readiness dossier, opened from its QR code.
  *
- * Asks for a login only from a visitor the guest role does not let in (local/evidencehub:verifydossier): by
- * default it works under forcelogin and for a contractor without an account. It shows the dossier's snapshot
+ * Asks for a login only from a visitor, or the guest user, whom the guest role does not let in
+ * (local/evidencehub:verifydossier): by default it works under forcelogin and for a contractor without an
+ * account. It shows the dossier's snapshot
  * as issued, or only the revocation, never the worker's identifier, full name or files, and neither logs nor
  * triggers anything: the page is anonymous and the code is the dossier's only secret.
  *
@@ -44,9 +45,18 @@ $CFG->additionalhtmlhead = ($CFG->additionalhtmlhead ?? '') . '<meta name="robot
 
 // Before the code is read, so a visitor who may not verify learns nothing about it.
 if (!\local_evidencehub\local\dossier::can_verify()) {
+    // An account may hold what the guest role does not: the login page brings the visitor back here, with the
+    // code it came with (the page's own URL leaves it out), when it has the shape of one.
+    $back = new moodle_url('/local/evidencehub/verify.php', preg_match('/^[0-9a-f]{32}$/', $code) ? ['code' => $code] : []);
+    if (isguestuser()) {
+        // Require_login() lets the guest user through, so it is sent to the login page directly.
+        $SESSION->wantsurl = $back->out(false);
+        redirect(get_login_url());
+    }
     if (!isloggedin()) {
-        // An account may hold what the guest role does not: the login page brings the visitor back here.
-        require_login();
+        // Never logged in as guest automatically: the guest role was just refused.
+        $SESSION->wantsurl = $back->out(false);
+        require_login(null, false, null, false);
     }
     throw new moodle_exception('errorverifydossier', 'local_evidencehub');
 }

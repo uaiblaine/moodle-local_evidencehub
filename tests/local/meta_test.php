@@ -80,6 +80,19 @@ final class meta_test extends \advanced_testcase {
     }
 
     /**
+     * A negative count is refused: a validity period never runs backwards.
+     *
+     * @return void
+     */
+    public function test_adding_negative_months_is_refused(): void {
+        // The control: no months at all is accepted and keeps the day.
+        $this->assertSame(20260115, meta::add_months(20260115, 0));
+
+        $this->expectException(\coding_exception::class);
+        meta::add_months(20260115, -1);
+    }
+
+    /**
      * Only real days in a plausible range are valid.
      *
      * @return void
