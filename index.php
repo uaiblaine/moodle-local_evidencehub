@@ -36,6 +36,7 @@ use local_evidencehub\local\hub_filter;
 use local_evidencehub\local\hub_kpis;
 use local_evidencehub\local\hub_query;
 use local_evidencehub\local\hub_scope;
+use local_evidencehub\output\hub_report_view;
 use local_evidencehub\reportbuilder\local\systemreports\hub_pairs;
 
 $contextid = optional_param('contextid', context_system::instance()->id, PARAM_INT);
@@ -142,6 +143,27 @@ if ($format !== '' && $filter !== null) {
         $download->rows($filter, $pairs)
     );
     die();
+}
+
+// The list of a template is the data report (stage E3): the template the request names, else the reader's last one
+// in this context while it is still offered. The matrix keeps its own page and filter; with no template either,
+// the page asks for one.
+if (optional_param('view', '', PARAM_ALPHA) !== hub_filter::VIEW_MATRIX) {
+    $listtemplateid = $tabletemplateid > 0 ? $tabletemplateid : hub_report_view::last_template($context);
+    if ($listtemplateid > 0) {
+        hub_access::require_template($listtemplateid, $context);
+        $report = hub_pairs::for_template($context, $listtemplateid);
+        $PAGE->set_url(hub_report_view::url($context, $listtemplateid));
+        // Until header() runs, $OUTPUT is core's bootstrap renderer: the shell is exported after it.
+        echo $OUTPUT->header();
+        echo $OUTPUT->render_from_template(
+            'local_evidencehub/hub_report_view',
+            (new hub_report_view($context, $report))->export_for_template($OUTPUT)
+        );
+        echo $OUTPUT->footer();
+        return;
+    }
+    $filter = null;
 }
 
 $page = new \local_evidencehub\output\hub_page($context, $filter, $scope);

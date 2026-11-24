@@ -242,7 +242,8 @@ final class hub_matrix_page_test extends \advanced_testcase {
     }
 
     /**
-     * The control of the matrix page: the list's tab shows the grid and no matrix.
+     * The control of the matrix page: the list's tab, view=list, renders the list's shell and no matrix, and stores
+     * no hub filter (the list's filters are core's store now).
      *
      * @return void
      */
@@ -259,9 +260,8 @@ final class hub_matrix_page_test extends \advanced_testcase {
             'statusfilter' => 1,
             'view' => hub_filter::VIEW_LIST,
         ]);
-        $this->assertStringContainsString('local-evidencehub-grid', $html);
-        $this->assertStringContainsString('value="' . $this->pair($worker, $c1) . '" data-region="pair"', $html);
+        $this->assertStringContainsString('data-region="local-evidencehub-reportview"', $html);
         $this->assertStringNotContainsString('local-evidencehub-matrix', $html);
-        $this->assertSame(hub_filter::VIEW_LIST, hub_filter::from_preference($system)->view);
+        $this->assertNull(hub_filter::from_preference($system));
     }
 }

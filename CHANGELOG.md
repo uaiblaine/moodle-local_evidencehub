@@ -29,6 +29,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   (expired, or within 30, 60 or 90 days), page sizes 30, 50 and 100, and three request parameters that can only
   narrow it: the scope (needing attention or all), a search by the worker's name, and whether suspended accounts
   are listed. The hub's page is unchanged.
+- Version 2026100518: the hub's list of a template is the fleet's data report, drawn in React (Moodle 5.3; the
+  bundle `js/esm/build/bundle.js` with its source manifest, built from `js/esm/src`). A band (workers, with those
+  hidden by permissions; ready workers and the rate; pairs needing attention; pairs expiring in 30 days; the pairs
+  by status and the competencies with most open pairs, each line setting its filter); a bar with the scope
+  ("Needs attention" or "All", each with its count), the count, Filters (status, cohort, competency, type of
+  evidence, verification and valid until, with their counts, stored in core's report filters, and "Accounts",
+  active only or including suspended accounts, kept in the reader's preference), Columns (the catalogue, the sets
+  "Validity" and "Deciding evidence", the default columns, the column widths), View (automatic, table or cards,
+  then the matrix and core's table view) and a search by the worker's name; a grid with sortable and resizable
+  columns or cards; a pager of 30, 50 or 100 pairs. A reader who may export dossiers selects pairs on the page
+  and exports their workers' dossiers from a dock under the rows, through the hub's existing export; "Inspect"
+  opens the existing drawer. Without JavaScript the page holds core's table. The hub opens on the reader's last
+  template in that place while it is still offered. The matrix, the table view, the download and the dossier
+  export's server side are unchanged; the old list's code stays until the next stage removes it.
 
 ### Changed
 

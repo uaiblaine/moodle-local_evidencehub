@@ -263,7 +263,12 @@ final class reportengine {
             foreach ($aliases as $key => $alias) {
                 $cells[] = ['key' => $key, 'html' => (string) ($formatted[$alias] ?? '')];
             }
-            $names = (object) ['worker' => $facts['worker'], 'competency' => $facts['competency']];
+            // The two titles are printed as text, and format_string() still writes a lone "<" or "&" as an entity
+            // even unescaped: decode it, as the filter options' labels are below.
+            $names = (object) [
+                'worker' => $facts['worker'],
+                'competency' => html_entity_decode($facts['competency'], ENT_QUOTES | ENT_HTML401, 'UTF-8'),
+            ];
             $rows[] = [
                 'userid' => $facts['userid'],
                 'competencyid' => $facts['competencyid'],

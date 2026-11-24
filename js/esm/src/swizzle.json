@@ -1,0 +1,54 @@
+{
+  "datareport/Bar": {
+    "eject": "prohibited",
+    "wrap": "prohibited"
+  },
+  "datareport/Cards": {
+    "eject": "prohibited",
+    "wrap": "prohibited"
+  },
+  "datareport/FilterPanel": {
+    "eject": "prohibited",
+    "wrap": "prohibited"
+  },
+  "datareport/Grid": {
+    "eject": "prohibited",
+    "wrap": "prohibited"
+  },
+  "datareport/Pager": {
+    "eject": "prohibited",
+    "wrap": "prohibited"
+  },
+  "datareport/Segmented": {
+    "eject": "prohibited",
+    "wrap": "prohibited"
+  },
+  "hub/Band": {
+    "eject": "prohibited",
+    "wrap": "prohibited"
+  },
+  "hub/Bar": {
+    "eject": "prohibited",
+    "wrap": "prohibited"
+  },
+  "hub/Cards": {
+    "eject": "prohibited",
+    "wrap": "prohibited"
+  },
+  "hub/Dock": {
+    "eject": "prohibited",
+    "wrap": "prohibited"
+  },
+  "hub/Grid": {
+    "eject": "prohibited",
+    "wrap": "prohibited"
+  },
+  "hub/HubView": {
+    "eject": "prohibited",
+    "wrap": "prohibited"
+  },
+  "views": {
+    "eject": "prohibited",
+    "wrap": "prohibited"
+  }
+}

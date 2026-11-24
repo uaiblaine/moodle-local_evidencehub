@@ -178,11 +178,15 @@ final class hub_page_test extends \advanced_testcase {
         $this->setUser($manager);
 
         $html = $this->run_page(['contextid' => \context_system::instance()->id, 'templateid' => $templateid, 'statusfilter' => 1]);
-        $this->assertStringContainsString('data-region="local-evidencehub-hub"', $html);
+        // The list of a template is the data report's shell (stage E3), core's table of its pairs in the noscript.
+        $this->assertStringContainsString('data-region="local-evidencehub-reportview"', $html);
         $this->assertStringContainsString('Ana Souza', $html);
-        $this->assertStringContainsString('value="' . $this->pair($worker, $c1) . '"', $html);
-        // The filter the request named is stored.
-        $this->assertSame($templateid, hub_filter::from_preference(\context_system::instance())->templateid);
+        $this->assertStringContainsString('href="' . (new \moodle_url('/local/evidencehub/evidence.php', [
+            'userid' => $worker->id,
+        ]))->out() . '"', $html);
+        // The old list's form and its filter preference are gone from this route.
+        $this->assertStringNotContainsString('value="' . $this->pair($worker, $c1) . '"', $html);
+        $this->assertNull(hub_filter::from_preference(\context_system::instance()));
     }
 
     /**
@@ -201,8 +205,9 @@ final class hub_page_test extends \advanced_testcase {
 
         $html = $this->run_page(['contextid' => $catcontext->id, 'templateid' => $templateid]);
         $this->assertStringContainsString(get_string('hublocked', 'local_evidencehub', 'Operations'), $html);
-        $this->assertStringContainsString(get_string('hubhiddenworkers', 'local_evidencehub', 1), $html);
-        $this->assertStringContainsString(get_string('hubnoworkers', 'local_evidencehub'), $html);
+        // The hidden and the empty figures are the band's now, read by the client
+        // (reportengine_test and report_services_test hold them); the page renders the shell.
+        $this->assertStringContainsString('data-region="local-evidencehub-reportview"', $html);
     }
 
     /**
