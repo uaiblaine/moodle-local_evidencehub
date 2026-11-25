@@ -77,6 +77,13 @@ With `local_dimensions` installed, its plan overview and its tracker show one pi
 The worker sees their own medical exam with its date; the manager sees "Restricted". A competency
 with no evidence shows "Pending, no evidence" only because an explicit policy covers it.
 
+### Validity policy in the Competency hub's panel
+
+With `local_dimensions` installed, the panel of its Competency hub's workspace shows, under the selected
+competency, a "Validity policy" section: the policy in force as the Validity policies page shows it (kind of
+policy, verified evidence only, minimum hours, alerts, grace days, rating validity, what happens on expiry) and
+who sets it: this competency, the framework, or the default when neither does.
+
 
 Requirements
 ------------
@@ -87,7 +94,8 @@ Requirements
 - Optional: `tool_cohortroles` (part of core) to give mentors the user-context capabilities over
   the workers of their cohorts
 - Optional: `local_dimensions` (5.3) to show validity pills on its plan overview and competency
-  tracker; neither plugin requires the other
+  tracker, and the validity policy in its Competency hub's panel (from its version 2026100541); neither
+  plugin requires the other
 
 
 Installation
@@ -412,6 +420,17 @@ a viewer without `local/evidencehub:viewsensitive` over the learner. A competenc
 built-in default it shows nothing, so a site that has not set validity up sees no pill on every competency.
 The bridge is the `\local_dimensions\hook\competency_status_badges` hook; without `local_dimensions` it is
 never called.
+
+**Validity policy in local_dimensions' Competency hub.** When `local_dimensions` is installed, the panel of its
+hub's workspace shows the selected competency's validity policy, row for row as the Validity policies page
+shows it, and who sets it ("This competency", "The framework" or "Default"). It is shown to a holder of
+`local/evidencehub:view` or `local/evidencehub:managepolicies` in the framework's own context (system or a
+course category), and to nobody else, a guest included; "Edit policy", to the framework's page of
+`policies.php`, only to a holder of `local/evidencehub:managepolicies` there; a framework that is not the
+competency's own gives nothing. Each panel costs three statements.
+The bridge is the `\local_dimensions\hook\competency_panel_sections` hook; `db/hooks.php` names it by class
+name only, so a site without `local_dimensions`, or with a version older than the hook, records the listener
+and never calls it.
 Site administration > Competencies > Readiness dossiers:
 
 - `local_evidencehub/includesensitivefiles` (off): include the files of sensitive evidence in dossiers,

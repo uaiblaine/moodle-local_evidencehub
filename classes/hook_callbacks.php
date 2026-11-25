@@ -95,4 +95,30 @@ final class hook_callbacks {
             $hook->add_badge((int) $competencyid, $badge['label'], $badge['tone']);
         }
     }
+
+    /**
+     * Answer local_dimensions' request for the Competency hub panel's sections of one competency: its validity policy.
+     *
+     * The section is decided by {@see local\policy_section::for_competency()}, from the competency and the framework
+     * the hook carries; the hook class belongs to local_dimensions and is not required, so its tones are passed
+     * through as plain strings.
+     *
+     * @param \local_dimensions\hook\competency_panel_sections $hook The hook.
+     * @return void
+     */
+    public static function competency_panel_sections(\local_dimensions\hook\competency_panel_sections $hook): void {
+        $section = local\policy_section::for_competency($hook->get_competencyid(), $hook->get_frameworkid());
+        if ($section === null) {
+            return;
+        }
+        $hook->add_section(
+            'local_evidencehub',
+            $section['key'],
+            $section['title'],
+            $section['rows'],
+            '',
+            $section['linkurl'],
+            $section['linklabel']
+        );
+    }
 }

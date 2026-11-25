@@ -8,6 +8,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- Version 2026100520: the validity policy in `local_dimensions`' Competency hub. A listener of
+  `\local_dimensions\hook\competency_panel_sections` (`local\policy_section`) adds a "Validity policy" section to
+  the panel of the selected competency: the rows of the Validity policies page and who sets the policy (the
+  competency, the framework or the default), to a holder of `view` or `managepolicies` in the framework's context;
+  "Edit policy" to `policies.php` for `managepolicies` only. The competency's own framework is read and a
+  hook naming another gives nothing. Three statements a panel; no dependency on `local_dimensions`, whose hook
+  class is named in `db/hooks.php` only. Gates G550 to G556.
 - The hub's pairs of a template as core's system report, `hub_pairs`: the hub's own rows, values, restriction
   and default order (restricted and missing first, then the earliest day), with filters by status ("missing"
   included), cohort, type of evidence and the worker's name. `index.php?view=table` renders it with a link back to

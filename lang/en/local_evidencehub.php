@@ -265,6 +265,7 @@ $string['policy_notblocking'] = 'does not block readiness';
 $string['policy_unverifiedcounts'] = 'unverified evidence counts';
 $string['policy_verifiedonly'] = 'verified evidence only';
 $string['policyalerts'] = '{$a->alert1} and {$a->alert2} days before';
+$string['policysection'] = 'Validity policy';
 $string['privacy:metadata:core_competency'] = 'The details describe evidence of prior learning that core competencies stores, with its files.';
 $string['privacy:metadata:core_files'] = 'The ZIP of readiness dossiers prepared for a user is stored in their user context until it expires.';
 $string['privacy:metadata:core_message'] = 'Alerts are sent through the messaging system: to a user when their validity becomes due, critical or expired, to verifiers when an evidence awaits verification, to mentors as a weekly digest, and to the requester of a dossier export when it is ready or failed.';

@@ -183,4 +183,74 @@ final class hook_callbacks_test extends \advanced_testcase {
         \core\di::get(\core\hook\manager::class)->dispatch($hook);
         $this->assertSame([['label' => 'Validity: Due soon, 2027-03-01', 'tone' => 'warning']], $hook->get_badges($id));
     }
+
+    /**
+     * The panel sections listener is recorded from db/hooks.php by the hook's name alone: reading the file loads no
+     * local_dimensions class, so a site without local_dimensions (or with one older than the hook) keeps working, and
+     * nothing there ever dispatches the hook.
+     *
+     * @return void
+     */
+    public function test_the_panel_sections_listener_needs_no_local_dimensions_class(): void {
+        $manager = \core\hook\manager::phpunit_get_instance([
+            'local_evidencehub' => __DIR__ . '/../db/hooks.php',
+        ]);
+        $callbacks = $manager->get_callbacks_for_hook('local_dimensions\\hook\\competency_panel_sections');
+        $this->assertSame(
+            ['local_evidencehub\\hook_callbacks::competency_panel_sections'],
+            array_column($callbacks, 'callback')
+        );
+        // The control: the file's other bridge is recorded the same way.
+        $this->assertCount(1, $manager->get_callbacks_for_hook('local_dimensions\\hook\\competency_status_badges'));
+    }
+
+    /**
+     * Dispatching local_dimensions' panel hook through the plugin's own db/hooks.php adds the policy section to a
+     * reader of policies, with "Edit policy" for a policy manager only, and nothing to a user who holds neither
+     * capability; skipped without the hook.
+     *
+     * @return void
+     */
+    public function test_the_panel_sections_hook_is_answered(): void {
+        $hookclass = '\\local_dimensions\\hook\\competency_panel_sections';
+        if (!class_exists($hookclass)) {
+            $this->markTestSkipped('local_dimensions with the competency_panel_sections hook is not installed.');
+        }
+        $manager = \core\hook\manager::phpunit_get_instance([
+            'local_evidencehub' => __DIR__ . '/../db/hooks.php',
+        ]);
+        $generator = $this->getDataGenerator()->get_plugin_generator('core_competency');
+        $framework = $generator->create_framework();
+        $competency = $generator->create_competency(['competencyframeworkid' => $framework->get('id')]);
+        $dispatch = static function () use ($hookclass, $manager, $framework, $competency): array {
+            $hook = new $hookclass((int) $competency->get('id'), (int) $framework->get('id'), \context_system::instance(), false);
+            $manager->dispatch($hook);
+            return $hook->get_sections();
+        };
+
+        $this->setUser($this->user_with());
+        $this->assertSame([], $dispatch());
+
+        $this->setUser($this->user_with(['local/evidencehub:view']));
+        $sections = $dispatch();
+        $this->assertSame(['local_evidencehub-policy'], array_column($sections, 'key'));
+        $this->assertSame(get_string('policysection', 'local_evidencehub'), $sections[0]['title']);
+        $this->assertSame(
+            ['value' => get_string('source_default', 'local_evidencehub'), 'tone' => 'neutral'],
+            array_slice(end($sections[0]['rows']), 1)
+        );
+        $this->assertSame('', $sections[0]['linkurl']);
+
+        // A hook built by hand with a framework that is not the competency's gives nothing, to the same reader.
+        $foreign = $generator->create_framework();
+        $hook = new $hookclass((int) $competency->get('id'), (int) $foreign->get('id'), \context_system::instance(), false);
+        $manager->dispatch($hook);
+        $this->assertSame([], $hook->get_sections());
+
+        $this->setUser($this->user_with(['local/evidencehub:managepolicies']));
+        $sections = $dispatch();
+        $expected = new \moodle_url('/local/evidencehub/policies.php', ['frameworkid' => $framework->get('id')]);
+        $this->assertSame($expected->out(false), $sections[0]['linkurl']);
+        $this->assertSame(get_string('actioneditpolicy', 'local_evidencehub'), $sections[0]['linklabel']);
+    }
 }
