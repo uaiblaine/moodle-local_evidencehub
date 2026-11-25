@@ -1,1 +1,1 @@
-s/report::get_records\(\['component' => 'local_evidencehub'\]\)/report::get_records()/;
+s/'SELECT r\.id FROM \{' \. report::TABLE \. "\} r WHERE \{\$isplugins\}", \$params\)/'SELECT r.id FROM {' . report::TABLE . '} r')/;

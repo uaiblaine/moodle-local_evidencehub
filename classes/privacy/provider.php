@@ -28,7 +28,9 @@ use core_reportbuilder\local\models\user_filter;
 use local_evidencehub\local\audit;
 use local_evidencehub\local\dossier_export;
 use local_evidencehub\local\export;
+use local_evidencehub\local\hub_access;
 use local_evidencehub\local\meta;
+use local_evidencehub\local\reportpersistents;
 use local_evidencehub\local\reportpreference;
 use local_evidencehub\local\status;
 
@@ -42,9 +44,9 @@ use local_evidencehub\local\status;
  *
  * The user's settings of the hub's pairs report (columns, widths, the suspended accounts choice, the last template
  * per hub context) are a user preference, exported with the others. Their stored filter values of that report are
- * rows core writes (reportbuilder_user_filter) for a report whose persistent has this plugin's component: core's own
- * provider covers custom reports only, so these are this plugin's to find, export and delete, in the reader's own
- * user context.
+ * rows core writes (reportbuilder_user_filter) for a persistent of the plugin's system report, whatever component
+ * it was created under ({@see reportpersistents::is_plugins()}): core's own provider covers custom reports only, so
+ * these are this plugin's to find, export and delete, in the reader's own user context.
  *
  * Other users appear as actors (who verified, who acted in the trail, who issued a dossier). They
  * find those rows in their own export, but deleting an actor's data leaves the worker's rows
@@ -198,13 +200,14 @@ class provider implements
              WHERE e.requestedby = :userid
         ", ['level' => $level, 'userid' => $userid]);
 
+        [$isplugins, $reportparams] = reportpersistents::is_plugins('r');
         $contextlist->add_from_sql("
             SELECT ctx.id
               FROM {" . user_filter::TABLE . "} f
-              JOIN {" . report::TABLE . "} r ON r.id = f.reportid AND r.component = :component
+              JOIN {" . report::TABLE . "} r ON r.id = f.reportid AND {$isplugins}
               JOIN {context} ctx ON ctx.instanceid = f.usercreated AND ctx.contextlevel = :level
              WHERE f.usercreated = :userid
-        ", ['component' => 'local_evidencehub', 'level' => $level, 'userid' => $userid]);
+        ", $reportparams + ['level' => $level, 'userid' => $userid]);
 
         return $contextlist;
     }
@@ -239,13 +242,14 @@ class provider implements
             'SELECT requestedby FROM {local_evidencehub_export} WHERE requestedby = :subject',
             $params
         );
+        [$isplugins, $reportparams] = reportpersistents::is_plugins('r');
         $userlist->add_from_sql(
             'usercreated',
             'SELECT f.usercreated
                FROM {' . user_filter::TABLE . '} f
-               JOIN {' . report::TABLE . '} r ON r.id = f.reportid AND r.component = :component
-              WHERE f.usercreated = :subject',
-            $params + ['component' => 'local_evidencehub']
+               JOIN {' . report::TABLE . "} r ON r.id = f.reportid AND {$isplugins}
+              WHERE f.usercreated = :subject",
+            $params + $reportparams
         );
     }
 
@@ -346,19 +350,14 @@ class provider implements
     /**
      * Delete one user's stored filter values of the plugin's reports, in core's table.
      *
-     * The one definition of the cut (the user's own rows, a report whose persistent has this component), shared by the
-     * privacy requests and the deletion of the account, after which the user context the finder reads is gone.
+     * The door of the privacy requests and of the account's deletion (after which the user context the finder reads
+     * is gone); the cut is {@see reportpersistents::is_plugins()}.
      *
      * @param int $userid The reader.
      * @return void
      */
     public static function delete_stored_filters(int $userid): void {
-        global $DB;
-        $DB->delete_records_select(
-            user_filter::TABLE,
-            'usercreated = :userid AND reportid IN (SELECT r.id FROM {' . report::TABLE . '} r WHERE r.component = :component)',
-            ['userid' => $userid, 'component' => 'local_evidencehub']
-        );
+        reportpersistents::delete_user_filters($userid);
     }
 
     /**
@@ -589,20 +588,22 @@ class provider implements
      */
     protected static function export_report_filters(\context $context, int $userid): void {
         global $DB;
+        [$isplugins, $reportparams] = reportpersistents::is_plugins('r');
         $records = $DB->get_records_sql("
-            SELECT f.id, f.filterdata, f.timecreated, f.timemodified, r.contextid, t.shortname AS templatename
+            SELECT f.id, f.filterdata, f.timecreated, f.timemodified, r.contextid,
+                   t.shortname AS templatename, t.contextid AS templatecontextid
               FROM {" . user_filter::TABLE . "} f
-              JOIN {" . report::TABLE . "} r ON r.id = f.reportid AND r.component = :component
+              JOIN {" . report::TABLE . "} r ON r.id = f.reportid AND {$isplugins}
          LEFT JOIN {competency_template} t ON t.id = r.itemid
              WHERE f.usercreated = :userid
           ORDER BY f.id
-        ", ['component' => 'local_evidencehub', 'userid' => $userid]);
+        ", $reportparams + ['userid' => $userid]);
         $entries = [];
         foreach ($records as $record) {
-            $hubcontext = \context::instance_by_id((int) $record->contextid, IGNORE_MISSING);
+            [$templatename, $contextname] = static::report_names($record, $userid);
             $entries[] = (object) [
-                'template' => format_string($record->templatename ?? '', true, ['context' => \context_system::instance()]),
-                'context' => $hubcontext ? $hubcontext->get_context_name(false, false, false) : '',
+                'template' => $templatename,
+                'context' => $contextname,
                 'filters' => json_decode((string) $record->filterdata),
                 'timecreated' => transform::datetime($record->timecreated),
                 'timemodified' => transform::datetime($record->timemodified),
@@ -614,6 +615,53 @@ class provider implements
                 (object) ['filters' => $entries]
             );
         }
+    }
+
+    /**
+     * The template and the hub context a stored-filters entry is exported under, each empty unless the subject may
+     * see it.
+     *
+     * A persistent's context and item are whatever a client named to core's services, which create it before the
+     * report's can_view() and then store filter values on a system report without asking it again. So they are named
+     * only where the subject may open the hub and read the template, as the hub's own page required when it built its
+     * report: never another user's context, nor a category or a template the subject cannot see. Judged for the
+     * subject, never for the user the export runs as.
+     *
+     * @param \stdClass $record The entry's contextid, templatename and templatecontextid.
+     * @param int $userid The subject.
+     * @return array [the template's name, the hub context's name].
+     */
+    protected static function report_names(\stdClass $record, int $userid): array {
+        $hubcontext = \context::instance_by_id((int) $record->contextid, IGNORE_MISSING);
+        if (!$hubcontext || !hub_access::opens_in($hubcontext)) {
+            return ['', ''];
+        }
+        if (!has_capability('local/evidencehub:view', $hubcontext, $userid)) {
+            return ['', ''];
+        }
+        $contextname = $hubcontext->get_context_name(false, false, false);
+        $templatecontext = $record->templatecontextid === null
+            ? false
+            : \context::instance_by_id((int) $record->templatecontextid, IGNORE_MISSING);
+        if (!$templatecontext || !static::is_at_or_below($templatecontext, $hubcontext)) {
+            return ['', $contextname];
+        }
+        $reads = ['moodle/competency:templateview', 'moodle/competency:templatemanage'];
+        if (!has_any_capability($reads, $templatecontext, $userid)) {
+            return ['', $contextname];
+        }
+        return [format_string($record->templatename, true, ['context' => $templatecontext]), $contextname];
+    }
+
+    /**
+     * Whether a context is another one or lies below it, as the hub offers a category the templates of its subtree.
+     *
+     * @param \context $context The context asked about.
+     * @param \context $ancestor The context it must be, or be below.
+     * @return bool
+     */
+    protected static function is_at_or_below(\context $context, \context $ancestor): bool {
+        return (int) $context->id === (int) $ancestor->id || str_starts_with($context->path, $ancestor->path . '/');
     }
 
     /**
