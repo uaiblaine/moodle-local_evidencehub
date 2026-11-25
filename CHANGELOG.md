@@ -160,7 +160,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   deletes, the account deletion and the uninstall; and another plugin's system report built under this plugin's
   component was taken for this plugin's. One definition (`local\reportpersistents::is_plugins()`: a system report
   whose source is the pairs report, without case or leading separator) now serves the provider, the `user_deleted`
-  observer and `db/uninstall.php`. Gates G557 to G561.
+  observer and `db/uninstall.php`. The export of those stored filters also names an entry's hub context and template
+  only where the subject may open the hub and read the template: a persistent's context and item are whatever a
+  client named, and the export used to print another user's full name or any template's name for one. Gates G557 to
+  G566.
 - Version 2026100521: a filter change in the hub's list answers at the press. The list wrote the new filter to
   core's store and dimmed the rows only when that call had answered, so a reader waited 55 to 148 ms (measured on
   the 300,000-pair seed, more on a slow machine) with nothing moving; the rows and the band now dim when the

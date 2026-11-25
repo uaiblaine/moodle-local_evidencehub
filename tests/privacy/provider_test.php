@@ -548,6 +548,7 @@ final class provider_test extends \core_privacy\tests\provider_testcase {
         $this->setAdminUser();
         $templateid = (int) $this->w['template']->get('id');
         $reader = $this->getDataGenerator()->create_user();
+        $this->allow($reader, ['local/evidencehub:view', 'moodle/competency:templateview']);
         $otherreader = $this->getDataGenerator()->create_user();
         $reportid = (int) hub_pairs::for_template(\context_system::instance(), $templateid)->get_report_persistent()->get('id');
         user_filter_manager::set($reportid, ['user:cohort_operator' => 1, 'user:cohort_value' => 3], (int) $reader->id);
@@ -578,6 +579,124 @@ final class provider_test extends \core_privacy\tests\provider_testcase {
         user_filter_manager::set((int) $named->get('id'), ['validity:status_value' => 4], (int) $reader->id);
         manager::reset_caches();
         return [$reader, $otherreader, $reportid, (int) $other->get('id'), (int) $named->get('id')];
+    }
+
+    /**
+     * Give a user capabilities in the system context, through a role of their own.
+     *
+     * @param \stdClass $user The user.
+     * @param array $capabilities The capabilities to allow.
+     * @return void
+     */
+    private function allow(\stdClass $user, array $capabilities): void {
+        $system = \context_system::instance();
+        $roleid = $this->getDataGenerator()->create_role();
+        foreach ($capabilities as $capability) {
+            assign_capability($capability, CAP_ALLOW, $roleid, $system->id, true);
+        }
+        role_assign($roleid, $user->id, $system->id);
+        accesslib_clear_all_caches_for_unit_testing();
+    }
+
+    /**
+     * The one stored-filters entry of a user's export, after storing a value for them on a report.
+     *
+     * @param \stdClass $user The subject.
+     * @param int $reportid The report the value is stored on.
+     * @return \stdClass The entry: template, context, filters and the two times.
+     */
+    private function exported_entry(\stdClass $user, int $reportid): \stdClass {
+        user_filter_manager::set($reportid, ['validity:status_value' => 3], (int) $user->id);
+        $context = \context_user::instance($user->id);
+        writer::reset();
+        provider::export_user_data(new approved_contextlist($user, 'local_evidencehub', [$context->id]));
+        $data = writer::with_context($context)->get_data($this->path('privacy:path:reportfilters'));
+        $this->assertCount(1, $data->filters);
+        return $data->filters[0];
+    }
+
+    /**
+     * A persistent of the pairs report as core's services would build it for a client: any context, any item.
+     *
+     * @param \context $context The context the client named.
+     * @param int $itemid The item the client named.
+     * @return int The persistent's id.
+     */
+    private function named_report(\context $context, int $itemid): int {
+        $report = new report(0, (object) [
+            'source' => hub_pairs::class,
+            'type' => \core_reportbuilder\local\report\base::TYPE_SYSTEM_REPORT,
+            'contextid' => $context->id,
+            'component' => 'local_evidencehub',
+            'area' => hub_pairs::AREA,
+            'itemid' => $itemid,
+        ]);
+        return (int) $report->create()->get('id');
+    }
+
+    /**
+     * The export names a stored-filters entry's hub context and template only where the subject may open the hub
+     * and read the template: a persistent's context and item are whatever a client named to core's services. Run as
+     * the administrator, who may see all of it; the subject is the one judged.
+     *
+     * Changes that must make it fail: naming a context the hub does not open in (another user's, by their full
+     * name); naming the context to a subject without the hub's view capability there; naming a template outside the
+     * hub context's subtree, or one the subject may not read; judging any of it for the current user.
+     *
+     * @return void
+     */
+    public function test_the_export_names_only_what_the_subject_may_open(): void {
+        set_config('enabled', 1, 'core_competency');
+        $this->setAdminUser();
+        $dg = $this->getDataGenerator();
+        $cgen = $dg->get_plugin_generator('core_competency');
+        $system = \context_system::instance();
+        $systemname = $system->get_context_name(false, false, false);
+        $templateid = (int) $this->w['template']->get('id');
+        $templatename = $this->w['template']->get('shortname');
+        $categorya = \context_coursecat::instance($dg->create_category()->id);
+        $categoryb = \context_coursecat::instance($dg->create_category()->id);
+        $elsewhere = $cgen->create_template(['contextid' => $categoryb->id]);
+        $views = ['local/evidencehub:view'];
+        $reads = ['local/evidencehub:view', 'moodle/competency:templateview'];
+
+        // The control: a subject who may open the hub and read the template has both named.
+        $reader = $dg->create_user();
+        $this->allow($reader, $reads);
+        $entry = $this->exported_entry($reader, $this->named_report($system, $templateid));
+        $this->assertSame([$templatename, $systemname], [$entry->template, $entry->context]);
+
+        // Another user's context, which the hub never opens in: nothing is named, whatever the subject holds.
+        $stranger = $dg->create_user(['firstname' => 'Hidden', 'lastname' => 'Stranger']);
+        $prober = $dg->create_user();
+        $this->allow($prober, $reads);
+        $entry = $this->exported_entry($prober, $this->named_report(\context_user::instance($stranger->id), $templateid));
+        $this->assertSame(['', ''], [$entry->template, $entry->context]);
+
+        // A subject without the hub's view capability: nothing is named.
+        $plain = $dg->create_user();
+        $entry = $this->exported_entry($plain, $this->named_report($system, $templateid));
+        $this->assertSame(['', ''], [$entry->template, $entry->context]);
+
+        // A subject who may open the hub but not read templates: the context alone.
+        $viewer = $dg->create_user();
+        $this->allow($viewer, $views);
+        $entry = $this->exported_entry($viewer, $this->named_report($system, $templateid));
+        $this->assertSame(['', $systemname], [$entry->template, $entry->context]);
+
+        // A template outside the hub category's subtree: the category alone, though the subject reads both.
+        $crosser = $dg->create_user();
+        $this->allow($crosser, $reads);
+        $entry = $this->exported_entry($crosser, $this->named_report($categorya, (int) $elsewhere->get('id')));
+        $this->assertSame(['', $categorya->get_context_name(false, false, false)], [$entry->template, $entry->context]);
+        // And the control of that case: the same template under its own category is named.
+        $insider = $dg->create_user();
+        $this->allow($insider, $reads);
+        $entry = $this->exported_entry($insider, $this->named_report($categoryb, (int) $elsewhere->get('id')));
+        $this->assertSame(
+            [$elsewhere->get('shortname'), $categoryb->get_context_name(false, false, false)],
+            [$entry->template, $entry->context]
+        );
     }
 
     /**

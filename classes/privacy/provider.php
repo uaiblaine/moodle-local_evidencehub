@@ -28,6 +28,7 @@ use core_reportbuilder\local\models\user_filter;
 use local_evidencehub\local\audit;
 use local_evidencehub\local\dossier_export;
 use local_evidencehub\local\export;
+use local_evidencehub\local\hub_access;
 use local_evidencehub\local\meta;
 use local_evidencehub\local\reportpersistents;
 use local_evidencehub\local\reportpreference;
@@ -589,7 +590,8 @@ class provider implements
         global $DB;
         [$isplugins, $reportparams] = reportpersistents::is_plugins('r');
         $records = $DB->get_records_sql("
-            SELECT f.id, f.filterdata, f.timecreated, f.timemodified, r.contextid, t.shortname AS templatename
+            SELECT f.id, f.filterdata, f.timecreated, f.timemodified, r.contextid,
+                   t.shortname AS templatename, t.contextid AS templatecontextid
               FROM {" . user_filter::TABLE . "} f
               JOIN {" . report::TABLE . "} r ON r.id = f.reportid AND {$isplugins}
          LEFT JOIN {competency_template} t ON t.id = r.itemid
@@ -598,10 +600,10 @@ class provider implements
         ", $reportparams + ['userid' => $userid]);
         $entries = [];
         foreach ($records as $record) {
-            $hubcontext = \context::instance_by_id((int) $record->contextid, IGNORE_MISSING);
+            [$templatename, $contextname] = static::report_names($record, $userid);
             $entries[] = (object) [
-                'template' => format_string($record->templatename ?? '', true, ['context' => \context_system::instance()]),
-                'context' => $hubcontext ? $hubcontext->get_context_name(false, false, false) : '',
+                'template' => $templatename,
+                'context' => $contextname,
                 'filters' => json_decode((string) $record->filterdata),
                 'timecreated' => transform::datetime($record->timecreated),
                 'timemodified' => transform::datetime($record->timemodified),
@@ -613,6 +615,53 @@ class provider implements
                 (object) ['filters' => $entries]
             );
         }
+    }
+
+    /**
+     * The template and the hub context a stored-filters entry is exported under, each empty unless the subject may
+     * see it.
+     *
+     * A persistent's context and item are whatever a client named to core's services, which create it before the
+     * report's can_view() and then store filter values on a system report without asking it again. So they are named
+     * only where the subject may open the hub and read the template, as the hub's own page required when it built its
+     * report: never another user's context, nor a category or a template the subject cannot see. Judged for the
+     * subject, never for the user the export runs as.
+     *
+     * @param \stdClass $record The entry's contextid, templatename and templatecontextid.
+     * @param int $userid The subject.
+     * @return array [the template's name, the hub context's name].
+     */
+    protected static function report_names(\stdClass $record, int $userid): array {
+        $hubcontext = \context::instance_by_id((int) $record->contextid, IGNORE_MISSING);
+        if (!$hubcontext || !hub_access::opens_in($hubcontext)) {
+            return ['', ''];
+        }
+        if (!has_capability('local/evidencehub:view', $hubcontext, $userid)) {
+            return ['', ''];
+        }
+        $contextname = $hubcontext->get_context_name(false, false, false);
+        $templatecontext = $record->templatecontextid === null
+            ? false
+            : \context::instance_by_id((int) $record->templatecontextid, IGNORE_MISSING);
+        if (!$templatecontext || !static::is_at_or_below($templatecontext, $hubcontext)) {
+            return ['', $contextname];
+        }
+        $reads = ['moodle/competency:templateview', 'moodle/competency:templatemanage'];
+        if (!has_any_capability($reads, $templatecontext, $userid)) {
+            return ['', $contextname];
+        }
+        return [format_string($record->templatename, true, ['context' => $templatecontext]), $contextname];
+    }
+
+    /**
+     * Whether a context is another one or lies below it, as the hub offers a category the templates of its subtree.
+     *
+     * @param \context $context The context asked about.
+     * @param \context $ancestor The context it must be, or be below.
+     * @return bool
+     */
+    protected static function is_at_or_below(\context $context, \context $ancestor): bool {
+        return (int) $context->id === (int) $ancestor->id || str_starts_with($context->path, $ancestor->path . '/');
     }
 
     /**
