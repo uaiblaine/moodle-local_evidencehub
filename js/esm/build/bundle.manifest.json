@@ -22,7 +22,7 @@
         "src/hub/Cards.tsx": "ee0fb1c9ff9a7b38284bed1caf8e4d3ca9edd9e9",
         "src/hub/Dock.tsx": "04ef31630ef8c44cc20512ffadecf8af81eb2d37",
         "src/hub/Grid.tsx": "9193cd1ddd02556d2a9b288391a6206c62230ee1",
-        "src/hub/HubView.tsx": "eae78d8ec8fa53a38ed033b3efb59b937f68a44c",
+        "src/hub/HubView.tsx": "dfc7ab5d7e496dfc07741e525b101ff060b2c954",
         "src/hub/amd.ts": "eafa9fc0834d82f03dbe7c5e070d74bf5cbed732",
         "src/hub/cells.tsx": "16bc2b8b639b9069c9645c0bee481871fa73cb6c",
         "src/hub/export.ts": "73dc7435a175bf3bb24c8829aa345db617adb528",
