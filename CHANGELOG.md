@@ -153,6 +153,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- Version 2026100521: a filter change in the hub's list answers at the press. The list wrote the new filter to
+  core's store and dimmed the rows only when that call had answered, so a reader waited 55 to 148 ms (measured on
+  the 300,000-pair seed, more on a slow machine) with nothing moving; the rows and the band now dim when the
+  filter is pressed and stay dimmed through the write and the read that follows it.
 - Version 2026100517: a visitor whom an authentication plugin logs in on the way to the login page (single
   sign-on through its `pre_loginpage_hook`) reads the dossier when the account may verify; the page used to
   refuse it without reading the right again. The page's whole decision is now `dossier::require_verify()`.

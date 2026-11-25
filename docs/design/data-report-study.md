@@ -527,8 +527,9 @@ Against the budgets:
   reader of every worker, 120 and 148 ms for the two managers at 1x, and 117 to 214 ms at 4x. Under a loaded
   machine it reached 175 to 346 ms (`-pass2.log`, a load average of 10). The reference client writes its filters
   the same way (enrol_apply's `ReportView.writeFilters()`), and its profile did not time a filter change apart.
-  Not changed in this stage, which is prose: a finding, open in the Design System's `data-report.md` until the
-  owner decides.
+  A finding of this stage, which is prose. The owner had it fixed on 2026-11-25, in 2026100521 here and
+  2026112500 in enrol_apply: both regions dim at the press and stay dimmed through the write and the read that
+  follows it (the Design System's D156, which has the figure measured afterwards).
 - **Not measured**: React's commit times. m503 serves react-dom's production build (`cachejs` on, and the site is
   shared), where the profiler reads no duration; the commits are counted (two for a sort or a page, five for a
   filter change, seven or eight for three keystrokes, three for a row box, ten or eleven for the first load).

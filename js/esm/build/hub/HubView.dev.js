@@ -104,6 +104,8 @@ const HubView = /* @__PURE__ */ __name((props) => {
   const [summary, setSummary] = useState(null);
   const [bandloading, setBandloading] = useState(true);
   const [banderror, setBanderror] = useState(false);
+  const [writing, setWriting] = useState(false);
+  const writes = useRef(0);
   const [widths, setWidths] = useState({});
   const [counted, setCounted] = useState({});
   const [selected, setSelected] = useState(() => /* @__PURE__ */ new Set());
@@ -258,12 +260,18 @@ const HubView = /* @__PURE__ */ __name((props) => {
   const writeFilters = /* @__PURE__ */ __name((write) => {
     setSelected(/* @__PURE__ */ new Set());
     const release = hold("local_evidencehub/hub:filters");
+    writes.current += 1;
+    setWriting(true);
     write().then(() => {
       run({ page: 0 }, true);
       return;
     }).catch(() => {
       setRowserror(true);
-    }).finally(release);
+    }).finally(() => {
+      writes.current -= 1;
+      setWriting(writes.current > 0);
+      release();
+    });
   }, "writeFilters");
   const filters = (rows?.filters ?? []).map((filter) => counted[filter.name] ? { ...filter, options: counted[filter.name].options } : filter);
   const setChoice = /* @__PURE__ */ __name((name, value) => {
@@ -432,7 +440,7 @@ const HubView = /* @__PURE__ */ __name((props) => {
       false,
       {
         fileName: "public/local/evidencehub/js/esm/src/hub/HubView.tsx",
-        lineNumber: 676,
+        lineNumber: 686,
         columnNumber: 13
       }
     ) : /* @__PURE__ */ jsxDEV(
@@ -455,7 +463,7 @@ const HubView = /* @__PURE__ */ __name((props) => {
       false,
       {
         fileName: "public/local/evidencehub/js/esm/src/hub/HubView.tsx",
-        lineNumber: 686,
+        lineNumber: 696,
         columnNumber: 13
       }
     );
@@ -476,7 +484,7 @@ const HubView = /* @__PURE__ */ __name((props) => {
       {
         labels,
         summary,
-        loading: bandloading,
+        loading: bandloading || writing,
         error: banderror,
         canfilter: rows !== null,
         chosenstatus: facts.chosenstatus,
@@ -488,7 +496,7 @@ const HubView = /* @__PURE__ */ __name((props) => {
       false,
       {
         fileName: "public/local/evidencehub/js/esm/src/hub/HubView.tsx",
-        lineNumber: 716,
+        lineNumber: 726,
         columnNumber: 13
       }
     ),
@@ -552,7 +560,7 @@ const HubView = /* @__PURE__ */ __name((props) => {
       false,
       {
         fileName: "public/local/evidencehub/js/esm/src/hub/HubView.tsx",
-        lineNumber: 727,
+        lineNumber: 737,
         columnNumber: 13
       }
     ),
@@ -560,7 +568,7 @@ const HubView = /* @__PURE__ */ __name((props) => {
       RowsRegion,
       {
         labels,
-        loading: rowsloading,
+        loading: rowsloading || writing,
         loaded: rows !== null,
         error: rowserror,
         total: rows?.total ?? 0,
@@ -570,7 +578,7 @@ const HubView = /* @__PURE__ */ __name((props) => {
         skeleton: { columns: skeleton, lead: "worker", widths, sizing: SIZING },
         dock: rows !== null && decides && chosen.length > 0 ? /* @__PURE__ */ jsxDEV(Dock, { labels, count: chosen.length, workers, posting, onExport }, void 0, false, {
           fileName: "public/local/evidencehub/js/esm/src/hub/HubView.tsx",
-          lineNumber: 793,
+          lineNumber: 803,
           columnNumber: 21
         }) : null,
         onRetry: () => loadRows(query.current, true),
@@ -580,7 +588,7 @@ const HubView = /* @__PURE__ */ __name((props) => {
       false,
       {
         fileName: "public/local/evidencehub/js/esm/src/hub/HubView.tsx",
-        lineNumber: 782,
+        lineNumber: 792,
         columnNumber: 13
       }
     ),
@@ -601,13 +609,13 @@ const HubView = /* @__PURE__ */ __name((props) => {
       false,
       {
         fileName: "public/local/evidencehub/js/esm/src/hub/HubView.tsx",
-        lineNumber: 800,
+        lineNumber: 810,
         columnNumber: 17
       }
     ) : null
   ] }, void 0, true, {
     fileName: "public/local/evidencehub/js/esm/src/hub/HubView.tsx",
-    lineNumber: 715,
+    lineNumber: 725,
     columnNumber: 9
   });
 }, "HubView");
