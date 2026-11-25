@@ -29,18 +29,19 @@ template of eight safety competencies, and 24 workers. The manager has no
 
 ### The evidence hub
 
-![The evidence hub for one template: KPI cards per status, the readiness share, status chips and the grid of pairs that need attention](docs/screenshots/hub.png)
+![The evidence hub for one template: the band of figures with the pairs by status, the bar with the scope, filters, columns, view and download, and the grid of pairs that need attention](docs/screenshots/hub.png)
 
-One template at a time, opened from its category. The cards count the pairs in each status, and
-"Ready" counts the workers whose every pair is compliant or due. The grid starts on
-**Needs attention**. The manager sees the occupational medical exams as "Restricted", because the
-type that decides them is sensitive.
+One template at a time, opened from its category. The band counts the workers, the ready ones (every
+pair compliant or due), the pairs needing attention and those expiring in 30 days, and lists the pairs
+by status and the competencies with most open pairs. The grid starts on **Needs attention**. The
+manager sees the occupational medical exams as "Restricted", because the type that decides them is
+sensitive.
 
 ### The readiness matrix
 
 ![The readiness matrix: one row per worker, one column per competency, cells coloured by status with the days left or overdue](docs/screenshots/matrix.png)
 
-The same filter, one row per worker. A cell shows the days left (or, negative, overdue) when a date
+The list's criteria, one row per worker. A cell shows the days left (or, negative, overdue) when a date
 matters, and a padlock when the pair is restricted to this viewer. Each column is headed by the
 kind of the competency's validity policy (REG, TEC, BEH).
 
@@ -213,35 +214,61 @@ the team's cohort). The hub says how many of the template's workers are hidden b
 every worker with an active plan from the template whom the viewer may not see, whatever the cohort,
 suspended or search filter, so changing a filter tells nothing about those workers.
 
-Above the grid, one tile per status counts the pairs and their share, with the readiness rate (the
-workers whose every pair is compliant or due); a tile or a status chip toggles that status. The
-default view, "needs attention", shows every status except compliant, the most urgent first:
-pending and restricted pairs, then by the last valid day. A cohort, a search on the worker's name
-(and on the ID number when the viewer is shown it as an identity field), "Include suspended" and the
-page size narrow the grid; every view is a URL, and the last filter shown is kept as a user preference
-and restored when the hub is opened without one (a download stores none). The rows
-of the filter, or only the ticked ones, download in any of the site's data formats.
+The template is chosen beside the page's heading and stays in the address; the hub opens on the
+last template the viewer opened in that place while it is still offered. The list of a template is a
+report builder system report, drawn in the browser:
+
+- **The band** counts the workers (with those hidden by permissions), the ready workers and the rate
+  (every pair compliant or due), the pairs needing attention and the pairs expiring in 30 days, and
+  lists the pairs by status and the five competencies with most open pairs; a line sets its filter.
+  The workers and ready figures follow every criterion but the scope and the status filter, because
+  readiness is a fact about all of a worker's pairs.
+- **The bar** holds the scope ("Needs attention", every status but compliant, the default; or "All",
+  each with its count), the count of pairs, and a search on the worker's name. **Filters** sets the
+  status, the cohort, the competency, the type of evidence, the verification and "valid until"
+  (expired, or within 30, 60 or 90 days), each option with the pairs it would list, and "Accounts"
+  (active only, the default, or including suspended accounts). **Columns** chooses the columns (the
+  sets "Validity" and "Deciding evidence", or one by one) and keeps their widths. **View** switches
+  between automatic (cards on a narrow screen), table and cards, and leads to the matrix and to
+  "Table view". **Download** offers the site's enabled data formats.
+- **The grid** sorts by a column, most urgent first by default: missing and restricted pairs, then by
+  the last valid day, a pair valid with no end last. A page holds 30, 50 or 100 pairs. "Inspect" opens
+  the inspection drawer; the worker's name leads to their evidence page.
+
+The filters a viewer sets are stored by core's report builder, one set per viewer, place and
+template, and come back on the next visit; the scope, the search and the sort are not stored, so a
+filtered view cannot be sent as a link, but the template can. **Table view** renders core's own
+table of the same report, with core's filter form, which also filters by the worker's name; without
+JavaScript the page shows core's table.
+
+**Download** writes the report's own table under the criteria in force (the stored filters, the
+scope, the search, the sort, the accounts choice and the chosen columns): the file holds what the
+list shows, never ticked rows. Each download is logged as the event "Evidence hub downloaded"
+(`\local_evidencehub\event\hub_downloaded`) with the number of rows the file holds. Core's own
+report download is refused for this report, so the hub's is the only way to the file. Core's table
+services still return the list's rows to the same viewers, masked in the same way, without an event,
+as for every system report.
 
 A pair decided by an evidence of a sensitive type reads "Restricted", with no date, evidence count,
 type or issuer,
 to a viewer who is not the worker and lacks `local/evidencehub:viewsensitive` in the worker's user
-context; the status filters, the sort, the tiles and the download treat it as its own status, so
-none of them reveals what the cell hides.
+context; the filters and their counts, the sort, the band and the download treat it as its own
+status, so none of them reveals what the cell hides.
 
-**The readiness matrix.** A tab beside the list ("List", "Matrix") shows the same filter as one row per
+**The readiness matrix.** "Matrix" in the list's View menu opens the list's criteria as one row per
 worker and one column per competency of the template, in the template's own order, each column
 headed by the competency's short name and the kind of its validity policy (REG regulatory, TEC
-technical, BEH behavioural). A legend above the table names each status's colour. A cell is the
+technical, BEH behavioural). Its rows are the workers of the list's rows under the viewer's stored
+filters, the scope and the accounts choice, and each row shows every competency of the template. The
+matrix has no filter of its own: a line above it says which criteria are in force, with a link back
+to the list to change them. A legend above the table names each status's colour. A cell is the
 pair's status as a coloured square, with the days left while it is due, the days since it expired, a
 dash when no evidence exists and a lock when it is restricted (no number then); each cell opens the
-pair's inspection drawer. The status chips keep the workers with at least one pair in the chosen
-statuses, whose rows still show every competency; the rows sort by name or, by default, most urgent
-first (the earliest last valid day among the worker's pairs not compliant), 25, 50 or 100 workers a
-page. The first column, with the worker's name, the identity fields the page shows and a checkbox
-selecting the worker (for the dossiers), stays in place while the table scrolls
-sideways. The matrix
-reads the same pairs, access rules and restriction as the list, and its view is kept with the rest
-of the filter.
+pair's inspection drawer. The rows sort most urgent first (the earliest last valid day among the
+worker's pairs not compliant, missing and restricted pairs first), then by name, 30, 50 or 100
+workers a page. The first column, with the worker's name, the identity fields the page shows and a
+checkbox selecting the worker (for the dossiers), stays in place while the table scrolls sideways.
+The matrix reads the same pairs, access rules and restriction as the list.
 
 **The inspection drawer.** Each row of the grid, and each cell of the matrix, has an "Inspect" button that opens a side sheet
 for that worker and competency. Its content is loaded from the server, which checks again that the
@@ -267,10 +294,14 @@ latest one copied, which on save is linked to the competency through core and re
 pair. Earlier evidence is never rewritten: a recycling adds a record to the timeline.
 
 **Readiness dossiers.** A holder of `local/evidencehub:exportdossier` and `local/evidencehub:view` in
-the hub's context sees "Export dossiers" under the list and the matrix. It exports one dossier per worker
-of the ticked rows (the list's pairs give their workers), checked on the server against the filter's
-rows as the requester sees them: a worker outside them is dropped, and a selection of more workers than
-`maxexportworkers` is refused. Each dossier is built as the requester: the hub's capabilities in its
+the hub's context gets a checkbox on each row of the list and on its heading. While rows are ticked, a
+dock under them says how many are selected on the page and how many workers they name, with "Export
+dossiers"; the selection belongs to the page on screen, and another page, filter, search, sort or scope
+clears it. The matrix has a checkbox per worker and its own "Export dossiers". An export holds one
+dossier per worker of the selection (two pairs of one worker are one dossier). The server keeps only
+the selected workers who belong to the template's pairs as the requester may see them, suspended
+accounts as the requester's accounts choice lists them, and nothing else: a selection of more workers
+than `maxexportworkers` is refused. Each dossier is built as the requester: the hub's capabilities in its
 context, the template offered there, and core's `moodle/competency:userevidenceview` in each worker's
 user context. A worker who fails a check (or no longer has an active plan from the template) is left
 out and listed in the manifest as "not available", with no reason.
@@ -511,7 +542,10 @@ Data stored
   `exportretentiondays` days or with the requester's data.
 
 The user preference `local_evidencehub_report` keeps a reader's choices on the hub's list (the columns and their
-widths, the view, and whether suspended accounts are listed); a data request exports it. The values of the filters a
+widths, whether suspended accounts are listed, and the last template opened in each place the hub opens); a data
+request exports it. The view (automatic, table or cards) is remembered in the reader's browser only. Each download
+of the list is logged in the site's log as "Evidence hub downloaded", with the template and the number of rows, and
+follows the log store's retention. The values of the filters a
 reader applies to the list (status, cohort, competency, type of evidence, verification, valid until) are kept in
 core's table `reportbuilder_user_filter`, one row per reader and report, until the reader resets them, the account is
 deleted, or the plugin is uninstalled. Core's privacy provider covers custom reports only, so this plugin exports and

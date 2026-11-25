@@ -257,6 +257,23 @@ table.eh-grid { margin: 0; table-layout: fixed; border-collapse: separate; borde
 .eh-card dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
 .eh-more { margin-top: 6px; border: 0; background: none; padding: 0; font-size: .8125rem; font-weight: 600; text-decoration: underline; cursor: pointer; }
 
+/* Selection variant and bulk dock (data-report.md, D129 to D135). */
+.eh-rowbox { display: inline-flex; flex: none; margin: 2px 8px 0 0; cursor: pointer; }
+.eh-rowbox input { width: 1rem; height: 1rem; margin: 0; accent-color: var(--eh-brand-fill); cursor: pointer; }
+.eh-headbox { display: flex; align-items: center; }
+.eh-headbox .eh-rowbox { margin: 0 0 0 12px; }
+.eh-headbox .eh-sortbtn { padding-left: 8px; }
+.eh-who > .eh-rowbox + span { flex: 1 1 auto; }
+.eh-grid tr.eh-row--selected > *, .eh-grid tbody tr.eh-row--selected:hover > *, .eh-card--selected { background: var(--eh-brand-tint); color: var(--eh-ink); }
+.eh-card--selected { border-color: var(--eh-brand-edge); }
+.eh-dock { position: sticky; bottom: .75rem; z-index: 5; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between;
+  gap: .5rem .75rem; margin-top: 12px; padding: .5rem .75rem; border: 1px solid var(--eh-line); border-radius: var(--eh-radius-lg);
+  background: var(--eh-surface); color: var(--eh-ink); box-shadow: var(--eh-elevation-md); }
+.eh-dockcount { font-weight: 600; font-variant-numeric: tabular-nums; }
+.eh-dockcount small { font-weight: 400; color: var(--eh-ink-muted); font-size: .8125rem; }
+.eh-dockactions { display: flex; flex-wrap: wrap; gap: .5rem; }
+.device.is-phone .eh-dockcount { flex: 1 0 100%; }
+
 /* Pager, empty, core table. */
 .eh-pager { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px; margin-top: 12px;
   font-size: .8125rem; color: var(--eh-ink-muted); }
@@ -337,7 +354,7 @@ table.core { width: 100%; border-collapse: collapse; font-size: .875rem; }
       <li>Filters are core's stored filters, set in the panel, shown as chips; the search and the scope are not stored.</li>
       <li>The reader chooses columns and their widths; the download follows them.</li>
       <li>The status tiles become a distribution; pressing a line sets the status filter.</li>
-      <li>No checkbox per row: the download is what the list shows, the dossiers are in the More menu (decisions 9 and 10).</li>
+      <li>The download is what the list shows, never ticked rows (decision 9); no More menu on the bar.</li>
       <li>The matrix is reached from View (decision 11).</li></ul></div>
     <div class="note"><h4>Open in this mockup</h4><ul>
       <li>The status labels' tones (decision 15): the Design System has no dark tone, which "Expired" uses today.</li>
@@ -348,7 +365,7 @@ table.core { width: 100%; border-collapse: collapse; font-size: .875rem; }
 <script>
 (function() {
   'use strict';
-  const S = {vp: 'desktop', view: 'auto', state: 'loaded', reader: 'manager', layer: '', more: {}, scope: 'attention'};
+  const S = {vp: 'desktop', view: 'auto', state: 'loaded', reader: 'manager', layer: '', more: {}, scope: 'attention', sel: {}};
   const I = {
     filter: '<svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M1.5 2h13l-5 6.2V14l-3-1.6V8.2z"/></svg>',
     columns: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x="1.75" y="2.75" width="12.5" height="10.5" rx="1.5"/><path d="M6 3v10M10 3v10"/></svg>',
@@ -357,7 +374,6 @@ table.core { width: 100%; border-collapse: collapse; font-size: .875rem; }
     auto: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x="1.75" y="3.75" width="8.5" height="8.5" rx="1"/><rect x="11.75" y="5.75" width="2.5" height="6.5" rx=".75"/></svg>',
     download: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 2v8M4.5 7 8 10.5 11.5 7M2.5 13.5h11"/></svg>',
     search: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><circle cx="7" cy="7" r="4.25"/><path d="m10.5 10.5 3 3"/></svg>',
-    kebab: '<svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><circle cx="8" cy="3" r="1.4"/><circle cx="8" cy="8" r="1.4"/><circle cx="8" cy="13" r="1.4"/></svg>',
     chev: '<svg class="chev" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m3 4.5 3 3 3-3"/></svg>',
     check: '<svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m2.5 6.5 2.5 2.5 4.5-5"/></svg>',
     cross: '<svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><path d="m3 3 6 6M9 3l-6 6"/></svg>',
@@ -390,6 +406,11 @@ table.core { width: 100%; border-collapse: collapse; font-size: .875rem; }
     ['expiry', 'Valid until', 120, true], ['count', 'Evidence', 96, false], ['type', 'Type of evidence', 240, false],
     ['issuer', 'Issuer', 200, false]
   ];
+  // Both readers of this mockup hold the dossier export capability; a reader without it would see no box and no dock.
+  const canexport = () => true;
+  const selected = () => rows().map((r, i) => i).filter((i) => S.sel[i]);
+  const box = (i, who) => '<label class="eh-rowbox"><input type="checkbox" data-sel="' + i + '"' + (S.sel[i] ? ' checked' : '')
+      + '><span class="visually-hidden">Select ' + who + '</span></label>';
   const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'}[c]));
   const narrow = () => S.vp === 'phone';
   const cardsView = () => S.view === 'cards' || (S.view === 'auto' && narrow());
@@ -455,11 +476,9 @@ table.core { width: 100%; border-collapse: collapse; font-size: .875rem; }
       h += item('menuitemradio', S.view === 'table', I.table, 'Table', '', ' data-view="table"');
       h += item('menuitemradio', S.view === 'cards', I.cards, 'Cards', '', ' data-view="cards"');
       h += sep + item('menuitem', null, I.matrix, 'Matrix') + item('menuitem', null, I.table, 'Table view', '', ' data-view="core"');
-    } else if (name === 'download') {
+    } else {
       ['Comma separated values (.csv)', 'Microsoft Excel (.xlsx)', 'OpenDocument (.ods)', 'Javascript Object Notation (.json)',
         'Portable Document Format (.pdf)'].forEach((f) => { h += item('menuitem', null, I.download, f); });
-    } else {
-      h += item('menuitem', null, I.file, 'Export dossiers of the listed workers', S.reader === 'manager' ? '1,204 workers' : 'At most 500');
     }
     return h + '</div>';
   }
@@ -497,7 +516,7 @@ table.core { width: 100%; border-collapse: collapse; font-size: .875rem; }
     h += ib('filters', 'Filters, 1 in force', I.filter, false, 1) + ib('columns', 'Columns', I.columns, true)
         + ib('view', 'View', cardsView() ? I.cards : (S.view === 'auto' ? I.auto : I.table), true) + ib('download', 'Download', I.download, true);
     h += '</div></div><div class="eh-capsule"><button type="button" class="eh-ib" aria-label="Search workers" title="Search workers">' + I.search + '</button>'
-        + ib('more', 'More', I.kebab, false) + '</div>';
+        + '</div>';
     h += '<div class="eh-chips"><button type="button" class="eh-chip" aria-label="Remove filter Cohort: Maintenance north"><span>Cohort: Maintenance north</span>' + I.cross + '</button>'
         + '</div>';
     return h + (S.layer === 'filters' ? fpanel() : '') + '</div>';
@@ -510,9 +529,14 @@ table.core { width: 100%; border-collapse: collapse; font-size: .875rem; }
         + COLS.map((c) => '<col style="width:' + c[2] + 'px">').join('') + '</colgroup><thead><tr>';
     COLS.forEach((c, i) => {
       const sorted = c[0] === 'expiry';
+      const head = i === 0 && canexport() && !sk;
       h += '<th scope="col"' + (i === 0 ? ' class="eh-fixed"' : '') + (c[3] ? ' aria-sort="' + (sorted ? 'ascending' : 'none') + '"' : '') + '>'
+          + (head ? '<div class="eh-headbox"><label class="eh-rowbox"><input type="checkbox" data-selpage="1"'
+              + (selected().length === rows().length ? ' checked' : '') + (selected().length && selected().length < rows().length ? ' data-mixed="1"' : '')
+              + '><span class="visually-hidden">Select every row on this page</span></label>' : '')
           + (c[3] ? '<button type="button" class="eh-sortbtn"><span>' + c[1] + '</span>' + (sorted ? '<span class="arrow" aria-hidden="true">▲</span>' : '') + '</button>'
               : '<span class="eh-plain">' + c[1] + '</span>')
+          + (head ? '</div>' : '')
           + '<span class="eh-resize" role="separator" tabindex="0" aria-orientation="vertical" aria-label="Resize ' + c[1] + '" aria-valuemin="80" aria-valuemax="800" aria-valuenow="' + c[2] + '"></span></th>';
     });
     h += '</tr></thead><tbody>';
@@ -521,8 +545,9 @@ table.core { width: 100%; border-collapse: collapse; font-size: .875rem; }
         h += '<tr><th scope="row" class="eh-fixed"><span class="eh-sk-block w80"></span></th>' + COLS.slice(1).map((c, j) => '<td><span class="eh-sk-block ' + ['w80', 'w60', 'w40'][j % 3] + '"></span></td>').join('') + '</tr>';
       }
     } else {
-      rows().forEach((r) => {
-        h += '<tr><th scope="row" class="eh-fixed"><div class="eh-who"><span><a class="eh-name c" href="#">' + esc(r[0]) + '</a><span class="sub">' + r[1] + '</span></span>'
+      rows().forEach((r, i) => {
+        h += '<tr' + (canexport() && S.sel[i] ? ' class="eh-row--selected"' : '') + '><th scope="row" class="eh-fixed"><div class="eh-who">'
+            + (canexport() ? box(i, esc(r[0]) + ', ' + esc(r[2])) : '') + '<span><a class="eh-name c" href="#">' + esc(r[0]) + '</a><span class="sub">' + r[1] + '</span></span>'
             + '<button type="button" class="btn btn-sm" aria-label="Inspect ' + esc(r[0]) + ': ' + esc(r[2]) + '">Inspect</button></div></th>'
             + '<td title="' + esc(r[2]) + '"><span class="c">' + esc(r[2]) + '</span></td><td>' + status(r[3]) + '</td>'
             + '<td><span class="c">' + val(r[4]) + '</span></td><td><span class="c">' + val(r[5]) + '</span></td>'
@@ -538,7 +563,9 @@ table.core { width: 100%; border-collapse: collapse; font-size: .875rem; }
     }
     return '<div class="eh-cards" role="list">' + rows().map((r, i) => {
       const extra = '<dl><dt>Evidence</dt><dd>' + val(r[5]) + '</dd><dt>Issuer</dt><dd>' + val(r[7]) + '</dd></dl>';
-      return '<article class="eh-card" role="listitem"><div class="l1"><span><a class="eh-name" href="#">' + esc(r[0]) + '</a> <span class="sub">' + r[1] + '</span></span>'
+      return '<article class="eh-card' + (canexport() && S.sel[i] ? ' eh-card--selected' : '') + '" role="listitem"><div class="l1">'
+          + '<span style="display:flex;align-items:flex-start;min-width:0">' + (canexport() ? box(i, esc(r[0]) + ', ' + esc(r[2])) : '')
+          + '<span><a class="eh-name" href="#">' + esc(r[0]) + '</a> <span class="sub">' + r[1] + '</span></span></span>'
           + '<button type="button" class="btn btn-sm" aria-label="Inspect ' + esc(r[0]) + ': ' + esc(r[2]) + '">Inspect</button></div>'
           + '<div class="ln"><span>' + esc(r[2]) + '</span>' + status(r[3]) + '</div>'
           + '<div class="ln"><span class="k">Valid until</span><span>' + val(r[4]) + '</span></div>'
@@ -546,6 +573,18 @@ table.core { width: 100%; border-collapse: collapse; font-size: .875rem; }
           + (narrow() ? (S.more[i] ? extra : '') + '<button type="button" class="eh-more" data-more="' + i + '" aria-expanded="' + !!S.more[i] + '">' + (S.more[i] ? 'Less' : 'More') + '</button>' : extra)
           + '</article>';
     }).join('') + '</div>';
+  }
+
+  function dock() {
+    const sel = selected();
+    if (!canexport() || !sel.length || (S.state !== 'loaded' && S.state !== 'later')) {
+      return '';
+    }
+    const workers = new Set(sel.map((i) => rows()[i][0])).size;
+    return '<div class="eh-dock" role="region" aria-label="Export the dossiers of the selected workers"><span class="eh-dockcount" aria-live="polite">'
+        + sel.length + ' selected on this page <small>· ' + workers + (workers === 1 ? ' worker' : ' workers') + '</small></span>'
+        + '<div class="eh-dockactions"><button type="button" class="btn btn-sm" data-selclear="1">Clear selection</button>'
+        + '<button type="button" class="btn btn-sm btn-primary">' + I.file.replace('<svg', '<svg width="14" height="14"') + ' Export dossiers</button></div></div>';
   }
 
   function pager() {
@@ -587,9 +626,10 @@ table.core { width: 100%; border-collapse: collapse; font-size: .875rem; }
       } else {
         h += cardsView() ? cards() : grid();
       }
-      h += '</div>' + pager() + '</div>';
+      h += '</div>' + dock() + pager() + '</div>';
     }
     document.getElementById('pagebody').innerHTML = h;
+    document.querySelectorAll('[data-mixed]').forEach((b) => { b.indeterminate = true; });
     const frame = document.getElementById('gridframe');
     if (frame) {
       frame.addEventListener('scroll', () => frame.classList.toggle('is-scrolled', frame.scrollLeft > 0));
@@ -599,6 +639,27 @@ table.core { width: 100%; border-collapse: collapse; font-size: .875rem; }
   document.addEventListener('click', (e) => {
     const sw = e.target.closest('[data-switch] button');
     const t = e.target.closest('[data-layer], [data-view], [data-scope], [data-more]');
+    const sb = e.target.closest('[data-sel], [data-selpage], [data-selclear]');
+    // What changes the rows on the page (page, sort, filter, search, scope, reader, state) empties the selection.
+    if (e.target.closest('.eh-sortbtn, .eh-pages button, .eh-pager > .btn, .eh-chip, [data-scope], [aria-label="Search workers"], .eh-fpanel-foot .btn')
+        || (sw && ['reader', 'state'].includes(sw.parentElement.dataset.switch))) {
+      S.sel = {};
+    }
+    if (sb) {
+      if (sb.dataset.selpage) {
+        const all = selected().length === rows().length;
+        S.sel = {};
+        if (!all) {
+          rows().forEach((r, i) => { S.sel[i] = true; });
+        }
+      } else if (sb.dataset.selclear) {
+        S.sel = {};
+      } else {
+        S.sel[sb.dataset.sel] = !S.sel[sb.dataset.sel];
+      }
+      render();
+      return;
+    }
     if (sw) {
       const group = sw.parentElement;
       S[group.dataset.switch] = sw.dataset.v;

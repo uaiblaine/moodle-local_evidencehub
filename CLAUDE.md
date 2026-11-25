@@ -54,7 +54,7 @@ definition, and none runs on the session model.
 ## Commands
 
 ```sh
-mdl ci moodle-local_evidencehub --matrix    # every leg: the merge gate (add --behat once features exist)
+mdl ci moodle-local_evidencehub --matrix --behat   # every leg with Behat: the merge gate of a tier-3 change
 mdl ci moodle-local_evidencehub --only phpcs,phpdoc,validate,phpunit   # fast iteration, one leg
 mdl phpunit m503 local_evidencehub          # targeted tests on the stack
 mdl purge m503                              # after PHP changes that affect output
@@ -72,24 +72,30 @@ was resumed on a container that skipped the setup script: attach `moodle-dev` an
 ## Code layout
 
 ```
-version.php, db/access.php, db/install.php (seeds types), db/install.xml (7 tables)
+version.php, db/access.php, db/install.php (seeds types), db/install.xml (7 tables), db/upgrade.php,
+                  db/uninstall.php (core's report persistents and stored filters, the plugin's preferences)
 db/hooks.php, db/events.php   tool_lp prompt (footer hook) and the local_dimensions pills
                   (competency_status_badges -> local/validity_badges); observers (classes/observer.php)
 db/tasks.php      evaluate_validity (hourly), reconcile_validity (weekly), cleanup_dossier_exports (daily),
                   send_weekly_digest (hourly; the round opens Monday 07:00)
 db/messages.php   dossierready, validitydue, validityexpired, verificationrequested, weeklydigest
-db/services.php   local_evidencehub_get_readiness (classes/external/get_readiness), service disabled
+db/services.php   local_evidencehub_get_readiness (service disabled); report_rows, report_summary,
+                  set_report_preference (AJAX, classes/external/)
+db/caches.php     hubgeneration, reportgeneration, reportsummary (keys and generations: local/hub_kpis)
 evidence.php      the worker's evidence page (renderable output/evidence_page, amd/src/evidence_page)
 policies.php      framework list / one framework's policies (output/policy_frameworks,
                   output/framework_policies, amd/src/policies); settings.php adds its admin entry
-index.php         the hub: the list (output/hub_report_view, the pairs report in React), the choice of a
-                  template (output/hub_choose_page); entries: settings.php (system) and lib.php's category
-                  More menu; db/caches.php hubgeneration, reportgeneration, reportsummary
-                  drawer: amd/src/drawer (core/modal subclass, templates/drawer), body from lib.php's
-                  output_fragment_pair (output/pair_drawer, templates/pair_drawer)
-                  view=matrix: output/hub_matrix_page, templates/hub_matrix, amd/src/hub_page
+index.php         the hub: the list (output/hub_report_view, the React view's shell, core's table in its
+                  noscript), the choice of a template (output/hub_choose_page); entries: settings.php (system)
+                  and lib.php's category More menu
+                  view=table: core's table of the pairs report; view=matrix: output/hub_matrix_page,
+                  templates/hub_matrix, amd/src/hub_page
                   download=<format>: local/report_download (the report's table, the hub_downloaded event)
                   action=exportdossiers: local/dossier_export (selection, stream or task)
+                  drawer: amd/src/drawer (core/modal subclass, templates/drawer), body from lib.php's
+                  output_fragment_pair (output/pair_drawer, templates/pair_drawer)
+js/esm/src/       the list in React: datareport/ (the mould's parts), hub/ (HubView, Band, Bar, Grid, Cards,
+                  Dock, export.ts); js/esm/build holds the bundle and its manifest
 verify.php        the public verification page of a dossier (output/verify_page); gated by verifydossier
                   (dossier::can_verify(), the guest role for a visitor not logged in), as tool_certificate
 settings.php      the admin entries, and the dossier settings page (local/dossier_config reads them)
@@ -99,39 +105,43 @@ classes/local/    status, meta, audit, export: stored constants and their labels
                   policy: constants + THE policy API (resolve, save, delete, require_manage)
                   validity_calculator: the rule, pure (candidate, validity value objects)
                   status_repository: THE writer of local_evidencehub_status (recompute, scopes)
-                  hub_access (context, templates, cohorts), hub_scope (the two capability
-                  fragments), hub_filter (the pair set's cuts), hub_query (base_sql), hub_kpis (the report's
-                  cache keys and generations), report_download, hub_matrix (the report's workers, cells
-                  over base_sql)
+                  pairset: THE pair set's joins and restricted rule (the report, base_sql, the datasource)
+                  hub_access (context, templates, cohorts), hub_scope (the two capability fragments),
+                  hub_filter (the pair set's cuts), hub_query (base_sql), hub_kpis (cache keys, generations),
+                  hub_matrix (the report's workers, cells over base_sql)
+                  reportengine (the headless read: rows, facets, summary), reportpreference (the reader's
+                  preference), report_download
                   dossier (codes, masked name, readiness, list, revoke), dossier_config (settings),
                   dossier_builder (prepare as the requester, build into any archive_writer),
                   dossier_plan (value object), dossier_pdf (TCPDF page; barcode() is the test seam),
                   dossier_export (selection, thresholds, queue/stream, store, notify, servable_file, cleanup)
-                  alerts (immediate alerts, user-context holders, recipient's language), digest (mentors,
-                  their workers, the report over base_sql with the mentor's scope)
-classes/reportbuilder/ datasource validity, entities validity + evidence_details
+                  alerts (immediate alerts, user-context holders, recipient's language), digest (mentors, their
+                  workers, the report over base_sql with the mentor's scope)
+classes/reportbuilder/ local/systemreports: hub_pairs (the list), headless_table (the two-statement read);
+                  local/filters: cohort, reader_select, validuntil; local/entities: validity,
+                  evidence_details; datasource/validity (custom reports)
 classes/form/     evidence (core evidence + details in one submit), verify, policy (dynamic forms)
-classes/event/    evidence_details_updated, evidence_verified, evidence_rejected,
-                  validity_status_changed, validity_policy_updated, dossier_exported, dossier_revoked
+classes/event/    evidence_details_updated, evidence_verified, evidence_rejected, validity_status_changed,
+                  validity_policy_updated, dossier_exported, dossier_revoked, hub_downloaded
 classes/task/     evaluate_validity, reconcile_validity, recompute_scope (ad hoc),
                   build_dossier_export (ad hoc, as the requester), cleanup_dossier_exports,
                   send_weekly_digest, send_verification_request (ad hoc, one queued per evidence)
-classes/privacy/  provider: worker rows in the worker's user context; actor columns kept
-tests/            privacy/provider_test, local/{types,constants,meta,details,policy,
-                  validity_calculator,status_repository}_test, form/*, output/*, task/*,
-                  observer_test, hook_callbacks_test, marketplace_readiness_test, behat/
-tests/classes/    scenario trait: users holding chosen capabilities, evidence, details;
-                  hub_scenario, dossier_scenario (requesters, decided evidence with files, a ZIP read
-                  back), dossier_pdf_spy (records the QR URLs);
-                  held_lock_factory: refuses chosen user_<id> locks (via $CFG->lock_factory)
+classes/privacy/  provider: worker rows in the worker's user context; actor columns kept; a reader's
+                  stored report filters in the reader's user context
+tests/            local/, output/, external/, reportbuilder/, privacy/, form/, task/, observer_test,
+                  hook_callbacks_test, schema_test, upgrade_test, uninstall_test, bundle_test,
+                  marketplace_readiness_test, behat/ (hub_report.feature drives the React list)
+tests/classes/    scenario trait (users with chosen capabilities, evidence, details); hub_scenario, dossier_scenario
+                  (requesters, decided evidence with files, a ZIP read back), dossier_pdf_spy (the QR URLs),
+                  held_lock_factory (refuses chosen user_<id> locks via $CFG->lock_factory)
 tests/generator/  writes rows directly (create_status() stays direct for the task tests)
 ```
 
 ## Versions
 
 5.3 only, one branch (`main`), numbered in the 5.3 namespace `20261005XX`. `db/upgrade.php` starts at
-2026100504 (the status row's `issensitive`), then 2026100507 (the export's `contextid`); every later step ends in a savepoint no higher than
-`version.php`.
+2026100504 (the status row's `issensitive`), then 2026100507 (the export's `contextid`) and 2026100519 (the old
+list's preference deleted); every later step ends in a savepoint no higher than `version.php`.
 
 ## Owner decisions (2026-11-23)
 
@@ -145,119 +155,79 @@ tests/generator/  writes rows directly (create_status() stays direct for the tas
 
 ## Architecture gotchas
 
-- **The family bridge is a listener, not a dependency**: `db/hooks.php` names
-  `\local_dimensions\hook\competency_status_badges`, a class that may not exist (core records the callback
-  unloaded), so nothing in `validity_badges` may reference a local_dimensions class; tones are plain strings.
-  A pair with no status row gets a pill only under an explicit policy, never under the built-in default.
-- **Dates are calendar days stored as `YYYYMMDD` integers** (`issuedate`, `expirydate`,
-  `effectiveexpiry`): a certificate's date has no time of day, and a timestamp would move it
-  across midnight with the timezone. Format with `local\meta::iso_date()`; compare as integers.
-- **"Missing" is never stored**: a pair the plan template requires and no status row covers is
-  computed at query time (`local\status::label(null)`), so the status table never holds a row per
-  required pair.
-- **No table or column is named after a reserved word** of any supported database
-  (`tests/schema_test.php` reads core's list): `validate` and a PostgreSQL install accept
-  `sensitive`, which only MySQL reserves, and the install then fails on MariaDB alone.
-- **The evidence is core's.** Create and update it through `core_competency\api`
-  (`create_user_evidence()`, `update_user_evidence()`), never by writing
-  `competency_userevidence`; core's privacy provider owns it and its files, this plugin's only the
-  details beside it.
+The long form of a rule marked "notes" is in `docs/architecture-notes.md`, under the rule's name.
+
+- **The family bridge is a listener, not a dependency**: the hook class in `db/hooks.php` may not exist, so
+  `validity_badges` references no local_dimensions class; a pair with no status row gets a pill only under an
+  explicit policy (notes).
+- **Dates are calendar days stored as `YYYYMMDD` integers** (`issuedate`, `expirydate`, `effectiveexpiry`): a
+  timestamp would move a certificate's date across midnight with the timezone; compare as integers (notes).
+- **"Missing" is never stored**: a pair the template requires and no status row covers is computed at query
+  time (`local\status::label(null)`), so the status table never holds a row per required pair.
+- **No table or column is named after a reserved word** of any supported database (`tests/schema_test.php`):
+  `validate` and PostgreSQL accept `sensitive`, which only MySQL reserves, and the install fails on MariaDB alone.
+- **The evidence is core's**: create and update it through `core_competency\api`, never by writing
+  `competency_userevidence`; core's privacy provider owns it and its files (notes).
 - **Row access always also needs core's `moodle/competency:userevidenceview` in the worker's user
   context**, filtered in SQL (`api::filter_users_with_capability_on_user_context_sql`).
 - **A page of the hub's list is two statements**, over the pairs report's SQL (`headless_table`; S0: one
   statement took 0.5–0.8 s on MariaDB over 300k pairs; the two-step deferred join stays under 300 ms).
-- **The status row carries its deciding evidence's type flag** (`local_evidencehub_status.issensitive`,
-  written by `status_repository` on every write): the hub's base set reads it instead of joining meta
-  and type for every pair. Any future change to a type's `issensitive` must recompute that type's
-  pairs (no type management UI exists yet).
+- **The status row carries its deciding evidence's type flag** (`issensitive`, read instead of joining meta and
+  type per pair): a change to a type's `issensitive` must recompute that type's pairs (notes).
 - **The hub reads the effective status, never the stored one** (`hub_query::base_sql()`, the report's entities):
-  restricted (-1) and missing (0) are computed per viewer; rows, filters, sort, figures and download all read it.
-  The restriction is worked out once in the innermost table, because each capability fragment's
-  placeholders may appear once per statement.
-- **The matrix reads the list's criteria from the report** (`reportengine::workers_sql()`: the workers of the
-  report's rows under the stored filters, the scope and the suspended choice) and every cell from
-  `hub_query::base_sql()`, so a worker kept by one pair shows them all; its pager counts its own workers.
-- **The matrix renders without layout shift**: the server renders every cell, the table has a fixed
-  layout with explicit widths (the column count is an inline custom property), and cells use text
-  or core's pix icons only. `tests/behat/matrix.feature` measures it on a bulk seed (generator entity
-  `matrix seeds`, 200 x 25).
-- **The report's cached figures have no TTL**: a status row inserted, deleted or changed in status or issensitive
-  (a rewrite that changes neither keeps it) and the plan, cohort and user events in
-  `db/events.php` replace the generation; core fires no event for a template's competencies, so
-  the key reads `hub_kpis::template_signature()` (the one statement a cached call sends).
-  The pairs report's summary has its own cache and generation (`reportsummary`, `reportgeneration`): the same
-  events replace it, and so does a status row's change of expiry, deciding evidence or count and the details'
-  events; its cache holds codes and ids, never a label or a name.
+  restricted (-1) and missing (0) are computed per viewer; rows, filters, sort, figures and download all read it,
+  worked out once in the innermost table, because each capability fragment's placeholders may appear once.
+- **The matrix reads the list's criteria from the report** (`reportengine::workers_sql()`: stored filters, scope,
+  suspended choice) and every cell from `hub_query::base_sql()`, so a worker kept by one pair shows them all (notes).
+- **The matrix renders without layout shift**: server-rendered cells, a fixed table layout, text or pix icons
+  only; `tests/behat/matrix.feature` measures it (notes).
+- **The report's cached figures never rest on a TTL**: generations retire them (`hubgeneration`,
+  `reportgeneration`), replaced by the status, plan, cohort, user and details events (the definition's one-day
+  TTL only bounds dead keys); core fires no event for a template's competencies, so the key reads
+  `hub_kpis::template_signature()`; the cache holds codes and ids only (notes).
 - **The hub's cohort check includes the page context itself**, unlike `cohort_get_cohort()`, whose
   callers are courses (`hub_access::cohorts()` says why).
-- **`archive_writer::get_file_writer()` takes a file NAME**: a path makes ZipStream write the ZIP
-  to stdout without a word. Its request directory goes with the task: copy the ZIP into file storage
-  (`dossier_export::store()`) before the task ends.
+- **`archive_writer::get_file_writer()` takes a file NAME**: a path makes ZipStream write the ZIP to stdout without
+  a word. Its request directory goes with the task: `dossier_export::store()` copies the ZIP before the task ends.
 - **A dossier is built as the requester, wherever it is built.** `dossier_builder::prepare()` checks
   with `$USER`; the ad hoc task is queued with `set_userid()` (core's cron calls `setup_user()` with it)
   and refuses to run as anyone else. The request-time selection is cut by `hub_query::base_sql()`.
-- **A prepared ZIP is served by `dossier_export::servable_file()` only**: the requester's own user
-  context, a done and unexpired export, `exportdossier` and `view` in the export's recorded hub context
-  (`contextid`; the template's for an older row), and `userevidenceview` over every worker of its dossiers.
-- **The dossier snapshot is what the public page may show**: masked name, template, issue time, each
-  competency's code and expiry (a sensitive-decided one always restricted, whoever issued it; the PDF
-  keeps the requester's view), both verdicts (`readiness`, real; `readinessshown`, over the public statuses).
-  Never the identifier, the full name or a file;
-  `verify.php` reads nothing else (and `verifylive` reads status rows with no rights). A revoked dossier's
-  page reads neither: it states the revocation alone.
+- **A prepared ZIP is served by `dossier_export::servable_file()` only**, which checks the requester, the
+  export's state, the recorded hub context and the reading of every worker (notes).
+- **The dossier snapshot is what the public page may show**, and `verify.php` reads nothing else: never the
+  identifier, the full name or a file; a revoked dossier's page states the revocation alone (notes).
 - **Dossier files are read in one array query** (`dossier_builder::files()`): a recordset costs three
   reads on PostgreSQL, and the test bounds the statement count.
-- **TCPDF traps (S0)**: every table cell carries its width; helvetica for Latin-1 only, freesans
-  otherwise (`dossier_pdf::font()`); no em dash or arrow in the PDF's own strings, or every page is set
-  in freesans.
-- **Privacy:** deleting an actor (verifier, issuer, requester of others' dossiers) leaves their
-  columns in other workers' rows, mirroring `core_competency\privacy\provider`. A new table with a
-  user column goes into `get_metadata()`; `provider_test` checks every declared column exists.
-
-- **The status is recomputed, never patched.** Every writer of a status row goes through
-  `status_repository::recompute()` (lock `user_<id>`, transaction, upsert or delete); observers only
-  pick pairs. Its own log entry in core's history (`desccomponent` local_evidencehub) is skipped by
-  the `competency_evidence_created` observer, or each recomputation would start another.
-- **A status change and its core log entry commit together** (`add_evidence()` runs inside the
-  row's transaction); `validity_status_changed` fires after the commit, because internal observers
-  run at once even inside a transaction. Observers queue a pair whose user lock times out
-  (`recompute_or_queue()`); the tasks trace and skip a failing pair.
+- **TCPDF traps**: every cell carries its width; `dossier_pdf::font()` picks the font; no em dash or arrow in the
+  PDF's own strings (notes).
+- **Privacy:** deleting an actor (verifier, issuer, requester of others' dossiers) leaves their columns in other
+  workers' rows, as core competencies do. A new user column goes into `get_metadata()`; `provider_test` checks it.
+- **The status is recomputed, never patched**: every writer goes through `status_repository::recompute()`;
+  observers only pick pairs, and skip its own core history entry, or each recomputation would start another (notes).
+- **A status change and its core log entry commit together**; `validity_status_changed` fires after the commit,
+  because internal observers run at once even inside a transaction; a pair whose user lock times out is queued
+  (`recompute_or_queue()`) (notes).
 - **The pill of a competency follows its deciding evidence**: a sensitive deciding evidence shows
   "Restricted" on every linked item to a viewer without `viewsensitive`.
-- **Alerts go to roles assigned in the worker's user context only** (`alerts::grants_sql()`, then
-  `has_capability()` to honour prohibitions): a system or category holder would be alerted about every
-  worker. The validity alerts run in an external observer (`internal => false`), so never for a change
-  that rolls back; verification requests go through an ad hoc task queued with `checkforexisting`,
-  because the form resets and saves in one transaction before it links the competency.
+- **Alerts go to roles assigned in the worker's user context only** (`alerts::grants_sql()`): a system or category
+  holder would be alerted about every worker; validity alerts are an external observer (notes).
 - **Messages are composed in the recipient's language** (`alerts::in_language()`); a test fakes the
   pt_br pack with a `langconfig.php` in `$CFG->dataroot/lang/pt_br`.
-- **PHPUnit on PostgreSQL wraps each test in a transaction**, so an external observer (the validity
-  alerts) never runs there: a test of them calls `preventResetByRollback()`. On MariaDB it runs in
-  every test that moves a pair into due, critical or expired, so a test asserting messages redirects
-  them and runs on both families.
-- **Every readiness verdict follows the `readinessbasis` setting** (`dossier_config::readiness_basis()`): real
-  (default) or as the reader is shown it, a restricted competency unmet; the PDF, the public page (read at view time;
-  a snapshot without `readinessshown` states no verdict under "shown") and the web service. The web service shows the
-  effective status; every worker refusal is one error (`errorreadinessnotfound`).
+- **PHPUnit on PostgreSQL wraps each test in a transaction**, so the external observer never runs there
+  (`preventResetByRollback()`); on MariaDB it does, so message tests redirect them (notes).
+- **Every readiness verdict follows the `readinessbasis` setting** (`dossier_config::readiness_basis()`): the PDF,
+  the public page and the web service; every worker refusal of the service is one error (notes).
 - **Templates print plain spellings**: `format_string(..., ['escape' => false])` into double stashes.
 - **"Today" is the site's calendar day** (`core_date::get_server_timezone_object()`), read from
   `\core\clock`, so tests freeze it with `mock_clock_with_frozen()`.
-- **The drawer's fragment checks everything itself** (`local_evidencehub_output_fragment_pair()`):
-  core's `core_get_fragment` validates only the context, so view, read access, competency and
-  template are re-checked there, never trusted to the hub page.
-- **The drawer's side-sheet class is in its template** (`templates/drawer.mustache`), and it slides
-  in with a CSS animation: core's `.modal` goes from `display: none` to block in one step, which a
-  transition cannot animate (S0 spike: a class added after `create()` lost the first slide).
-- **`settings.php` adds two admin pages and the dossier settings page**, in local_dimensions' admin category when
-  it is already in the tree (`local\admin_tree`: plugins load by localised display name, so it is best effort and
-  falls back to `competencies`); every setting is named
-  `local_evidencehub/<name>` with `<name>` + `<name>_desc` strings, and the identifier select loads its
-  choices lazily (a closure, `identifier_choices(...)`: core's configselect takes an array callable for the
-  choices themselves), so loading settings.php never queries `user_info_field`.
-- **The list's rows reach core's own routes without the hub's event or file.** The `hub_downloaded` event records a
-  file written by `index.php?download=`; core's table routes (`core_table_get_dynamic_table_content` with a client page
-  size, `core_reportbuilder_retrieve_system_report` on the mobile service) return the list's rows, masked and under the
-  same `can_view()`, with no event and no file, as for every core system report.
+- **The drawer's fragment checks everything itself** (`local_evidencehub_output_fragment_pair()`): core's
+  `core_get_fragment` validates only the context, so view, read access, competency and template are re-checked.
+- **The drawer's side-sheet class is in its template** and it slides in with a CSS animation: core's `.modal`
+  cannot be transitioned from `display: none` (notes).
+- **`settings.php` names every setting `local_evidencehub/<name>`** with `<name>` + `<name>_desc` strings, places
+  its pages beside local_dimensions' best effort, and never queries `user_info_field` when loaded (notes).
+- **The list's rows reach core's own routes without the hub's event or file**: core's table services return
+  them masked and under the same `can_view()`, as for every core system report (notes).
 - **The download's event fires before the first byte**, so a send that fails after it leaves an entry without a file,
   and its row count is a separate statement from the file's read.
 - **Deleting a hub's category leaves the report persistent and its readers' stored filters as orphans** (core cascades
