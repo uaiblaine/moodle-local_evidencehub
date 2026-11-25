@@ -32,6 +32,7 @@ use core_privacy\local\request\writer;
 use core_reportbuilder\local\helpers\user_filter_manager;
 use core_reportbuilder\local\models\report;
 use core_reportbuilder\local\models\user_filter;
+use core_reportbuilder\local\systemreports\reports_list;
 use core_reportbuilder\manager;
 use local_evidencehub\local\audit;
 use local_evidencehub\local\dossier_export;
@@ -532,11 +533,15 @@ final class provider_test extends \core_privacy\tests\provider_testcase {
 
     /**
      * A reader whose only data is their stored filters of the hub's pairs report, a reader of the same report who is
-     * the control, and the first reader's stored filters of another component's report of the same shape.
+     * the control, and the first reader's stored filters of two more reports: another plugin's system report filed
+     * under this plugin's component (never this plugin's), and the pairs report built under a component a client
+     * named (this plugin's: core's services create it before they ask can_view()), its source spelled as PHP would
+     * still resolve it.
      *
      * Built as the administrator: the report's persistent is created by building it once, as the hub does.
      *
-     * @return array [the reader, the other reader, this plugin's report id, the other component's report id].
+     * @return array [the reader, the other reader, this plugin's report id, the other plugin's report id, the id of
+     *      the pairs report under the named component].
      */
     private function stored_filters(): array {
         set_config('enabled', 1, 'core_competency');
@@ -552,17 +557,27 @@ final class provider_test extends \core_privacy\tests\provider_testcase {
             (int) $otherreader->id
         );
         $other = new report(0, (object) [
-            'source' => hub_pairs::class,
+            'source' => reports_list::class,
             'type' => \core_reportbuilder\local\report\base::TYPE_SYSTEM_REPORT,
             'contextid' => \context_system::instance()->id,
-            'component' => 'local_other',
+            'component' => 'local_evidencehub',
             'area' => hub_pairs::AREA,
             'itemid' => $templateid,
         ]);
         $other->create();
         user_filter_manager::set((int) $other->get('id'), ['validity:status_value' => 2], (int) $reader->id);
+        $named = new report(0, (object) [
+            'source' => '\\' . strtoupper(hub_pairs::class),
+            'type' => \core_reportbuilder\local\report\base::TYPE_SYSTEM_REPORT,
+            'contextid' => \context_system::instance()->id,
+            'component' => 'local_other',
+            'area' => 'anything',
+            'itemid' => $templateid,
+        ]);
+        $named->create();
+        user_filter_manager::set((int) $named->get('id'), ['validity:status_value' => 4], (int) $reader->id);
         manager::reset_caches();
-        return [$reader, $otherreader, $reportid, (int) $other->get('id')];
+        return [$reader, $otherreader, $reportid, (int) $other->get('id'), (int) $named->get('id')];
     }
 
     /**
@@ -579,16 +594,18 @@ final class provider_test extends \core_privacy\tests\provider_testcase {
 
     /**
      * The stored filters of the plugin's reports are declared, found in the reader's own context, listed among its
-     * users and exported there with the report's template and context named; another component's stored filters are
-     * not this plugin's. Run as the administrator, never as the reader.
+     * users and exported there with the report's template and context named, the ones of a pairs report built under
+     * another component included; another plugin's report filed under this component is not this plugin's. Run as
+     * the administrator, never as the reader.
      *
      * Changes that must make it fail: the finder or the user list missing the rows (core's provider covers custom
-     * reports only, so nobody would find them); the finder or the export cut by anything but this component.
+     * reports only, so nobody would find them); the finder or the export cut by the component instead of the report's
+     * source.
      *
      * @return void
      */
     public function test_the_stored_report_filters_are_found_and_exported(): void {
-        [$reader, $otherreader, , $otherreport] = $this->stored_filters();
+        [$reader, $otherreader, , $otherreport, $namedreport] = $this->stored_filters();
         $collection = provider::get_metadata(new \core_privacy\local\metadata\collection('local_evidencehub'));
         $declared = array_map(fn($item): string => $item->get_name(), $collection->get_collection());
         $this->assertContains(user_filter::TABLE, $declared);
@@ -602,16 +619,33 @@ final class provider_test extends \core_privacy\tests\provider_testcase {
 
         provider::export_user_data(new approved_contextlist($reader, 'local_evidencehub', [$context->id]));
         $data = writer::with_context($context)->get_data($this->path('privacy:path:reportfilters'));
-        $this->assertCount(1, $data->filters);
+        // The hub's own report, then the one built under the named component; never the other plugin's report.
+        $this->assertCount(2, $data->filters);
         $entry = $data->filters[0];
         $this->assertSame($this->w['template']->get('shortname'), $entry->template);
         $this->assertSame(\context_system::instance()->get_context_name(false, false, false), $entry->context);
         $this->assertSame(['user:cohort_operator' => 1, 'user:cohort_value' => 3], (array) $entry->filters);
+        $this->assertSame(['validity:status_value' => 4], (array) $data->filters[1]->filters);
 
-        // The control: a user whose only stored filters are another component's has no context here.
+        // The control: a user whose only stored filters are of another plugin's report under this component has no
+        // context here.
         $outsider = $this->getDataGenerator()->create_user();
         user_filter_manager::set($otherreport, ['validity:status_value' => 2], (int) $outsider->id);
         $this->assertSame([], provider::get_contexts_for_userid((int) $outsider->id)->get_contextids());
+        $outsiderlist = new userlist(\context_user::instance($outsider->id), 'local_evidencehub');
+        provider::get_users_in_context($outsiderlist);
+        $this->assertSame([], $outsiderlist->get_userids());
+        // A user whose only stored filters are of the pairs report under the named component is found.
+        $named = $this->getDataGenerator()->create_user();
+        user_filter_manager::set($namedreport, ['validity:status_value' => 2], (int) $named->id);
+        $namedcontext = \context_user::instance($named->id);
+        $this->assertSame(
+            [(int) $namedcontext->id],
+            array_map('intval', provider::get_contexts_for_userid((int) $named->id)->get_contextids())
+        );
+        $namedlist = new userlist($namedcontext, 'local_evidencehub');
+        provider::get_users_in_context($namedlist);
+        $this->assertSame([(int) $named->id], array_map('intval', $namedlist->get_userids()));
         // And the other reader of this plugin's report finds their own context, not the first reader's.
         $this->assertSame(
             [(int) \context_user::instance($otherreader->id)->id],
@@ -630,20 +664,22 @@ final class provider_test extends \core_privacy\tests\provider_testcase {
 
     /**
      * Each delete method removes the reader's stored filters of the plugin's reports, entered through the finder's
-     * context, and leaves the other reader's of the same report and the reader's of another component's report.
+     * context, the pairs report built under another component included, and leaves the other reader's of the same
+     * report and the reader's of another plugin's report filed under this component.
      *
-     * Changes that must make it fail: a delete that leaves the rows, or one cut by anything but this component and the
-     * context's user.
+     * Changes that must make it fail: a delete that leaves the rows, or one cut by anything but the report's source
+     * and the context's user.
      *
      * @param string $method user, context or users.
      * @return void
      */
     #[DataProvider('deletions')]
     public function test_the_stored_report_filters_are_deleted(string $method): void {
-        [$reader, $otherreader, $reportid, $otherreport] = $this->stored_filters();
+        [$reader, $otherreader, $reportid, $otherreport, $namedreport] = $this->stored_filters();
         $contextids = provider::get_contexts_for_userid((int) $reader->id)->get_contextids();
         $context = \context::instance_by_id((int) reset($contextids));
         $this->assertSame(1, $this->stored($reader, $reportid));
+        $this->assertSame(1, $this->stored($reader, $namedreport));
 
         match ($method) {
             'user' => provider::delete_data_for_user(new approved_contextlist($reader, 'local_evidencehub', $contextids)),
@@ -652,6 +688,7 @@ final class provider_test extends \core_privacy\tests\provider_testcase {
         };
 
         $this->assertSame(0, $this->stored($reader, $reportid));
+        $this->assertSame(0, $this->stored($reader, $namedreport));
         $this->assertSame(1, $this->stored($otherreader, $reportid));
         $this->assertSame(1, $this->stored($reader, $otherreport));
     }
@@ -680,21 +717,24 @@ final class provider_test extends \core_privacy\tests\provider_testcase {
 
     /**
      * Deleting the account removes the reader's stored filters of the plugin's reports, which the finder could no
-     * longer reach once the user context is gone; another reader's rows of the same report and the deleted reader's
-     * rows of another component's report stay.
+     * longer reach once the user context is gone, the pairs report built under another component included; another
+     * reader's rows of the same report and the deleted reader's rows of another plugin's report filed under this
+     * component stay.
      *
      * Changes that must make it fail: the user_deleted observer not clearing them, or clearing by anything but the
-     * deleted user and this component.
+     * deleted user and the report's source.
      *
      * @return void
      */
     public function test_deleting_the_account_removes_the_stored_report_filters(): void {
-        [$reader, $otherreader, $reportid, $otherreport] = $this->stored_filters();
+        [$reader, $otherreader, $reportid, $otherreport, $namedreport] = $this->stored_filters();
         $this->assertSame(1, $this->stored($reader, $reportid));
+        $this->assertSame(1, $this->stored($reader, $namedreport));
 
         delete_user($reader);
 
         $this->assertSame(0, $this->stored($reader, $reportid));
+        $this->assertSame(0, $this->stored($reader, $namedreport));
         $this->assertSame(1, $this->stored($otherreader, $reportid));
         $this->assertSame(1, $this->stored($reader, $otherreport));
     }

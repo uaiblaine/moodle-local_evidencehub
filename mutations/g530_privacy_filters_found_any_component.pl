@@ -1,1 +1,1 @@
-s/(FROM \{" \. user_filter::TABLE \. "\} f\n\s*JOIN \{" \. report::TABLE \. "\} r ON r\.id = f\.reportid) AND r\.component = :component(\n\s*JOIN \{context\} ctx ON ctx\.instanceid = f\.usercreated)/$1$2/;
+s/(FROM \{" \. user_filter::TABLE \. "\} f\n\s*JOIN \{" \. report::TABLE \. "\} r ON r\.id = f\.reportid) AND \{\$isplugins\}(\n\s*JOIN \{context\} ctx ON ctx\.instanceid = f\.usercreated)/$1$2/;

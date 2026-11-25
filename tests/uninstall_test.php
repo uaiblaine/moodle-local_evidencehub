@@ -20,6 +20,7 @@ use core_reportbuilder\local\helpers\user_filter_manager;
 use core_reportbuilder\local\models\report;
 use core_reportbuilder\local\models\user_filter;
 use core_reportbuilder\local\report\base;
+use core_reportbuilder\local\systemreports\reports_list;
 use core_reportbuilder\manager;
 use local_evidencehub\reportbuilder\local\systemreports\hub_pairs;
 use local_evidencehub\tests\hub_scenario;
@@ -45,11 +46,13 @@ final class uninstall_test extends \advanced_testcase {
     }
 
     /**
-     * The uninstall deletes the pairs report's persistents with every reader's stored filters, and the plugin's own user
-     * preferences; another component's report and its stored filters, and another preference, stay.
+     * The uninstall deletes the pairs report's persistents with every reader's stored filters, the one built under a
+     * component a client named included, and the plugin's own user preferences; another plugin's report filed under
+     * this plugin's component, with its stored filters, and another preference stay.
      *
-     * Changes that must make it fail: the reports cut by anything but this component (another component's report goes,
-     * or this one's stays); a preference left behind, or one of another component taken with them.
+     * Changes that must make it fail: the reports cut by the component instead of the report's source (the other
+     * plugin's report goes, or the pairs report under another component stays); a preference left behind, or one of
+     * another component taken with them.
      *
      * @return void
      */
@@ -65,18 +68,30 @@ final class uninstall_test extends \advanced_testcase {
         user_filter_manager::set($reportid, ['validity:status_operator' => 1, 'validity:status_value' => 5]);
         user_filter_manager::set($reportid, ['user:cohort_operator' => 1, 'user:cohort_value' => 3], (int) $reader->id);
 
-        // Another component's system report of the same shape, with a reader's stored filters.
+        // Another plugin's system report filed under this plugin's component, with a reader's stored filters.
         $other = new report(0, (object) [
             'name' => '',
-            'source' => hub_pairs::class,
+            'source' => reports_list::class,
             'type' => base::TYPE_SYSTEM_REPORT,
             'contextid' => \context_system::instance()->id,
-            'component' => 'local_other',
+            'component' => 'local_evidencehub',
             'area' => hub_pairs::AREA,
             'itemid' => $templateid,
         ]);
         $other->create();
         user_filter_manager::set((int) $other->get('id'), ['validity:status_value' => 2], (int) $reader->id);
+        // The pairs report under a component a client named, its source spelled as PHP would still resolve it.
+        $named = new report(0, (object) [
+            'name' => '',
+            'source' => '\\' . strtoupper(hub_pairs::class),
+            'type' => base::TYPE_SYSTEM_REPORT,
+            'contextid' => \context_system::instance()->id,
+            'component' => 'local_other',
+            'area' => 'anything',
+            'itemid' => $templateid,
+        ]);
+        $named->create();
+        user_filter_manager::set((int) $named->get('id'), ['validity:status_value' => 4], (int) $reader->id);
 
         set_user_preference('local_evidencehub_report', json_encode(['suspended' => true]), $reader);
         set_user_preference('local_evidencehub_hubfilter', json_encode(['templateid' => $templateid]), $reader);
@@ -86,18 +101,21 @@ final class uninstall_test extends \advanced_testcase {
         set_user_preference('local_evidencehub_reportx', 'kept', $reader);
         // The precondition: the plugin's rows are there.
         $this->assertSame(2, $DB->count_records(user_filter::TABLE, ['reportid' => $reportid]));
+        $this->assertSame(1, $DB->count_records(user_filter::TABLE, ['reportid' => $named->get('id')]));
         manager::reset_caches();
 
         $this->assertTrue(xmldb_local_evidencehub_uninstall());
 
-        $this->assertFalse($DB->record_exists(report::TABLE, ['component' => 'local_evidencehub']));
+        $this->assertFalse($DB->record_exists(report::TABLE, ['id' => $reportid]));
         $this->assertSame(0, $DB->count_records(user_filter::TABLE, ['reportid' => $reportid]));
+        $this->assertFalse($DB->record_exists(report::TABLE, ['id' => $named->get('id')]));
+        $this->assertSame(0, $DB->count_records(user_filter::TABLE, ['reportid' => $named->get('id')]));
         $this->assertSame(0, $DB->count_records_select(
             'user_preferences',
             'name IN (:report, :old)',
             ['report' => 'local_evidencehub_report', 'old' => 'local_evidencehub_hubfilter']
         ));
-        // The controls: another component's report, its stored filters and another preference stay.
+        // The controls: the other plugin's report, its stored filters and another preference stay.
         $this->assertTrue($DB->record_exists(report::TABLE, ['id' => $other->get('id')]));
         $this->assertSame(1, $DB->count_records(user_filter::TABLE, ['reportid' => $other->get('id')]));
         $this->assertSame('kept', get_user_preferences('local_other_report', null, $reader));

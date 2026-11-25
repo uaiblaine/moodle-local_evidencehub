@@ -110,7 +110,8 @@ classes/local/    status, meta, audit, export: stored constants and their labels
                   hub_filter (the pair set's cuts), hub_query (base_sql), hub_kpis (cache keys, generations),
                   hub_matrix (the report's workers, cells over base_sql)
                   reportengine (the headless read: rows, facets, summary), reportpreference (the reader's
-                  preference), report_download
+                  preference), report_download, reportpersistents (WHICH of core's report persistents are the
+                  plugin's: by source, never by component; the provider, the observer and the uninstall read it)
                   dossier (codes, masked name, readiness, list, revoke), dossier_config (settings),
                   dossier_builder (prepare as the requester, build into any archive_writer),
                   dossier_plan (value object), dossier_pdf (TCPDF page; barcode() is the test seam),
@@ -232,6 +233,9 @@ The long form of a rule marked "notes" is in `docs/architecture-notes.md`, under
   and its row count is a separate statement from the file's read.
 - **Deleting a hub's category leaves the report persistent and its readers' stored filters as orphans** (core cascades
   nothing); they stay reachable to the Privacy API through each reader's user context.
+- **A report persistent is the plugin's by its source, never by its component** (`reportpersistents::is_plugins()`):
+  core's services create a persistent under any component a client names, before `can_view()`; a new system report
+  class joins `SOURCES` (a test lists the tree).
 
 ## Testing notes
 

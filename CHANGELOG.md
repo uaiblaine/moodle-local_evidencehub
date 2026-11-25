@@ -153,6 +153,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- Version 2026100522: the plugin's report persistents are told by the report's source, not by the component. Core's
+  report services build a system report from the source and the component the client sends and create its
+  persistent before asking the report's `can_view()`, so a reader of the hub could have the pairs report built under
+  another component, and the stored filters they then saved there were outside the Privacy API's finder, export and
+  deletes, the account deletion and the uninstall; and another plugin's system report built under this plugin's
+  component was taken for this plugin's. One definition (`local\reportpersistents::is_plugins()`: a system report
+  whose source is the pairs report, without case or leading separator) now serves the provider, the `user_deleted`
+  observer and `db/uninstall.php`. Gates G557 to G561.
 - Version 2026100521: a filter change in the hub's list answers at the press. The list wrote the new filter to
   core's store and dimmed the rows only when that call had answered, so a reader waited 55 to 148 ms (measured on
   the 300,000-pair seed, more on a slow machine) with nothing moving; the rows and the band now dim when the
