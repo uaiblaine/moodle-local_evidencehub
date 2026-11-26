@@ -442,14 +442,46 @@ final class dossier_export {
             'id, requestedby'
         );
         foreach ($rs as $export) {
-            $context = \context_user::instance((int) $export->requestedby, IGNORE_MISSING);
-            if ($context) {
-                $fs->delete_area_files($context->id, 'local_evidencehub', self::FILEAREA, (int) $export->id);
-            }
-            $DB->set_field(self::TABLE, 'status', export::STATUS_EXPIRED, ['id' => $export->id]);
+            self::retire_one($fs, $export);
             $count++;
         }
         $rs->close();
         return $count;
+    }
+
+    /**
+     * Retire exports now, whatever their state: their stored ZIPs are deleted and they are marked expired, as the
+     * cleanup task does; the dossier rows stay.
+     *
+     * The privacy provider's door, for the exports holding a dossier about a worker whose data is deleted.
+     *
+     * @param array $exportids The export ids; an id with no row is skipped.
+     * @return void
+     */
+    public static function retire(array $exportids): void {
+        global $DB;
+        if (!$exportids) {
+            return;
+        }
+        $fs = get_file_storage();
+        foreach ($DB->get_records_list(self::TABLE, 'id', $exportids, 'id', 'id, requestedby') as $export) {
+            self::retire_one($fs, $export);
+        }
+    }
+
+    /**
+     * Delete one export's stored ZIP, in its requester's user context, and mark it expired.
+     *
+     * @param \file_storage $fs The file storage.
+     * @param \stdClass $export The export's id and requestedby.
+     * @return void
+     */
+    private static function retire_one(\file_storage $fs, \stdClass $export): void {
+        global $DB;
+        $context = \context_user::instance((int) $export->requestedby, IGNORE_MISSING);
+        if ($context) {
+            $fs->delete_area_files($context->id, 'local_evidencehub', self::FILEAREA, (int) $export->id);
+        }
+        $DB->set_field(self::TABLE, 'status', export::STATUS_EXPIRED, ['id' => $export->id]);
     }
 }

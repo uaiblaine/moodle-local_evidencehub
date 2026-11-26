@@ -258,8 +258,9 @@ class pair_drawer implements renderable, templatable {
      * Every core evidence of the worker linked to the competency, newest issue first, as items.
      *
      * Ties keep the highest evidence id first; evidence without details has no issue day and comes
-     * last. The gap to the next newer interval is worked out between neighbours whose dates the
-     * viewer may read: never next to a restricted item.
+     * after. Restricted items come last, by id alone: a place among the readable ones would bound
+     * their issue day. A gap to the next newer interval is worked out only while the viewer reads
+     * every item's dates: a restricted interval may cover any day between two readable ones.
      *
      * @param \stdClass|null $row The status row.
      * @param array $types The evidence types, by id.
@@ -275,7 +276,14 @@ class pair_drawer implements renderable, templatable {
              LEFT JOIN {" . details::TABLE . "} m ON m.userevidenceid = ue.id
                  WHERE ue.userid = :userid AND uec.competencyid = :competencyid";
         $records = array_values($DB->get_records_sql($sql, ['userid' => $this->userid, 'competencyid' => $this->competencyid]));
+        foreach ($records as $record) {
+            $record->restricted = $record->metaid !== null && details::is_restricted(
+                (object) ['userid' => $this->userid, 'typeid' => (int) $record->typeid],
+                $types[(int) $record->typeid] ?? null
+            );
+        }
         usort($records, [self::class, 'compare']);
+        $readsall = !in_array(true, array_column($records, 'restricted'), true);
 
         $usercontext = \context_user::instance($this->userid);
         $canedit = user_evidence::can_manage_user($this->userid);
@@ -315,7 +323,7 @@ class pair_drawer implements renderable, templatable {
                 $item['typename'] = $type
                     ? format_string($type->name, true, ['context' => \context_system::instance(), 'escape' => false])
                     : '';
-                $item['restricted'] = details::is_restricted($meta, $type);
+                $item['restricted'] = $record->restricted;
                 // Who may not read the details may neither change nor decide on them.
                 $item['canedit'] = $canedit && !$item['restricted'];
                 $item['canverify'] = $canverify && !$item['restricted'];
@@ -328,14 +336,14 @@ class pair_drawer implements renderable, templatable {
                     $item += $this->details($record);
                 }
             }
-            // The gap sits on the older of two neighbours, and only when both dates may be read.
-            if ($newerissue !== null && $meta !== null && !$item['restricted']) {
+            // The gap sits on the older of two neighbours, and only when every date may be read.
+            if ($newerissue !== null && $meta !== null) {
                 $gap = self::gap($meta->expirydate, $newerissue);
                 if ($gap > 0) {
                     $item['gap'] = get_string('drawergap', 'local_evidencehub', $gap);
                 }
             }
-            $newerissue = ($meta !== null && !$item['restricted']) ? $meta->issuedate : null;
+            $newerissue = ($readsall && $meta !== null) ? $meta->issuedate : null;
             $items[] = $item;
         }
         return $items;
@@ -343,13 +351,16 @@ class pair_drawer implements renderable, templatable {
 
     /**
      * The timeline order of two linked evidence records: newest issue first, then the highest id;
-     * without details last.
+     * without details after; restricted last, by the highest id alone, whatever their issue day.
      *
-     * @param \stdClass $a A record.
-     * @param \stdClass $b Another record.
+     * @param \stdClass $a A record, with its restricted flag.
+     * @param \stdClass $b Another record, with its restricted flag.
      * @return int
      */
     private static function compare(\stdClass $a, \stdClass $b): int {
+        if ($a->restricted || $b->restricted) {
+            return [(int) $a->restricted, (int) $b->id] <=> [(int) $b->restricted, (int) $a->id];
+        }
         $aissue = $a->metaid === null ? 0 : (int) $a->issuedate;
         $bissue = $b->metaid === null ? 0 : (int) $b->issuedate;
         return [$bissue, (int) $b->id] <=> [$aissue, (int) $a->id];
@@ -545,8 +556,9 @@ class pair_drawer implements renderable, templatable {
     /**
      * The audit rows of the timeline's evidence, newest first.
      *
-     * A restricted item's rows show their date, action and evidence name only. A note shows only to the
-     * worker and to holders of local/evidencehub:verify in the worker's context, as on {@see evidence_page}.
+     * A restricted item's rows show their date and evidence name, and one generic action: the action itself
+     * (verified, rejected, ...) would give back the verification state its card hides. A note shows only to
+     * the worker and to holders of local/evidencehub:verify in the worker's context, as on {@see evidence_page}.
      *
      * @param array $items The timeline.
      * @return array List of [date, action, actor, evidence, note].
@@ -577,7 +589,7 @@ class pair_drawer implements renderable, templatable {
             $actor = $actors[(int) $record->userid] ?? null;
             $rows[] = [
                 'date' => userdate((int) $record->timecreated, get_string('strftimedatetimeshort', 'core_langconfig')),
-                'action' => audit::label($record->action),
+                'action' => $restricted ? get_string('audit_restricted', 'local_evidencehub') : audit::label($record->action),
                 'actor' => (!$restricted && $actor) ? fullname($actor, $viewfullnames) : '',
                 'evidence' => $item['name'],
                 'note' => (!$restricted && $notes) ? (string) $record->note : '',

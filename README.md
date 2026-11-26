@@ -282,7 +282,8 @@ applies and where it is set, every evidence of the worker linked to the competen
 record when they do not touch), the audit trail of those evidence records (notes only to the worker
 and to verifiers), and when the status was computed and its next change. An evidence of a sensitive
 type shows only its type and "Restricted details" to a viewer who is not the worker and lacks
-`local/evidencehub:viewsensitive`, and its audit rows only their date and action; when such an
+`local/evidencehub:viewsensitive`, and its audit rows only their date and "Details changed", never the action
+itself (which would tell whether it was verified or rejected); when such an
 evidence decides the pair, the section is headed "Deciding evidence" whether or not it is in force.
 
 From the drawer, each action shows only to who may take it, and the form it opens checks again:
@@ -345,8 +346,8 @@ is decided by `local/evidencehub:verifydossier`, as `tool/certificate:verify` de
 visitor who is not logged in is checked as the guest role, which holds it by default, so the page works on a
 site that forces login and for a contractor without an account; a site that prevents it for guest asks such a
 visitor to log in, and one that prevents it for authenticated users too limits it to the roles it grants it to.
-It tells search engines not to index it. The code is 128 random bits; anything else reads "not found", as an
-unknown code does. The page shows the dossier as issued: the masked name ("J*** S***", the first letter of
+It tells search engines not to index it, no cache keeps it, and it sends no referrer to the pages it links to. The
+code is 128 random bits; anything else reads "not found", as an unknown code does. The page shows the dossier as issued: the masked name ("J*** S***", the first letter of
 each part of the name), the template, the issue date, each competency's status and expiry on that date
 ("Restricted", with no date, for one decided by evidence of a sensitive type, whoever issued the dossier),
 the readiness on that date (by default the worker's real one: certifying it is what a dossier is for; under the
@@ -354,7 +355,7 @@ the readiness on that date (by default the worker's real one: certifying it is w
 met, and no verdict at all for a dossier issued before the snapshot kept it), the SHA-256 of the issued PDF (to compare with the file a contractor holds). A revoked
 dossier's page says only that it was revoked, and on which day. It never shows the identifier, the full name or a file, and it logs nothing. With
 `verifylive` on, it also shows each competency's status today, read with no rights at all: a competency
-decided by sensitive evidence reads "Restricted".
+decided by sensitive evidence reads "Restricted", and a suspended or deleted worker has no status today.
 
 **Shared dossiers.** The worker's evidence page lists every dossier issued about them: when, by whom, for
 which template, and whether it was revoked. The dossier's creator, or a holder of
@@ -374,7 +375,13 @@ restricted values.
 **Core competency history.** Each status change writes one log entry ("Evidence hub: ...") into the
 history of the worker's user competency (`competency_evidence`, through core's `add_evidence()`,
 with the plugin's component): core's own privacy provider exports and deletes those entries with the
-rest of the competency history.
+rest of the competency history. The entry names the new status and the effective expiry date, except
+for a pair decided by an evidence of a sensitive type: core shows that history to every reader of the
+user competency, so such a pair's entry says only "Evidence hub: the validity of this competency
+changed.", with no status and no date (an expiry under a review policy still asks for the review).
+A pair that turns sensitive later (its deciding evidence, or that evidence's type, changes) has its earlier entries
+rewritten the same way, whether or not its status changes; upgrading to 2026100523 does it once for every pair
+already flagged sensitive.
 
 **Tasks.**
 
@@ -539,7 +546,8 @@ Data stored
 - `local_evidencehub_export`: each dossier export request: who asked, in which hub context, for which
   template, how many workers, its state and when its ZIP expires. The ZIP of an export prepared in the background is a
   file in the requester's user context (component `local_evidencehub`, file area `export`), deleted after
-  `exportretentiondays` days or with the requester's data.
+  `exportretentiondays` days, with the requester's data, or with the data of any worker it holds a dossier about
+  (the export then reads expired).
 
 The user preference `local_evidencehub_report` keeps a reader's choices on the hub's list (the columns and their
 widths, whether suspended accounts are listed, and the last template opened in each place the hub opens); a data
@@ -556,8 +564,10 @@ never a name; a request with a search is counted every time and never cached.
 A data request exports, in the worker's user context, the details of the worker's evidence, the
 trail, the dossiers about the worker and the validity of each competency; an actor (a verifier, a
 dossier issuer) also finds the rows they acted on in each worker's context, and a requester their
-export requests with the ZIPs still kept for them. A deletion request for a worker deletes every row about that worker and their
-export requests (the dossiers of those exports describe other workers and stay). As in core
+export requests, without the ZIPs kept for them (those hold other workers' dossiers, which only the download serves,
+after checking the requester's reading of every one). A deletion request for a worker deletes every row about that
+worker and their export requests (the dossiers of those exports describe other workers and stay), and the ZIPs other
+requesters prepared with a dossier about that worker, whose exports then read expired. As in core
 competencies, deleting an actor leaves the workers' rows, including the column naming the actor.
 The evidence and its files are core's and follow core's privacy provider.
 The alerts and digests are core notifications, exported and deleted by core's messaging privacy provider.

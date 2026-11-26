@@ -317,7 +317,51 @@ final class pair_drawer_test extends \advanced_testcase {
     }
 
     /**
-     * No gap is worked out from a restricted item's dates: neither on it nor on its older neighbour.
+     * Restricted items come after every readable one, by id alone, so their place bounds no issue day; the readable
+     * ones keep newest issue first. The control is the same viewer with viewsensitive, for whom every item takes its
+     * place by issue day.
+     *
+     * @return void
+     */
+    public function test_restricted_items_come_last_by_id(): void {
+        $newestsensitive = $this->linked(
+            ['issuedate' => 20260101, 'expirydate' => 20270101, 'typeid' => $this->type_id('aso')],
+            'Newest health certificate'
+        );
+        $plainnew = $this->linked(['issuedate' => 20250101, 'expirydate' => 20290101], 'Plain new');
+        $oldestsensitive = $this->linked(
+            ['issuedate' => 20200101, 'expirydate' => 20210101, 'typeid' => $this->type_id('aso')],
+            'Oldest health certificate'
+        );
+        $plainold = $this->linked(['issuedate' => 20230101, 'expirydate' => 20240101], 'Plain old');
+        $viewer = $this->viewer(self::READER);
+        $this->setUser($viewer);
+
+        $this->assertSame(
+            [
+                $plainnew->userevidenceid,
+                $plainold->userevidenceid,
+                $oldestsensitive->userevidenceid,
+                $newestsensitive->userevidenceid,
+            ],
+            array_column($this->export()['history'], 'userevidenceid')
+        );
+
+        $this->grant($viewer, ['local/evidencehub:viewsensitive']);
+        $this->assertSame(
+            [
+                $newestsensitive->userevidenceid,
+                $plainnew->userevidenceid,
+                $plainold->userevidenceid,
+                $oldestsensitive->userevidenceid,
+            ],
+            array_column($this->export()['history'], 'userevidenceid')
+        );
+    }
+
+    /**
+     * No gap is worked out while the timeline holds a restricted item: neither on it nor between readable items,
+     * which now neighbour each other across it although it may cover the days between them.
      *
      * @return void
      */
@@ -478,6 +522,50 @@ final class pair_drawer_test extends \advanced_testcase {
 
         $this->setUser($this->worker);
         $this->assertSame('Note by ' . $verifier->id, $this->export()['audit'][0]['note']);
+    }
+
+    /**
+     * A restricted item's audit rows keep their date and replace the action with one generic label, since the action
+     * would give back the verification state the card hides. The same reader with viewsensitive sees the action, and
+     * a plain item's row shows its action all along (the controls).
+     *
+     * @return void
+     */
+    public function test_a_restricted_audit_row_names_no_action(): void {
+        $health = $this->linked(
+            ['issuedate' => 20250101, 'expirydate' => 20290101, 'typeid' => $this->type_id('aso')],
+            'Health certificate'
+        );
+        $plain = $this->linked(['issuedate' => 20240101, 'expirydate' => 20250101], 'Training');
+        $generator = $this->getDataGenerator()->get_plugin_generator('local_evidencehub');
+        foreach ([$health, $plain] as $item) {
+            $generator->create_audit((object) [
+                'id' => $item->metaid,
+                'userevidenceid' => $item->userevidenceid,
+                'userid' => $this->worker->id,
+            ], (int) $this->worker->id, audit::ACTION_VERIFIED);
+        }
+        $reader = $this->viewer(self::READER);
+        $this->setUser($reader);
+        $verified = audit::label(audit::ACTION_VERIFIED);
+        $generic = get_string('audit_restricted', 'local_evidencehub');
+        // By evidence name: rows of the same second come by id, which says nothing here.
+        $actions = function (array $audit): array {
+            $byname = array_combine(array_column($audit, 'evidence'), array_column($audit, 'action'));
+            ksort($byname);
+            return $byname;
+        };
+
+        $audit = $this->export()['audit'];
+        $this->assertSame(['Health certificate' => $generic, 'Training' => $verified], $actions($audit));
+        $this->assertNotSame('', $audit[0]['date']);
+        $this->assertNotSame('', $audit[1]['date']);
+
+        $this->grant($reader, ['local/evidencehub:viewsensitive']);
+        $this->assertSame(
+            ['Health certificate' => $verified, 'Training' => $verified],
+            $actions($this->export()['audit'])
+        );
     }
 
     /**

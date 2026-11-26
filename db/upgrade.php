@@ -68,5 +68,30 @@ function xmldb_local_evidencehub_upgrade($oldversion) {
         upgrade_plugin_savepoint(true, 2026100519, 'local', 'evidencehub');
     }
 
+    if ($oldversion < 2026100523) {
+        // The plugin's status entries in core's competency history named a sensitive pair's status and date, and core
+        // shows that history to readers without viewsensitive: a pair whose status row is flagged sensitive now has
+        // them all rewritten into the neutral entry, without its date, as status_repository::log() writes it. Inline, as
+        // an upgrade step must be; status_repository::neutralise_history() does the same for one pair from now on.
+        $like = $DB->sql_like('descidentifier', ':identifiers');
+        $DB->execute(
+            "UPDATE {competency_evidence}
+                SET descidentifier = :restricted, desca = NULL
+              WHERE desccomponent = :component
+                AND $like
+                AND usercompetencyid IN (SELECT uc.id
+                                           FROM {competency_usercomp} uc
+                                           JOIN {local_evidencehub_status} s
+                                                ON s.userid = uc.userid AND s.competencyid = uc.competencyid
+                                          WHERE s.issensitive = 1)",
+            [
+                'restricted' => 'evidence_status_restricted',
+                'component' => 'local_evidencehub',
+                'identifiers' => $DB->sql_like_escape('evidence_status_') . '%',
+            ]
+        );
+        upgrade_plugin_savepoint(true, 2026100523, 'local', 'evidencehub');
+    }
+
     return true;
 }

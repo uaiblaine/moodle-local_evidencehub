@@ -1,1 +1,1 @@
-s/\$item\['restricted'\] = details::is_restricted\(\$meta, \$type\);/\$item['restricted'] = false;/;
+s/\$record->restricted = \$record->metaid !== null && details::is_restricted\(/\$record->restricted = false && details::is_restricted(/;

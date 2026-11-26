@@ -372,10 +372,46 @@ final class status_repository {
             $row->timechanged = $now;
             $row->id = $DB->insert_record(self::TABLE, $row);
         }
+        // A pair that turns sensitive keeps no dated entry of before, whether or not its status changes now.
+        if ($row->issensitive === 1 && (!$existing || (int) $existing->issensitive === 0)) {
+            self::neutralise_history($userid, $competencyid);
+        }
         if ($changed) {
             self::log($row, $policy, $result);
         }
         return [$result, $row, $from, $counted, $reportchanged];
+    }
+
+    /**
+     * Rewrite a pair's status entries in core's competency history into the neutral one, without a date.
+     *
+     * Core shows that history to every reader of the user competency, so once the pair is decided by a sensitive
+     * evidence its earlier entries must not name a status or a date either. Only the plugin's status entries change;
+     * the upgrade step to 2026100523 does the same for every sensitive pair at once (db/upgrade.php).
+     *
+     * @param int $userid The worker.
+     * @param int $competencyid The competency.
+     * @return void
+     */
+    public static function neutralise_history(int $userid, int $competencyid): void {
+        global $DB;
+        $like = $DB->sql_like('descidentifier', ':identifiers');
+        $DB->execute(
+            "UPDATE {" . evidence::TABLE . "}
+                SET descidentifier = :restricted, desca = NULL
+              WHERE desccomponent = :component
+                AND $like
+                AND usercompetencyid IN (SELECT uc.id
+                                           FROM {competency_usercomp} uc
+                                          WHERE uc.userid = :userid AND uc.competencyid = :competencyid)",
+            [
+                'restricted' => 'evidence_status_restricted',
+                'component' => 'local_evidencehub',
+                'identifiers' => $DB->sql_like_escape('evidence_status_') . '%',
+                'userid' => $userid,
+                'competencyid' => $competencyid,
+            ]
+        );
     }
 
     /**
@@ -472,6 +508,9 @@ final class status_repository {
      * core_competency's add_evidence() throws while competencies are disabled: the row then rolls
      * back with it and waits for a recomputation that can log it.
      *
+     * A row decided by a sensitive evidence logs a neutral entry, with neither the status nor the date: core's
+     * competency pages show the history to every reader of the user competency, viewsensitive or not.
+     *
      * @param \stdClass $row The stored row.
      * @param \stdClass $policy The effective policy.
      * @param validity $result The result.
@@ -479,14 +518,16 @@ final class status_repository {
      */
     private static function log(\stdClass $row, \stdClass $policy, validity $result): void {
         $to = (int) $row->status;
+        $sensitive = (int) $row->issensitive === 1;
         // A literal key per status: the descidentifier is read back through get_string().
-        $identifier = match ($to) {
+        $identifier = $sensitive ? 'evidence_status_restricted' : match ($to) {
             status::STATUS_UNVERIFIED => 'evidence_status_unverified',
             status::STATUS_VALID => 'evidence_status_valid',
             status::STATUS_DUE => 'evidence_status_due',
             status::STATUS_CRITICAL => 'evidence_status_critical',
             status::STATUS_EXPIRED => 'evidence_status_expired',
         };
+        $desca = $sensitive ? null : meta::iso_date($result->effectiveexpiry);
         // Expired under a review policy asks core for a review; the rating itself never changes.
         $recommend = $to === status::STATUS_EXPIRED && (int) $policy->onexpiry === policy::ONEXPIRY_REVIEW;
         api::add_evidence(
@@ -496,7 +537,7 @@ final class status_repository {
             evidence::ACTION_LOG,
             $identifier,
             'local_evidencehub',
-            meta::iso_date($result->effectiveexpiry),
+            $desca,
             $recommend
         );
     }

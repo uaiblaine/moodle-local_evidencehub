@@ -27,6 +27,7 @@ namespace local_evidencehub\output;
 
 use core_competency\api;
 use local_evidencehub\local\details;
+use local_evidencehub\local\meta;
 use local_evidencehub\local\status;
 use local_evidencehub\tests\scenario;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -137,6 +138,43 @@ final class evidence_page_test extends \advanced_testcase {
         // A reader who neither manages nor verifies never sees the code nor the verifier's note.
         $this->assertArrayNotHasKey('authcode', $health);
         $this->assertArrayNotHasKey('note', $health);
+    }
+
+    /**
+     * A restricted card carries the type only: neither the verification state nor who decided it and when, which
+     * date the sensitive evidence's handling. The same reader with viewsensitive gets all three (the control).
+     *
+     * @return void
+     */
+    public function test_a_restricted_card_carries_no_decision(): void {
+        global $DB, $OUTPUT;
+        $verifierid = (int) $DB->get_field('local_evidencehub_meta', 'verifiedby', ['userevidenceid' => $this->healthid]);
+        // A name the page prints as it is: generated names are random.
+        $DB->update_record('user', (object) ['id' => $verifierid, 'firstname' => 'Vera', 'lastname' => 'Verifier']);
+        $verifier = 'Vera Verifier';
+        $rejected = meta::verify_label(meta::VERIFY_REJECTED);
+        $reader = $this->user_with(['moodle/competency:userevidenceview']);
+        $this->setUser($reader);
+
+        $health = $this->export()['items'][$this->healthid];
+        $this->assertTrue($health['restricted']);
+        $this->assertNotEmpty($health['typename']);
+        foreach (['statelabel', 'badgeclass', 'decidedby'] as $hidden) {
+            $this->assertArrayNotHasKey($hidden, $health);
+        }
+        $page = new evidence_page((int) $this->worker->id);
+        $html = $OUTPUT->render_from_template('local_evidencehub/evidence_page', $page->export_for_template($OUTPUT));
+        $this->assertStringContainsString($health['typename'], $html);
+        $this->assertStringNotContainsString($verifier, $html);
+        $this->assertStringNotContainsString('>' . $rejected . '<', $html);
+
+        $this->grant($reader, ['local/evidencehub:viewsensitive']);
+        $health = $this->export()['items'][$this->healthid];
+        $this->assertSame($rejected, $health['statelabel']);
+        $this->assertStringContainsString($verifier, $health['decidedby']);
+        $html = $OUTPUT->render_from_template('local_evidencehub/evidence_page', $page->export_for_template($OUTPUT));
+        $this->assertStringContainsString($verifier, $html);
+        $this->assertStringContainsString('>' . $rejected . '<', $html);
     }
 
     /**
