@@ -116,10 +116,21 @@ class held_lock_factory implements \core\lock\lock_factory {
      * @return mixed What the code returned.
      */
     public static function while_held(array $userids, callable $work): mixed {
+        return self::while_resources_held(array_map(fn(int $userid): string => 'user_' . $userid, $userids), $work);
+    }
+
+    /**
+     * Run some code while some locks of the evidence hub, by resource name, are held elsewhere.
+     *
+     * @param array $resources The resource names.
+     * @param callable $work The code.
+     * @return mixed What the code returned.
+     */
+    public static function while_resources_held(array $resources, callable $work): mixed {
         global $CFG;
         $previous = $CFG->lock_factory ?? null;
         $CFG->lock_factory = self::class;
-        self::$held = array_map(fn(int $userid): string => 'user_' . $userid, $userids);
+        self::$held = $resources;
         try {
             return $work();
         } finally {

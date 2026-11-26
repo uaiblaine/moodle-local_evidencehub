@@ -1,1 +1,1 @@
-s/if \(\$actorid !== \(int\) \$meta->userid && has_capability/if (has_capability/;
+s/\n\s*if \(\$actorid === \$ownerid\) \{\n\s*return false;\n\s*\}\n/\n/;

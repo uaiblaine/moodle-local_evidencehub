@@ -371,4 +371,40 @@ final class get_readiness_test extends \advanced_testcase {
         $this->setUser($this->viewer(self::CALLER));
         $this->data(['useridnumber' => 'W-1']);
     }
+
+    /**
+     * A suspended worker is not found, by id or by ID number, with the error of an unknown one; unsuspended, the
+     * same calls are answered (the control).
+     *
+     * @return void
+     */
+    public function test_a_suspended_worker_is_not_found(): void {
+        global $DB;
+        $this->setUser($this->viewer(self::CALLER));
+        $unknown = $this->call(['useridnumber' => 'nobody']);
+        $DB->set_field('user', 'suspended', 1, ['id' => $this->worker->id]);
+        foreach ([['userid' => $this->worker->id], ['useridnumber' => 'W-1']] as $args) {
+            $response = $this->call($args);
+            $this->assertTrue($response['error'], json_encode($args));
+            $this->assertSame('errorreadinessnotfound', $response['exception']->errorcode);
+            $this->assertSame($unknown['exception']->message, $response['exception']->message);
+        }
+
+        $DB->set_field('user', 'suspended', 0, ['id' => $this->worker->id]);
+        $this->data(['userid' => $this->worker->id]);
+        $this->data(['useridnumber' => 'W-1']);
+    }
+
+    /**
+     * With competencies disabled on the site the call is refused; enabled, it is answered.
+     *
+     * @return void
+     */
+    public function test_competencies_must_be_enabled(): void {
+        $this->setUser($this->viewer(self::CALLER));
+        set_config('enabled', 0, 'core_competency');
+        $this->assertSame('competenciesarenotenabled', $this->refusal(['userid' => $this->worker->id]));
+        set_config('enabled', 1, 'core_competency');
+        $this->data(['userid' => $this->worker->id]);
+    }
 }

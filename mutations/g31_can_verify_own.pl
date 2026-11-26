@@ -1,1 +1,1 @@
-s/return \$ownerid !== \(int\) \$USER->id\n\s*&& has_capability/return has_capability/;
+s/return self::may_decide\(\$meta \?\? \(object\) \[.userid. => \$ownerid, .typeid. => 0\], \(int\) \$USER->id\);/return has_capability(\x27local\/evidencehub:verify\x27, \\context_user::instance(\$ownerid));/;

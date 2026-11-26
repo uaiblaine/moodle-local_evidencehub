@@ -101,16 +101,25 @@ final class dossier_builder_test extends \advanced_testcase {
     }
 
     /**
-     * The identifier setting reads a text profile field; a worker without a value is "u" and the user id.
+     * The identifier setting reads a text profile field; a worker without a value, or whose field the requester may
+     * not see, is "u" and the user id.
      *
      * @return void
      */
     public function test_the_identifier_can_be_a_profile_field(): void {
+        global $CFG;
+        require_once($CFG->dirroot . '/user/profile/lib.php');
         [$c1] = $this->competencies(1);
         $templateid = $this->template([$c1]);
         $this->getDataGenerator()->create_custom_profile_field(['datatype' => 'text', 'shortname' => 'cpf', 'name' => 'CPF']);
+        $this->getDataGenerator()->create_custom_profile_field([
+            'datatype' => 'text',
+            'shortname' => 'secret',
+            'name' => 'Secret',
+            'visible' => PROFILE_VISIBLE_PRIVATE,
+        ]);
         $ana = $this->worker($templateid, ['firstname' => 'Ana', 'lastname' => 'Souza', 'idnumber' => 'W1',
-            'profile_field_cpf' => '123.456.789-00']);
+            'profile_field_cpf' => '123.456.789-00', 'profile_field_secret' => 'S-1']);
         $bia = $this->worker($templateid, ['firstname' => 'Bia', 'lastname' => 'Lima', 'idnumber' => 'W2']);
         $this->setUser($this->requester([$ana, $bia]));
 
@@ -118,6 +127,12 @@ final class dossier_builder_test extends \advanced_testcase {
         $plan = (new dossier_builder(\context_system::instance(), $templateid))->prepare([$ana->id, $bia->id]);
         $this->assertSame('123.456.789-00', $this->planned($plan, (int) $ana->id)->identifier);
         $this->assertSame('u' . $bia->id, $this->planned($plan, (int) $bia->id)->identifier);
+
+        // A field private to its user is not the requester's to print: the user id stands in.
+        set_config('identifierfield', 'profile_field_secret', 'local_evidencehub');
+        $plan = (new dossier_builder(\context_system::instance(), $templateid))->prepare([$ana->id, $bia->id]);
+        $this->assertSame('u' . $ana->id, $this->planned($plan, (int) $ana->id)->identifier);
+        $this->assertSame('u' . $ana->id, $this->planned($plan, (int) $ana->id)->fileid);
 
         // A field that is gone falls back to the ID number rather than dropping every worker.
         set_config('identifierfield', 'profile_field_gone', 'local_evidencehub');
@@ -462,5 +477,101 @@ final class dossier_builder_test extends \advanced_testcase {
     public function test_the_masked_name(): void {
         $this->assertSame('J*** d*** S***', dossier::mask_name('João', 'da  Silva'));
         $this->assertSame('Á***', dossier::mask_name('Álvaro', ''));
+    }
+
+    /**
+     * The ID number is printed only to a requester shown it among the identity fields: one whose
+     * moodle/site:viewuseridentity is prohibited gets "u" and the user id in the PDF, the names and the manifest;
+     * a manager of the site gets the ID number (the control).
+     *
+     * @return void
+     */
+    public function test_the_identifier_needs_the_requester_to_see_it(): void {
+        global $DB;
+        [$c1] = $this->competencies(1);
+        $templateid = $this->template([$c1]);
+        $ana = $this->worker($templateid, ['firstname' => 'Ana', 'lastname' => 'Souza', 'idnumber' => 'W1']);
+        $this->decided($ana, $c1, 'nrcertificate', ['/cert.pdf' => 'certificate']);
+        $hidden = $this->requester([$ana]);
+        $prohibit = $this->getDataGenerator()->create_role();
+        assign_capability('moodle/site:viewuseridentity', CAP_PROHIBIT, $prohibit, \context_system::instance()->id, true);
+        role_assign($prohibit, $hidden->id, \context_system::instance()->id);
+        accesslib_clear_all_caches_for_unit_testing();
+        set_config('showuseridentity', 'email,idnumber');
+
+        $this->setUser($hidden);
+        $built = $this->build_zip($templateid, [$ana->id]);
+        $planned = $this->planned($built['plan'], (int) $ana->id);
+        $this->assertSame('u' . $ana->id, $planned->identifier);
+        $this->assertSame('u' . $ana->id, $planned->fileid);
+        $this->assertArrayHasKey('u' . $ana->id . '_Souza-Ana/u' . $ana->id . '_dossier.pdf', $built['files']);
+        foreach (array_keys($built['files']) as $path) {
+            $this->assertStringNotContainsString('W1', $path);
+        }
+        $this->assertStringNotContainsString('W1', $built['files'][dossier_builder::MANIFEST]);
+
+        $manager = $this->getDataGenerator()->create_user();
+        role_assign((int) $DB->get_field('role', 'id', ['shortname' => 'manager']), $manager->id, \context_system::instance()->id);
+        $this->setUser($manager);
+        $built = $this->build_zip($templateid, [$ana->id]);
+        $this->assertSame('W1', $this->planned($built['plan'], (int) $ana->id)->identifier);
+        $this->assertArrayHasKey('W1_Souza-Ana/W1_dossier.pdf', $built['files']);
+    }
+
+    /**
+     * A pair whose status row was stored before its evidence's type became sensitive (the row's own flag still 0)
+     * is restricted by the type's flag: a requester without viewsensitive gets its status only; one with it gets
+     * the row (the control).
+     *
+     * @return void
+     */
+    public function test_the_types_flag_restricts_a_row_whose_stored_flag_lags(): void {
+        global $DB;
+        [$c1] = $this->competencies(1);
+        $templateid = $this->template([$c1]);
+        $ana = $this->worker($templateid, ['idnumber' => 'W1']);
+        $meta = $this->decided($ana, $c1, 'aso', ['/aso.pdf' => 'health']);
+        $DB->set_field(status_repository::TABLE, 'issensitive', 0, ['metaid' => $meta->id]);
+
+        $this->setUser($this->requester([$ana]));
+        $row = $this->build_zip($templateid, [$ana->id])['plan']->workers[0]->rows[0];
+        $this->assertSame(status::EFFECTIVE_RESTRICTED, $row->code);
+        $this->assertTrue($row->restricted);
+        $this->assertNull($row->typename);
+        $this->assertNull($row->issuer);
+
+        $this->setUser($this->requester([$ana], ['local/evidencehub:viewsensitive']));
+        $row = $this->build_zip($templateid, [$ana->id])['plan']->workers[0]->rows[0];
+        $this->assertSame(status::STATUS_VALID, $row->code);
+        $this->assertFalse($row->restricted);
+    }
+
+    /**
+     * The export row records what the ZIP holds: unmasked sensitive rows, and files of a sensitive evidence, set
+     * from what the builder put in; a ZIP where the sensitive row is restricted, or of plain evidence only, flags
+     * nothing.
+     *
+     * @return void
+     */
+    public function test_the_export_records_the_sensitive_content_of_its_zip(): void {
+        [$c1, $c2] = $this->competencies(2);
+        $templateid = $this->template([$c1, $c2]);
+        $ana = $this->worker($templateid, ['idnumber' => 'W1']);
+        $bia = $this->worker($templateid, ['idnumber' => 'W2']);
+        $this->decided($ana, $c1, 'aso', ['/aso.pdf' => 'health']);
+        $this->decided($ana, $c2, 'nrcertificate', ['/nr.pdf' => 'training']);
+        $this->decided($bia, $c1, 'nrcertificate', ['/nr.pdf' => 'training']);
+        $plain = $this->requester([$ana, $bia]);
+        $sensitive = $this->requester([$ana, $bia], ['local/evidencehub:viewsensitive']);
+        $flags = fn(array $built): array => [(int) $built['export']->hassensitive, (int) $built['export']->hassensitivefiles];
+
+        $this->setUser($plain);
+        $this->assertSame([0, 0], $flags($this->build_zip($templateid, [$ana->id, $bia->id])), 'The row was restricted.');
+
+        $this->setUser($sensitive);
+        $this->assertSame([1, 0], $flags($this->build_zip($templateid, [$ana->id, $bia->id])), 'The rows, not the files.');
+        set_config('includesensitivefiles', 1, 'local_evidencehub');
+        $this->assertSame([1, 1], $flags($this->build_zip($templateid, [$ana->id, $bia->id])));
+        $this->assertSame([0, 0], $flags($this->build_zip($templateid, [$bia->id])), 'Control: plain evidence only.');
     }
 }

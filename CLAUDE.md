@@ -141,8 +141,9 @@ tests/generator/  writes rows directly (create_status() stays direct for the tas
 ## Versions
 
 5.3 only, one branch (`main`), numbered in the 5.3 namespace `20261005XX`. `db/upgrade.php` starts at
-2026100504 (the status row's `issensitive`), then 2026100507 (the export's `contextid`) and 2026100519 (the old
-list's preference deleted); every later step ends in a savepoint no higher than `version.php`.
+2026100504 (the status row's `issensitive`), then 2026100507 (the export's `contextid`), 2026100519 (the old
+list's preference deleted) and 2026100524 (the export's sensitive flags, 1 on older rows); every later step ends
+in a savepoint no higher than `version.php`.
 
 ## Owner decisions (2026-11-23)
 
@@ -194,7 +195,8 @@ The long form of a rule marked "notes" is in `docs/architecture-notes.md`, under
   with `$USER`; the ad hoc task is queued with `set_userid()` (core's cron calls `setup_user()` with it)
   and refuses to run as anyone else. The request-time selection is cut by `hub_query::base_sql()`.
 - **A prepared ZIP is served by `dossier_export::servable_file()` only**, which checks the requester, the
-  export's state, the recorded hub context and the reading of every worker (notes).
+  export's state, the recorded hub context and the reading of every worker, and, from the flags the builder
+  records before the first byte (`hassensitive`, `hassensitivefiles`), viewsensitive and the files setting (notes).
 - **The dossier snapshot is what the public page may show**, and `verify.php` reads nothing else: never the
   identifier, the full name or a file; a revoked dossier's page states the revocation alone (notes).
 - **Dossier files are read in one array query** (`dossier_builder::files()`): a recordset costs three

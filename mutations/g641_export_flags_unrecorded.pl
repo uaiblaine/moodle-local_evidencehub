@@ -1,0 +1,1 @@
+s/\n\s*\$DB->update_record\(dossier_export::TABLE, \(object\) \[\n\s*.id. => \(int\) \$export->id,\n\s*.hassensitive. => \$export->hassensitive,\n\s*.hassensitivefiles. => \$export->hassensitivefiles,\n\s*\]\);\n/\n/;

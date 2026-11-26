@@ -172,7 +172,9 @@ final class details {
                 }
                 $DB->update_record(self::TABLE, (object) (['id' => (int) $fresh->id] + $fields));
                 self::write_audit($fresh, $actorid, audit::ACTION_DETAILS);
-                self::reset_row($fresh, $actorid);
+                // The rule judges the row as it now is: a change to a sensitive type is decided on that type.
+                $saved = (object) ($fields + (array) $fresh);
+                self::reset_row($saved, $actorid);
                 $transaction->allow_commit();
             });
         }
@@ -185,10 +187,11 @@ final class details {
 
     /**
      * Send a decided evidence back to pending after its details changed, unless the change came
-     * from someone entitled to decide on it.
+     * from someone entitled to decide on it ({@see self::may_decide()}).
      *
      * The owner resets even when they hold local/evidencehub:verify: otherwise a worker verified
-     * once could edit the details freely afterwards, walking around the self-verification rule.
+     * once could edit the details freely afterwards, walking around the self-verification rule. So does
+     * a verifier who may not read the evidence or its sensitive type: keeping a decision is deciding.
      *
      * @param \stdClass $meta The meta row; changed in place when it resets.
      * @param int $actorid Who changed the details.
@@ -225,8 +228,7 @@ final class details {
         if ((int) $meta->verifystatus === meta::VERIFY_PENDING) {
             return false;
         }
-        $context = \context_user::instance((int) $meta->userid);
-        if ($actorid !== (int) $meta->userid && has_capability('local/evidencehub:verify', $context, $actorid)) {
+        if (self::may_decide($meta, $actorid)) {
             return false;
         }
         $decision = [
@@ -245,15 +247,49 @@ final class details {
     }
 
     /**
-     * Whether the current user may read the details of a worker's sensitive evidence.
+     * Whether a user may read the details of a worker's sensitive evidence: the worker, or a holder of
+     * viewsensitive in the worker's user context.
      *
      * @param int $ownerid The worker.
+     * @param int|null $actorid The user asking; the current user when null.
      * @return bool
      */
-    public static function can_see_sensitive(int $ownerid): bool {
+    public static function can_see_sensitive(int $ownerid, ?int $actorid = null): bool {
         global $USER;
-        return $ownerid === (int) $USER->id
-            || has_capability('local/evidencehub:viewsensitive', \context_user::instance($ownerid));
+        $actorid ??= (int) $USER->id;
+        return $ownerid === $actorid
+            || has_capability('local/evidencehub:viewsensitive', \context_user::instance($ownerid), $actorid);
+    }
+
+    /**
+     * Whether an actor may decide on a worker's evidence: verify it, reject it, or keep its decision while
+     * changing it. The one rule of {@see self::decide()} and {@see self::reset_row()}.
+     *
+     * Not the owner; local/evidencehub:verify in the owner's user context; the right to read the evidence,
+     * as {@see \core_competency\user_evidence::can_read_user()} counts it (userevidenceview or
+     * userevidencemanage there), here for the actor rather than the current user, because an observer passes
+     * the event's actor; and, when the evidence's type is sensitive, the right to read it.
+     *
+     * @param \stdClass $meta The meta row: userid and typeid are read.
+     * @param int $actorid The user who decides or edits.
+     * @return bool
+     */
+    public static function may_decide(\stdClass $meta, int $actorid): bool {
+        global $DB;
+        $ownerid = (int) $meta->userid;
+        if ($actorid === $ownerid) {
+            return false;
+        }
+        $context = \context_user::instance($ownerid);
+        if (!has_capability('local/evidencehub:verify', $context, $actorid)) {
+            return false;
+        }
+        $read = ['moodle/competency:userevidenceview', 'moodle/competency:userevidencemanage'];
+        if (!has_any_capability($read, $context, $actorid)) {
+            return false;
+        }
+        $sensitive = (bool) $DB->get_field('local_evidencehub_type', 'issensitive', ['id' => (int) $meta->typeid]);
+        return !$sensitive || self::can_see_sensitive($ownerid, $actorid);
     }
 
     /**
@@ -272,19 +308,23 @@ final class details {
     }
 
     /**
-     * Whether the current user may verify or reject a worker's evidence.
+     * Whether the current user may verify or reject a worker's evidence: {@see self::may_decide()} for the
+     * current user, for the pages that only decide whether to offer the action.
      *
-     * The same rule as verify() and reject(), for the pages that only decide whether to offer the
-     * action.
+     * Given the meta row, the whole rule, its type's sensitivity included. Without it (a page deciding for all of a
+     * worker's evidence at once), the rule for a type that is not sensitive; such a page also hides the action on a
+     * restricted item ({@see self::is_restricted()}).
      *
      * @param int $ownerid The worker.
+     * @param \stdClass|null $meta The meta row of the evidence, when the page has it; its owner must be $ownerid.
      * @return bool
      */
-    public static function can_verify(int $ownerid): bool {
+    public static function can_verify(int $ownerid, ?\stdClass $meta = null): bool {
         global $USER;
-        return $ownerid !== (int) $USER->id
-            && has_capability('local/evidencehub:verify', \context_user::instance($ownerid))
-            && user_evidence::can_read_user($ownerid);
+        if ($meta !== null && (int) $meta->userid !== $ownerid) {
+            return false;
+        }
+        return self::may_decide($meta ?? (object) ['userid' => $ownerid, 'typeid' => 0], (int) $USER->id);
     }
 
     /**
@@ -348,9 +388,10 @@ final class details {
             global $DB;
             $transaction = $DB->start_delegated_transaction();
             $fresh = $DB->get_record(self::TABLE, ['id' => $metaid], '*', MUST_EXIST);
-            // A refusal commits the empty transaction: a rollback would poison the caller's outer one.
+            // A refusal commits the empty transaction: a rollback would poison the caller's outer one. The checks
+            // above give their own errors; what may_decide() refuses past them is the sensitive type.
             $refusal = null;
-            if (self::is_restricted($fresh)) {
+            if (!self::may_decide($fresh, $actorid)) {
                 $refusal = 'errorrestricted';
             } else if ((int) $fresh->verifystatus === $state) {
                 $refusal = $state === meta::VERIFY_VERIFIED ? 'alreadyverified' : 'alreadyrejected';

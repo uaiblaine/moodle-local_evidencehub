@@ -137,6 +137,8 @@ class provider implements
             'timecreated' => 'privacy:metadata:timecreated',
             'timecompleted' => 'privacy:metadata:local_evidencehub_export:timecompleted',
             'timeexpires' => 'privacy:metadata:local_evidencehub_export:timeexpires',
+            'hassensitive' => 'privacy:metadata:local_evidencehub_export:hassensitive',
+            'hassensitivefiles' => 'privacy:metadata:local_evidencehub_export:hassensitivefiles',
         ], 'privacy:metadata:local_evidencehub_export');
 
         // The reader's stored filter values of the plugin's system reports: core writes them, under the plugin's report.

@@ -149,8 +149,9 @@ whatever their capabilities.
 
 **An edit sends a decision back to pending.** When the details or the core evidence of a verified
 or rejected evidence change (in this plugin's form or in tool_lp), the evidence returns to
-"Awaiting verification", unless the change came from a holder of `local/evidencehub:verify` who is
-not the owner. Every entry, change, decision and reset is written to the audit trail.
+"Awaiting verification", unless the change came from someone who may decide on it: a holder of
+`local/evidencehub:verify` who is not the owner, reads the evidence, and, for a sensitive type (the type the
+change saves, when it changes the type), holds `local/evidencehub:viewsensitive`. Every entry, change, decision and reset is written to the audit trail.
 
 
 **Validity.** For each (worker, competency) pair the plugin works out a status from the evidence
@@ -328,8 +329,12 @@ anyone holding `moodle/competency:userevidenceview` over the worker: on this sit
 effectively access to health data, and should be granted with that in mind.
 
 The identifier is the user's ID number, or a custom profile field of the text type chosen in
-`identifierfield` (a national identification number, for example); a worker without a value is "u" and
-the user id. It is printed in the PDF and the file names only, never on the verification page.
+`identifierfield` (a national identification number, for example). It is printed only where the requester
+may see it: the ID number when the requester is shown it among the identity fields in the hub's context
+(`moodle/site:viewuseridentity` and the site's `showuseridentity`), a profile field when its visibility shows it
+to the requester for that worker. A worker without a value, or whose value the requester may not see, is "u"
+and the user id. It is printed in the PDF, the file names and `manifest.csv` only, never on the verification
+page.
 
 An export of at most `syncmaxworkers` workers whose files weigh at most `syncmaxbytes` downloads at once
 and nothing is kept on the site. A larger one is prepared in the background by an ad hoc task running
@@ -337,7 +342,13 @@ as the requester, stored in the requester's user context, and announced by a not
 dossiers prepared in the background") with the link; only the requester can download it, for
 `exportretentiondays` days, while they still hold `local/evidencehub:exportdossier` and
 `local/evidencehub:view` in the hub's context the export was made in, and still read the evidence of every
-worker it holds a dossier about. A failure is notified too. In `manifest.csv`, a cell starting with `=`,
+worker it holds a dossier about, while competencies are enabled. The export records what its ZIP holds: one
+with a sensitive competency shown unmasked downloads only while the requester still holds
+`local/evidencehub:viewsensitive` over every worker it is about (a worker's own dossier excepted), and one with
+files of a sensitive evidence only while `includesensitivefiles` is still on. A user has at most
+`maxqueuedexports` exports waiting or being prepared at once (counting those asked for in the last 24 hours);
+another is refused, back on the hub with the reason, until one finishes. A failure
+is notified too. In `manifest.csv`, a cell starting with `=`,
 `+`, `-`, `@`, a tab or a carriage return gets a leading single quote, so a spreadsheet never reads it as a
 formula.
 
@@ -436,8 +447,9 @@ for a learning plan template (`templateid`) and exactly one of a worker's `useri
 `id`, `shortname`, `idnumber`, `status` (the effective code for the caller: -1 restricted, 0 missing,
 1 awaiting verification, 2 compliant, 3 due, 4 due and critical, 5 expired), `expiry` (YYYY-MM-DD) and
 `blocking`. The caller needs `local/evidencehub:view` in the template's context, the right to read the
-template, and `moodle/competency:userevidenceview` over the worker; a worker who cannot be found or read,
-or who has no active plan from the template, gives one and the same error, and so does an ID number for a
+template, and `moodle/competency:userevidenceview` over the worker; competencies must be enabled on the
+site. A worker who cannot be found or read, whose account is suspended, or who has no active plan from the
+template, gives one and the same error, and so does an ID number for a
 caller who is not shown ID numbers in the template's context (the hub's identity-field rule). An unknown
 template reads like a template the caller cannot reach. A competency decided by a
 sensitive evidence shows status -1 and no expiry to a caller without `local/evidencehub:viewsensitive`,
@@ -478,6 +490,8 @@ Site administration > Competencies > Readiness dossiers:
 - `local_evidencehub/syncmaxworkers` (10) and `local_evidencehub/syncmaxbytes` (104857600, 100 MB): up to
   these, an export downloads at once; above either, it is prepared in the background.
 - `local_evidencehub/maxexportworkers` (500): the most workers one export may name.
+- `local_evidencehub/maxqueuedexports` (2, at least 1): the most exports one user may have waiting or being
+  prepared in the background at once.
 - `local_evidencehub/exportretentiondays` (7): days a prepared ZIP is kept.
 - `local_evidencehub/readinessbasis` (`real`): which readiness verdict readers get, in the dossier PDF, on the
   public verification page and from the web service. `real`: the worker's real readiness, whatever the
@@ -505,11 +519,12 @@ Capabilities
   held in the system context, on the site and in the custom report datasource. Each row also needs
   core's `moodle/competency:userevidenceview` in the worker's user context.
 - `local/evidencehub:verify` (user; manager): verify or reject the details of a worker's evidence.
-- `local/evidencehub:viewsensitive` (user; no archetype): see the details and files of evidence of a
-  sensitive type.
+- `local/evidencehub:viewsensitive` (user; no archetype): see the details of evidence of a sensitive type
+  in the hub, its pages, services and dossiers, and (with `includesensitivefiles` on) take its files into a
+  dossier. It does not hide those files in core: tool_lp serves them to any holder of
+  `moodle/competency:userevidenceview` over the worker (see "Sensitive files stay out by default").
 - `local/evidencehub:managepolicies` (course category; manager): set the validity policy of a
   competency framework or of one competency, in the framework's context.
-- `local/evidencehub:managetypes` (system; manager): manage the evidence types.
 - `local/evidencehub:exportdossier` (course category; manager): export readiness dossiers.
 - `local/evidencehub:verifydossier` (system; guest and authenticated user): open a dossier's public
   verification page. A visitor who is not logged in is checked as the guest role.
@@ -544,7 +559,8 @@ Data stored
   the SHA-256 of its PDF, and whether and when it was revoked. Kept for good, because it backs the
   verification page; deleted with the worker's data.
 - `local_evidencehub_export`: each dossier export request: who asked, in which hub context, for which
-  template, how many workers, its state and when its ZIP expires. The ZIP of an export prepared in the background is a
+  template, how many workers, its state, when its ZIP expires, and whether the ZIP holds the details or the files
+  of sensitive evidence. The ZIP of an export prepared in the background is a
   file in the requester's user context (component `local_evidencehub`, file area `export`), deleted after
   `exportretentiondays` days, with the requester's data, or with the data of any worker it holds a dossier about
   (the export then reads expired).

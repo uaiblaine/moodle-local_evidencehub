@@ -150,7 +150,7 @@ final class dossier_builder {
                         implode('_', [$worker->fileid, $row->idnumber, $row->expiryname, $file->get_filename()]),
                         PARAM_FILE
                     );
-                    $worker->files[] = [$name, $file];
+                    $worker->files[] = [$name, $file, $row->sensitive];
                     $bytes += (int) $file->get_filesize();
                 }
             }
@@ -186,6 +186,9 @@ final class dossier_builder {
     /**
      * The workers asked for who exist and have an active plan from the template, by name, with their identifier.
      *
+     * The identifier is the worker's value only where the requester may see it ({@see self::identifier_shown()});
+     * otherwise, as for a worker without a value, the user id stands in.
+     *
      * @param array $userids The workers asked for.
      * @return array List of records: userid, firstname, lastname, fullname, identifier, fileid.
      */
@@ -195,6 +198,7 @@ final class dossier_builder {
             return [];
         }
         $field = dossier_config::identifier_field();
+        $shown = $this->identifier_shown($field);
         $fields = \core_user\fields::for_name()->including('idnumber', $field)->get_sql('u', true);
         [$userin, $params] = $DB->get_in_or_equal($userids, SQL_PARAMS_NAMED, 'dbw');
         $sql = "SELECT u.id{$fields->selects}
@@ -210,10 +214,10 @@ final class dossier_builder {
         $rs = $DB->get_recordset_sql($sql, $params);
         foreach ($rs as $user) {
             $userid = (int) $user->id;
-            $value = trim((string) ($user->$field ?? ''));
+            $value = $shown($userid) ? trim((string) ($user->$field ?? '')) : '';
             $fileid = clean_param($value, PARAM_FILE);
             if ($fileid === '') {
-                // No value, or none that survives as a file name: the user id stands in for both.
+                // No value the requester may see, or none that survives as a file name: the user id stands in for both.
                 $value = $fileid = 'u' . $userid;
             }
             $workers[] = (object) [
@@ -227,6 +231,35 @@ final class dossier_builder {
         }
         $rs->close();
         return $workers;
+    }
+
+    /**
+     * Whether the requester may see a worker's identifier, by core's rules for that field.
+     *
+     * The ID number when the requester is shown it among the identity fields in the hub's context
+     * ({@see \core_user\fields::get_identity_fields()}: moodle/site:viewuseridentity, showuseridentity,
+     * hiddenuserfields); a custom profile field by its visibility for that worker
+     * ({@see \profile_field_base::is_visible()}, in the worker's user context, where the worker always sees their own).
+     *
+     * @param string $field dossier_config::identifier_field()'s value.
+     * @return \Closure fn(int $userid): bool.
+     */
+    private function identifier_shown(string $field): \Closure {
+        global $CFG;
+        if ($field === dossier_config::IDENTIFIER_IDNUMBER) {
+            $shown = in_array('idnumber', \core_user\fields::get_identity_fields($this->context, true), true);
+            return fn(int $userid): bool => $shown;
+        }
+        require_once($CFG->dirroot . '/user/profile/lib.php');
+        $data = profile_get_custom_field_data_by_shortname(substr($field, strlen(\core_user\fields::PROFILE_FIELD_PREFIX)));
+        if ($data === null) {
+            return fn(int $userid): bool => false;
+        }
+        $instance = profile_get_user_field($data->datatype, (int) $data->id, 0, $data);
+        return function (int $userid) use ($instance): bool {
+            $instance->set_userid($userid);
+            return $instance->is_visible();
+        };
     }
 
     /**
@@ -308,7 +341,7 @@ final class dossier_builder {
             $sensitive = (int) $status->issensitive === 1 || (int) $status->typesensitive === 1;
             $row->sensitive = $sensitive;
             $row->realcode = (int) $status->status;
-            if ((int) $status->issensitive === 1 && !$cansee) {
+            if ($sensitive && !$cansee) {
                 $row->code = status::EFFECTIVE_RESTRICTED;
                 $row->restricted = true;
                 continue;
@@ -383,6 +416,14 @@ final class dossier_builder {
         $dossiers = [];
         // The PDF's verdict follows the site's readiness basis setting.
         $shown = dossier_config::readiness_basis() === dossier_config::READINESS_SHOWN;
+        // What the ZIP will hold is recorded before the first byte, so a stored ZIP never carries flags that
+        // say less than its content: dossier_export::servable_file() decides its download from them.
+        [$export->hassensitive, $export->hassensitivefiles] = self::sensitivity($plan);
+        $DB->update_record(dossier_export::TABLE, (object) [
+            'id' => (int) $export->id,
+            'hassensitive' => $export->hassensitive,
+            'hassensitivefiles' => $export->hassensitivefiles,
+        ]);
         foreach ($plan->workers as $worker) {
             $pdfreadiness = $shown ? $worker->readinessshown : $worker->readiness;
             $folder = clean_param($worker->fileid . '_' . $worker->lastname . '-' . $worker->firstname, PARAM_FILE);
@@ -432,6 +473,34 @@ final class dossier_builder {
         $zip->add_file_from_string(self::MANIFEST, self::csv($manifest));
         $zip->finish();
         return $dossiers;
+    }
+
+    /**
+     * What sensitive content a plan puts in its ZIP: a sensitive row shown unmasked, and a file of a sensitive
+     * evidence.
+     *
+     * A worker's own sensitive rows count too: the download excuses the worker reading their own dossier
+     * ({@see details::can_see_sensitive()}), not the flag.
+     *
+     * @param dossier_plan $plan The plan, from {@see self::prepare()}.
+     * @return array [hassensitive, hassensitivefiles], each 0 or 1.
+     */
+    public static function sensitivity(dossier_plan $plan): array {
+        $rows = 0;
+        $files = 0;
+        foreach ($plan->workers as $worker) {
+            foreach ($worker->rows as $row) {
+                if ($row->sensitive && !$row->restricted) {
+                    $rows = 1;
+                }
+            }
+            foreach ($worker->files as $entry) {
+                if ($entry[2]) {
+                    $files = 1;
+                }
+            }
+        }
+        return [$rows, $files];
     }
 
     /**

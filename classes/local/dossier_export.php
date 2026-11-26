@@ -41,6 +41,16 @@ final class dossier_export {
     /** @var int The most pairs one export may post; the selection of one page of the list names at most 100. */
     public const int MAX_PAIRS = 1000;
 
+    /** @var int Seconds a request waits for another request of the same requester to finish queueing. */
+    private const int QUEUE_LOCK_TIMEOUT = 5;
+
+    /**
+     * @var int How far back a queued or running export counts against the requester's limit. A stream that died
+     *     (the client went away, PHP timed out) leaves its row running until cleanup() expires it after the retention
+     *     days; a day is far longer than any real build, so such a row stops blocking the requester after it.
+     */
+    private const int QUEUE_WINDOW = DAYSECS;
+
     /**
      * Refuse anything but a POST: an export, a revocation or a policy removal changes state, so a link must
      * never trigger it.
@@ -200,23 +210,57 @@ final class dossier_export {
     /**
      * Queue the ad hoc task of an export, to run as the current user.
      *
+     * A requester has at most maxqueuedexports exports queued or running ({@see dossier_config::max_queued_exports()})
+     * created within the last QUEUE_WINDOW: each one builds a whole ZIP on the cron, so one more is refused until one
+     * finishes. The count and the new row
+     * are decided under the requester's queue lock, so two requests at once cannot both pass the count. A streamed
+     * export is not counted: it runs in its own request.
+     *
      * @param \context $context The hub's context.
      * @param int $templateid The plan template.
      * @param array $userids The validated selection.
      * @return \stdClass The export row, queued.
+     * @throws \moodle_exception When the requester's queue is full, or another of their requests holds it.
      */
     public static function queue(\context $context, int $templateid, array $userids): \stdClass {
-        global $USER;
-        $export = self::create($context, $templateid, count($userids), export::STATUS_QUEUED);
-        $task = new build_dossier_export();
-        // Core runs the task as this user, so every check of dossier_builder::prepare() is the requester's.
-        $task->set_userid((int) $USER->id);
-        $task->set_custom_data([
-            'exportid' => $export->id,
-            'contextid' => $context->id,
-            'userids' => array_values(array_map('intval', $userids)),
-        ]);
-        \core\task\manager::queue_adhoc_task($task);
+        global $DB, $USER;
+        $requesterid = (int) $USER->id;
+        $lock = \core\lock\lock_config::get_lock_factory('local_evidencehub')
+            ->get_lock('dossierqueue_' . $requesterid, self::QUEUE_LOCK_TIMEOUT);
+        if (!$lock) {
+            throw new \moodle_exception('errordossierqueuebusy', 'local_evidencehub');
+        }
+        try {
+            [$waitingsql, $params] = $DB->get_in_or_equal(
+                [export::STATUS_QUEUED, export::STATUS_RUNNING],
+                SQL_PARAMS_NAMED,
+                'dxq'
+            );
+            $waiting = $DB->count_records_select(
+                self::TABLE,
+                "requestedby = :dxqrequester AND status $waitingsql AND timecreated > :dxqsince",
+                $params + [
+                    'dxqrequester' => $requesterid,
+                    'dxqsince' => \core\di::get(\core\clock::class)->time() - self::QUEUE_WINDOW,
+                ]
+            );
+            $max = dossier_config::max_queued_exports();
+            if ($waiting >= $max) {
+                throw new \moodle_exception('errordossierqueuefull', 'local_evidencehub', '', $max);
+            }
+            $export = self::create($context, $templateid, count($userids), export::STATUS_QUEUED);
+            $task = new build_dossier_export();
+            // Core runs the task as this user, so every check of dossier_builder::prepare() is the requester's.
+            $task->set_userid($requesterid);
+            $task->set_custom_data([
+                'exportid' => $export->id,
+                'contextid' => $context->id,
+                'userids' => array_values(array_map('intval', $userids)),
+            ]);
+            \core\task\manager::queue_adhoc_task($task);
+        } finally {
+            $lock->release();
+        }
         return $export;
     }
 
@@ -368,10 +412,14 @@ final class dossier_export {
     /**
      * The stored ZIP a pluginfile request names, when the current user may download it.
      *
-     * Only the requester, in their own user context, while the export is done and not expired, while they
-     * still hold exportdossier and view in the hub's context the export was authorised in (the template's
-     * context for a row from before that context was recorded), and while they still read the evidence of
-     * every worker the ZIP holds a dossier about: one worker no longer readable refuses the whole ZIP.
+     * Only while competencies are enabled; only the requester, in their own user context, while the export is
+     * done and not expired, while they still hold exportdossier and view in the hub's context the export was
+     * authorised in (the template's context for a row from before that context was recorded), and while they
+     * still read the evidence of every worker the ZIP holds a dossier about: one worker no longer readable refuses
+     * the whole ZIP. What the builder recorded on the export decides the rest: a ZIP holding a worker's unmasked
+     * sensitive rows needs, for every worker, the right to read them ({@see details::can_see_sensitive()}: the
+     * worker themself, or viewsensitive in their user context); one holding files of a sensitive evidence also
+     * needs the site to include such files still ({@see dossier_config::include_sensitive_files()}).
      *
      * @param \context $context The file's context.
      * @param string $filearea The file area.
@@ -381,6 +429,9 @@ final class dossier_export {
     public static function servable_file(\context $context, string $filearea, array $args): ?\stored_file {
         global $DB, $USER;
         if ((int) $context->contextlevel !== CONTEXT_USER || $filearea !== self::FILEAREA) {
+            return null;
+        }
+        if (!\core_competency\api::is_enabled()) {
             return null;
         }
         if ((int) $context->instanceid !== (int) $USER->id) {
@@ -403,9 +454,16 @@ final class dossier_export {
         ) {
             return null;
         }
+        if ((int) $export->hassensitivefiles === 1 && !dossier_config::include_sensitive_files()) {
+            return null;
+        }
+        $sensitive = (int) $export->hassensitive === 1;
         foreach ($DB->get_fieldset_select(dossier::TABLE, 'DISTINCT userid', 'exportid = ?', [$export->id]) as $workerid) {
             $workercontext = \context_user::instance((int) $workerid, IGNORE_MISSING);
             if (!$workercontext || !has_capability('moodle/competency:userevidenceview', $workercontext)) {
+                return null;
+            }
+            if ($sensitive && !details::can_see_sensitive((int) $workerid)) {
                 return null;
             }
         }

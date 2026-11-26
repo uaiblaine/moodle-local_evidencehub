@@ -45,6 +45,9 @@ final class dossier_config {
     /** @var int Days a prepared ZIP is kept. */
     public const int DEFAULT_RETENTIONDAYS = 7;
 
+    /** @var int The most exports one requester may have queued or running at once. */
+    public const int DEFAULT_MAXQUEUEDEXPORTS = 2;
+
     /**
      * The identifiers the setting offers: the ID number, then every custom profile field of the text type.
      *
@@ -120,6 +123,15 @@ final class dossier_config {
      */
     public static function max_export_workers(): int {
         return self::positive('maxexportworkers', self::DEFAULT_MAXEXPORTWORKERS, 1);
+    }
+
+    /**
+     * The most exports one requester may have queued or running at once; never below one.
+     *
+     * @return int
+     */
+    public static function max_queued_exports(): int {
+        return self::positive('maxqueuedexports', self::DEFAULT_MAXQUEUEDEXPORTS, 1);
     }
 
     /**

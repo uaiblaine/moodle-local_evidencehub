@@ -22,6 +22,7 @@ use local_evidencehub\output\hub_report_view;
 use local_evidencehub\reportbuilder\local\systemreports\hub_pairs;
 use local_evidencehub\task\build_dossier_export;
 use local_evidencehub\tests\dossier_scenario;
+use local_evidencehub\tests\held_lock_factory;
 use local_evidencehub\tests\hub_scenario;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\CoversFunction;
@@ -433,5 +434,228 @@ final class dossier_export_test extends \advanced_testcase {
         role_assign($prohibit, $requester->id, \context_user::instance($dropped->id)->id);
         accesslib_clear_all_caches_for_unit_testing();
         $this->assertNull(dossier_export::servable_file($context, dossier_export::FILEAREA, $this->args($file)));
+    }
+
+    /**
+     * A done export of a requester about some workers, its ZIP stored, with the flags of what the ZIP holds.
+     *
+     * @param \stdClass $requester The requester.
+     * @param array $workers The workers it holds a dossier about.
+     * @param int $hassensitive Whether it holds unmasked sensitive rows.
+     * @param int $hassensitivefiles Whether it holds files of a sensitive evidence.
+     * @return \stored_file The stored ZIP.
+     */
+    private function prepared_about(\stdClass $requester, array $workers, int $hassensitive, int $hassensitivefiles): \stored_file {
+        [$export, $file] = $this->prepared($requester, [
+            'hassensitive' => $hassensitive,
+            'hassensitivefiles' => $hassensitivefiles,
+        ]);
+        $generator = $this->getDataGenerator()->get_plugin_generator('local_evidencehub');
+        foreach ($workers as $worker) {
+            $generator->create_dossier([
+                'userid' => $worker->id,
+                'templateid' => $this->templateid,
+                'exportid' => $export->id,
+                'createdby' => $requester->id,
+            ]);
+        }
+        return $file;
+    }
+
+    /**
+     * A ZIP that holds a worker's unmasked sensitive rows is served only while the requester holds viewsensitive
+     * over every worker it is about; one without such rows needs no viewsensitive (the control), and the worker's
+     * own dossier is never sensitive to the worker.
+     *
+     * @return void
+     */
+    public function test_the_download_of_sensitive_rows_rechecks_viewsensitive(): void {
+        $worker = $this->worker($this->templateid);
+        $requester = $this->requester([$worker], ['local/evidencehub:viewsensitive']);
+        $sensitive = $this->prepared_about($requester, [$worker], 1, 0);
+        $plain = $this->prepared_about($requester, [$worker], 0, 0);
+        $context = \context_user::instance($requester->id);
+        $this->setUser($requester);
+        $this->assertNotNull(dossier_export::servable_file($context, dossier_export::FILEAREA, $this->args($sensitive)));
+
+        $prohibit = $this->getDataGenerator()->create_role();
+        assign_capability('local/evidencehub:viewsensitive', CAP_PROHIBIT, $prohibit, \context_system::instance()->id, true);
+        role_assign($prohibit, $requester->id, \context_user::instance($worker->id)->id);
+        accesslib_clear_all_caches_for_unit_testing();
+        $this->assertNull(dossier_export::servable_file($context, dossier_export::FILEAREA, $this->args($sensitive)));
+        $this->assertNotNull(
+            dossier_export::servable_file($context, dossier_export::FILEAREA, $this->args($plain)),
+            'Control: a ZIP without sensitive rows needs no viewsensitive.'
+        );
+
+        // A requester whose ZIP is about themself only reads their own data.
+        $owner = $this->worker($this->templateid);
+        $roleid = $this->getDataGenerator()->create_role();
+        $capabilities = ['local/evidencehub:view', 'local/evidencehub:exportdossier', 'moodle/competency:userevidenceview'];
+        foreach ($capabilities as $capability) {
+            assign_capability($capability, CAP_ALLOW, $roleid, \context_system::instance()->id, true);
+        }
+        role_assign($roleid, $owner->id, \context_system::instance()->id);
+        accesslib_clear_all_caches_for_unit_testing();
+        $own = $this->prepared_about($owner, [$owner], 1, 0);
+        $this->setUser($owner);
+        $this->assertNotNull(dossier_export::servable_file(
+            \context_user::instance($owner->id),
+            dossier_export::FILEAREA,
+            $this->args($own)
+        ));
+    }
+
+    /**
+     * A ZIP holding files of a sensitive evidence is served only while the site still includes such files.
+     *
+     * @return void
+     */
+    public function test_the_download_of_sensitive_files_rechecks_the_setting(): void {
+        $worker = $this->worker($this->templateid);
+        $requester = $this->requester([$worker], ['local/evidencehub:viewsensitive']);
+        $withfiles = $this->prepared_about($requester, [$worker], 1, 1);
+        $context = \context_user::instance($requester->id);
+        $this->setUser($requester);
+        set_config('includesensitivefiles', 1, 'local_evidencehub');
+        $this->assertNotNull(dossier_export::servable_file($context, dossier_export::FILEAREA, $this->args($withfiles)));
+
+        set_config('includesensitivefiles', 0, 'local_evidencehub');
+        $this->assertNull(dossier_export::servable_file($context, dossier_export::FILEAREA, $this->args($withfiles)));
+        $rowsonly = $this->prepared_about($requester, [$worker], 1, 0);
+        $this->assertNotNull(
+            dossier_export::servable_file($context, dossier_export::FILEAREA, $this->args($rowsonly)),
+            'Control: a ZIP without sensitive files does not read the setting.'
+        );
+    }
+
+    /**
+     * No ZIP is served while competencies are disabled on the site.
+     *
+     * @return void
+     */
+    public function test_the_download_needs_competencies_enabled(): void {
+        $worker = $this->worker($this->templateid);
+        $requester = $this->requester([$worker]);
+        $file = $this->prepared_about($requester, [$worker], 0, 0);
+        $context = \context_user::instance($requester->id);
+        $this->setUser($requester);
+        set_config('enabled', 0, 'core_competency');
+        $this->assertNull(dossier_export::servable_file($context, dossier_export::FILEAREA, $this->args($file)));
+        set_config('enabled', 1, 'core_competency');
+        $this->assertNotNull(dossier_export::servable_file($context, dossier_export::FILEAREA, $this->args($file)));
+    }
+
+    /**
+     * A requester queues at most maxqueuedexports exports waiting or running: the next is refused with no row and
+     * no task. Another requester still queues, a finished export frees a place, and a streamed export is not
+     * counted against the limit.
+     *
+     * @return void
+     */
+    public function test_a_requester_queues_at_most_maxqueuedexports(): void {
+        global $DB;
+        $worker = $this->worker($this->templateid);
+        $this->decided($worker, $this->competencyid);
+        $requester = $this->requester([$worker]);
+        $other = $this->requester([$worker]);
+        $system = \context_system::instance();
+        $tasks = fn(): int => $DB->count_records('task_adhoc', ['classname' => '\\' . build_dossier_export::class]);
+        $this->setUser($requester);
+        $first = dossier_export::queue($system, $this->templateid, [(int) $worker->id]);
+        $second = dossier_export::queue($system, $this->templateid, [(int) $worker->id]);
+        $DB->set_field(dossier_export::TABLE, 'status', export::STATUS_RUNNING, ['id' => $second->id]);
+
+        try {
+            dossier_export::queue($system, $this->templateid, [(int) $worker->id]);
+            $this->fail('A third export was queued past the limit of two.');
+        } catch (\moodle_exception $e) {
+            $this->assertSame('errordossierqueuefull', $e->errorcode);
+        }
+        $this->assertSame(2, $DB->count_records(dossier_export::TABLE, ['requestedby' => $requester->id]));
+        $this->assertSame(2, $tasks());
+
+        // A streamed export is not refused by the queue.
+        $this->assertInstanceOf(dossier_plan::class, dossier_export::start($system, $this->templateid, [(int) $worker->id]));
+
+        // Another requester is not counted against this one.
+        $this->setUser($other);
+        dossier_export::queue($system, $this->templateid, [(int) $worker->id]);
+        $this->assertSame(3, $tasks());
+
+        // A done export frees a place, and the limit follows the setting.
+        $this->setUser($requester);
+        $DB->set_field(dossier_export::TABLE, 'status', export::STATUS_DONE, ['id' => $first->id]);
+        dossier_export::queue($system, $this->templateid, [(int) $worker->id]);
+        set_config('maxqueuedexports', 3, 'local_evidencehub');
+        dossier_export::queue($system, $this->templateid, [(int) $worker->id]);
+        $this->assertSame(4, $DB->count_records(dossier_export::TABLE, ['requestedby' => $requester->id]));
+        $this->assertSame(3, dossier_config::max_queued_exports());
+        set_config('maxqueuedexports', 0, 'local_evidencehub');
+        $this->assertSame(1, dossier_config::max_queued_exports(), 'The setting never goes below one.');
+    }
+
+    /**
+     * Only exports created within the queue window count: two running rows older than a day (streams that died)
+     * leave the requester free to queue, while two fresh ones refuse the next (the control).
+     *
+     * @return void
+     */
+    public function test_an_old_running_export_no_longer_counts(): void {
+        global $DB;
+        $clock = $this->mock_clock_with_frozen();
+        $worker = $this->worker($this->templateid);
+        $requester = $this->requester([$worker]);
+        $system = \context_system::instance();
+        $generator = $this->getDataGenerator()->get_plugin_generator('local_evidencehub');
+        for ($i = 0; $i < 2; $i++) {
+            $generator->create_export([
+                'requestedby' => $requester->id,
+                'templateid' => $this->templateid,
+                'status' => export::STATUS_RUNNING,
+                'timecreated' => $clock->time() - DAYSECS - 1,
+            ]);
+        }
+        $this->setUser($requester);
+        dossier_export::queue($system, $this->templateid, [(int) $worker->id]);
+        dossier_export::queue($system, $this->templateid, [(int) $worker->id]);
+        try {
+            dossier_export::queue($system, $this->templateid, [(int) $worker->id]);
+            $this->fail('A third fresh export was queued past the limit of two.');
+        } catch (\moodle_exception $e) {
+            $this->assertSame('errordossierqueuefull', $e->errorcode);
+        }
+        $this->assertSame(4, $DB->count_records(dossier_export::TABLE, ['requestedby' => $requester->id]));
+    }
+
+    /**
+     * Queueing is decided under the requester's own queue lock: while another request holds it, the export is
+     * refused with no row and no task; while only another requester's is held, the same call queues (the control).
+     *
+     * @return void
+     */
+    public function test_queueing_waits_for_the_requesters_queue_lock(): void {
+        global $DB;
+        $worker = $this->worker($this->templateid);
+        $requester = $this->requester([$worker]);
+        $system = \context_system::instance();
+        $this->setUser($requester);
+        try {
+            held_lock_factory::while_resources_held(
+                ['dossierqueue_' . $requester->id],
+                fn() => dossier_export::queue($system, $this->templateid, [(int) $worker->id])
+            );
+            $this->fail('An export was queued while the queue lock was held.');
+        } catch (\moodle_exception $e) {
+            $this->assertSame('errordossierqueuebusy', $e->errorcode);
+        }
+        $this->assertSame(0, $DB->count_records(dossier_export::TABLE));
+        // The lock is the requester's own: another requester's held lock does not stop this one.
+        $other = $this->requester([$worker]);
+        held_lock_factory::while_resources_held(
+            ['dossierqueue_' . $other->id],
+            fn() => dossier_export::queue($system, $this->templateid, [(int) $worker->id])
+        );
+        $this->assertSame(1, $DB->count_records(dossier_export::TABLE));
     }
 }

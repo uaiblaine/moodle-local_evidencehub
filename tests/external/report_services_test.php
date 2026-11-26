@@ -523,4 +523,19 @@ final class report_services_test extends \advanced_testcase {
         $this->assertSame([0, 4], [$response['data']['page'], $response['data']['total']]);
         $this->assertCount(4, $response['data']['rows']);
     }
+
+    /**
+     * The rows service writes (the reader's last template, a user preference), so it is declared a write: a
+     * service declared a read promises a site and its tokens that it changes nothing. The summary, which writes
+     * nothing, stays a read (the control).
+     *
+     * @return void
+     */
+    public function test_the_rows_service_is_declared_a_write(): void {
+        global $CFG;
+        $functions = [];
+        require($CFG->dirroot . '/local/evidencehub/db/services.php');
+        $this->assertSame('write', $functions['local_evidencehub_report_rows']['type']);
+        $this->assertSame('read', $functions['local_evidencehub_report_summary']['type']);
+    }
 }

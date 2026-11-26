@@ -93,5 +93,23 @@ function xmldb_local_evidencehub_upgrade($oldversion) {
         upgrade_plugin_savepoint(true, 2026100523, 'local', 'evidencehub');
     }
 
+    if ($oldversion < 2026100524) {
+        // What a prepared ZIP holds, recorded when it is built, so its download re-checks the rights that content
+        // needs: unmasked sensitive rows, and files of a sensitive evidence. What an older ZIP holds is unknown, so
+        // every row already there is marked as holding both.
+        $table = new xmldb_table('local_evidencehub_export');
+        $fields = [
+            new xmldb_field('hassensitive', XMLDB_TYPE_INTEGER, '1', null, XMLDB_NOTNULL, null, '0', 'timeexpires'),
+            new xmldb_field('hassensitivefiles', XMLDB_TYPE_INTEGER, '1', null, XMLDB_NOTNULL, null, '0', 'hassensitive'),
+        ];
+        foreach ($fields as $field) {
+            if (!$dbman->field_exists($table, $field)) {
+                $dbman->add_field($table, $field);
+            }
+        }
+        $DB->execute('UPDATE {local_evidencehub_export} SET hassensitive = 1, hassensitivefiles = 1');
+        upgrade_plugin_savepoint(true, 2026100524, 'local', 'evidencehub');
+    }
+
     return true;
 }

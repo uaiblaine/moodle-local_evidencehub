@@ -681,6 +681,48 @@ final class hub_report_view_test extends \advanced_testcase {
     }
 
     /**
+     * An export refused because the requester's background queue is full returns to the hub with the reason, as
+     * the branch's other refusals do, instead of ending on core's error page; no row or task is written. Once the
+     * limit allows it, the same post queues (the control).
+     *
+     * Changes that must make it fail: dossier_export::start() called outside the branch's catch.
+     *
+     * @return void
+     */
+    public function test_the_export_branch_returns_to_the_hub_when_the_queue_is_full(): void {
+        global $DB, $PAGE;
+        [$templateid, $worker] = $this->scenario();
+        $exporter = $this->requester([$worker]);
+        set_config('syncmaxworkers', 0, 'local_evidencehub');
+        $generator = $this->getDataGenerator()->get_plugin_generator('local_evidencehub');
+        for ($i = 0; $i < 2; $i++) {
+            $generator->create_export([
+                'requestedby' => $exporter->id,
+                'templateid' => $templateid,
+                'status' => \local_evidencehub\local\export::STATUS_QUEUED,
+            ]);
+        }
+        $this->setUser($exporter);
+        $request = [
+            'contextid' => \context_system::instance()->id,
+            'templateid' => $templateid,
+            'action' => 'exportdossiers',
+            'workers' => [(int) $worker->id],
+            'sesskey' => sesskey(),
+        ];
+        $before = $DB->count_records(dossier_export::TABLE);
+
+        $this->assertSame('redirecterrordetected', $this->refusal($request, 'POST')->errorcode);
+        $this->assertSame($before, $DB->count_records(dossier_export::TABLE));
+        $this->assertSame([], \core\task\manager::get_adhoc_tasks(\local_evidencehub\task\build_dossier_export::class));
+
+        $PAGE = new \moodle_page();
+        set_config('maxqueuedexports', 3, 'local_evidencehub');
+        $this->assertSame('redirecterrordetected', $this->refusal($request, 'POST')->errorcode);
+        $this->assertSame($before + 1, $DB->count_records(dossier_export::TABLE));
+    }
+
+    /**
      * A visitor not logged in is asked to log in whether the context id exists or not: the page does not tell the two
      * apart before the login.
      *
