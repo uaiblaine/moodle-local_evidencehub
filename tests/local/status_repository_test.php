@@ -451,6 +451,109 @@ final class status_repository_test extends \advanced_testcase {
     }
 
     /**
+     * A pair decided by a sensitive evidence logs a neutral entry, with neither its status nor its date: core's
+     * competency pages show the history to readers without viewsensitive. The expiry still asks for a review under a
+     * review policy. The control is the same expiry decided by a plain type, whose entry names its status and date.
+     *
+     * @return void
+     */
+    public function test_a_sensitive_pair_logs_a_neutral_entry(): void {
+        $this->framework_policy(['onexpiry' => policy::ONEXPIRY_REVIEW]);
+        $this->linked(['typeid' => $this->type_id('aso'), 'expirydate' => 20260601]);
+        $this->recompute();
+        $this->assertSame(
+            [status::STATUS_EXPIRED, 1],
+            [(int) $this->row()->status, (int) $this->row()->issensitive],
+            'Precondition: an expired sensitive evidence decides.'
+        );
+        $logs = $this->log_rows();
+        $log = end($logs);
+        $this->assertSame('evidence_status_restricted', $log->descidentifier);
+        $this->assertNull($log->desca);
+        $description = (string) (new evidence((int) $log->id))->get_description();
+        $this->assertSame(get_string('evidence_status_restricted', 'local_evidencehub'), $description);
+        $this->assertStringNotContainsString('2026-06-01', $description);
+        $uc = user_competency::get_record(['userid' => $this->worker->id, 'competencyid' => $this->competency->get('id')]);
+        $this->assertEquals(user_competency::STATUS_WAITING_FOR_REVIEW, $uc->get('status'));
+
+        // The control: a second worker, the same expiry on a plain type.
+        $this->worker = $this->user_with();
+        $this->linked(['typeid' => $this->type_id('nrcertificate'), 'expirydate' => 20260601]);
+        $this->recompute();
+        $this->assertSame(0, (int) $this->row()->issensitive);
+        $logs = $this->log_rows();
+        $log = end($logs);
+        $this->assertSame('evidence_status_expired', $log->descidentifier);
+        $this->assertStringContainsString('2026-06-01', (string) (new evidence((int) $log->id))->get_description());
+    }
+
+    /**
+     * A pair that turns sensitive while its status stays the same has its earlier dated entries rewritten into the
+     * neutral one: no new entry is logged, since the status did not change. Controls: the entries were dated before the
+     * flip, another worker's plain pair of the same competency keeps its dated entry, and core's own entry on the
+     * pair keeps its text.
+     *
+     * @return void
+     */
+    public function test_a_pair_turning_sensitive_neutralises_its_history(): void {
+        global $DB;
+        $meta = $this->linked(['typeid' => $this->type_id('nrcertificate'), 'expirydate' => 20260701]);
+        $this->recompute();
+        $worker = $this->worker;
+        $this->worker = $this->user_with();
+        $this->linked(['typeid' => $this->type_id('nrcertificate'), 'expirydate' => 20260701]);
+        $this->recompute();
+        $otherlogs = $this->log_rows();
+        $this->worker = $worker;
+        $logs = $this->log_rows();
+        $this->assertCount(1, $logs);
+        $this->assertSame('evidence_status_critical', $logs[0]->descidentifier, 'Precondition: a dated entry.');
+        $ucid = (int) $logs[0]->usercompetencyid;
+        $coreid = (int) $DB->insert_record(evidence::TABLE, (object) [
+            'usercompetencyid' => $ucid,
+            'contextid' => \context_user::instance((int) $this->worker->id)->id,
+            'action' => evidence::ACTION_LOG,
+            'descidentifier' => 'evidence_status_valid',
+            'desccomponent' => 'core_competency',
+            'desca' => json_encode('2026-07-01'),
+            'timecreated' => time(),
+            'timemodified' => time(),
+            'usermodified' => 2,
+        ]);
+
+        $DB->set_field(details::TABLE, 'typeid', $this->type_id('aso'), ['id' => $meta->id]);
+        $this->recompute();
+
+        $this->assertSame(
+            [status::STATUS_CRITICAL, 1],
+            [(int) $this->row()->status, (int) $this->row()->issensitive],
+            'Precondition: the status stayed, the flag turned.'
+        );
+        $logs = $this->log_rows();
+        $this->assertCount(1, $logs, 'An unchanged status logged a new entry.');
+        $this->assertSame('evidence_status_restricted', $logs[0]->descidentifier);
+        $this->assertNull($logs[0]->desca);
+        $core = $DB->get_record(evidence::TABLE, ['id' => $coreid], '*', MUST_EXIST);
+        $this->assertSame(['evidence_status_valid', json_encode('2026-07-01')], [$core->descidentifier, $core->desca]);
+        $this->assertEquals($otherlogs, $this->log_rows_of((int) $otherlogs[0]->usercompetencyid));
+    }
+
+    /**
+     * The plugin's log entries of one user competency, oldest first.
+     *
+     * @param int $usercompetencyid The user competency.
+     * @return array Evidence rows.
+     */
+    private function log_rows_of(int $usercompetencyid): array {
+        global $DB;
+        return array_values($DB->get_records(
+            evidence::TABLE,
+            ['usercompetencyid' => $usercompetencyid, 'desccomponent' => 'local_evidencehub'],
+            'id'
+        ));
+    }
+
+    /**
      * A proficient rating proves a technical competency on its own; a behavioural one for its cycle
      * from the day of the rating in the site's timezone.
      *

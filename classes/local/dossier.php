@@ -122,7 +122,8 @@ final class dossier {
      * The dossier a verification code names.
      *
      * Anything but 32 hex characters finds nothing, as an unknown code does: the page answers both
-     * the same way, so it is no oracle of the code's shape.
+     * the same way, so it is no oracle of the code's shape. A trailing newline is malformed too (the
+     * pattern's D modifier): it never reaches the database.
      *
      * @param string $code The code as given.
      * @return \stdClass|null The dossier row.
@@ -130,7 +131,7 @@ final class dossier {
     public static function find_by_code(string $code): ?\stdClass {
         global $DB;
         $code = strtolower($code);
-        if (!preg_match('/^[0-9a-f]{32}$/', $code)) {
+        if (!preg_match('/^[0-9a-f]{32}$/D', $code)) {
             return null;
         }
         return $DB->get_record(self::TABLE, ['code' => $code]) ?: null;

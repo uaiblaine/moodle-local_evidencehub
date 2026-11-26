@@ -68,7 +68,7 @@ final class upgrade_test extends \advanced_testcase {
         );
         $this->assertSame([$c1 => 1, $c2 => 0, $c3 => 0], array_map('intval', $flags));
         // The run goes on to the last step's savepoint.
-        $this->assertEquals(2026100519, get_config('local_evidencehub', 'version'));
+        $this->assertEquals(2026100523, get_config('local_evidencehub', 'version'));
     }
 
     /**
@@ -131,7 +131,7 @@ final class upgrade_test extends \advanced_testcase {
         $this->assertTrue($dbman->field_exists($table, $field));
         $this->assertNull($DB->get_field('local_evidencehub_export', 'contextid', ['id' => $export->id]));
         $this->assertFalse($DB->get_columns('local_evidencehub_export')['contextid']->not_null);
-        $this->assertEquals(2026100519, get_config('local_evidencehub', 'version'));
+        $this->assertEquals(2026100523, get_config('local_evidencehub', 'version'));
     }
 
     /**
@@ -168,6 +168,90 @@ final class upgrade_test extends \advanced_testcase {
             'kept',
             $DB->get_field('user_preferences', 'value', ['userid' => $reader->id, 'name' => 'local_evidencehub_hubfilterx'])
         );
-        $this->assertEquals(2026100519, get_config('local_evidencehub', 'version'));
+        $this->assertEquals(2026100523, get_config('local_evidencehub', 'version'));
+    }
+
+    /**
+     * A log entry of the plugin in core's competency history, written as core's add_evidence() writes it.
+     *
+     * @param int $userid The worker.
+     * @param int $competencyid The competency.
+     * @param string $identifier The description's string id.
+     * @param string $component The description's component.
+     * @return int The entry's id.
+     */
+    private function history_entry(int $userid, int $competencyid, string $identifier, string $component): int {
+        global $DB;
+        $uc = $DB->get_record('competency_usercomp', ['userid' => $userid, 'competencyid' => $competencyid]);
+        $ucid = $uc ? (int) $uc->id : (int) $this->getDataGenerator()->get_plugin_generator('core_competency')
+            ->create_user_competency(['userid' => $userid, 'competencyid' => $competencyid])->get('id');
+        return (int) $DB->insert_record('competency_evidence', (object) [
+            'usercompetencyid' => $ucid,
+            'contextid' => \context_user::instance($userid)->id,
+            'action' => \core_competency\evidence::ACTION_LOG,
+            'descidentifier' => $identifier,
+            'desccomponent' => $component,
+            'desca' => json_encode('2027-01-15'),
+            'timecreated' => time(),
+            'timemodified' => time(),
+            'usermodified' => 2,
+        ]);
+    }
+
+    /**
+     * Upgrading from 2026100522 rewrites the plugin's status entries of a sensitive pair into the neutral one, with no
+     * date: core's competency pages show them to readers without viewsensitive.
+     *
+     * Changes that must make it fail: the step ignoring the pair's flag, matching the pair by competency or worker
+     * alone, or taking another component's entries or the plugin's other entries. Each has its control here: the same
+     * worker's plain pair, another worker's plain pair of the same competency, core's own entry on the sensitive pair,
+     * and an identifier that only an unescaped LIKE wildcard matches.
+     *
+     * @return void
+     */
+    public function test_the_status_entries_of_a_sensitive_pair_are_neutralised(): void {
+        global $DB;
+        $this->resetAfterTest();
+        $this->setAdminUser();
+        [$c1, $c2] = $this->competencies(2);
+        $worker = (int) $this->getDataGenerator()->create_user()->id;
+        $other = (int) $this->getDataGenerator()->create_user()->id;
+        $this->status_row($worker, $c1, status::STATUS_VALID, 20300101, 'aso');
+        $this->status_row($worker, $c2, status::STATUS_VALID, 20300101, 'nrcertificate');
+        $this->status_row($other, $c1, status::STATUS_VALID, 20300101, 'nrcertificate');
+        $sensitive = [
+            $this->history_entry($worker, $c1, 'evidence_status_valid', 'local_evidencehub'),
+            $this->history_entry($worker, $c1, 'evidence_status_expired', 'local_evidencehub'),
+        ];
+        $kept = [
+            'plain pair' => $this->history_entry($worker, $c2, 'evidence_status_due', 'local_evidencehub'),
+            'other worker' => $this->history_entry($other, $c1, 'evidence_status_critical', 'local_evidencehub'),
+            'core entry' => $this->history_entry($worker, $c1, 'evidence_status_valid', 'core_competency'),
+            'wildcard' => $this->history_entry($worker, $c1, 'evidence1status2valid', 'local_evidencehub'),
+        ];
+        $this->assertSame(
+            1,
+            (int) $DB->get_field('local_evidencehub_status', 'issensitive', ['userid' => $worker, 'competencyid' => $c1]),
+            'Precondition: the pair is flagged sensitive.'
+        );
+        set_config('version', 2026100522, 'local_evidencehub');
+
+        $this->assertTrue(xmldb_local_evidencehub_upgrade(2026100522));
+
+        foreach ($sensitive as $id) {
+            $entry = $DB->get_record('competency_evidence', ['id' => $id], '*', MUST_EXIST);
+            $this->assertSame('evidence_status_restricted', $entry->descidentifier);
+            $this->assertNull($entry->desca);
+            $this->assertSame(
+                get_string('evidence_status_restricted', 'local_evidencehub'),
+                (string) (new \core_competency\evidence($id))->get_description()
+            );
+        }
+        foreach ($kept as $name => $id) {
+            $entry = $DB->get_record('competency_evidence', ['id' => $id], '*', MUST_EXIST);
+            $this->assertNotSame('evidence_status_restricted', $entry->descidentifier, $name);
+            $this->assertSame(json_encode('2027-01-15'), $entry->desca, $name);
+        }
+        $this->assertEquals(2026100523, get_config('local_evidencehub', 'version'));
     }
 }

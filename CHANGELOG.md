@@ -153,6 +153,28 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- Version 2026100523: the external security audit of 2026-11-25, part A.
+  - A pair decided by evidence of a sensitive type logs a neutral entry into core's competency history ("Evidence
+    hub: the validity of this competency changed.", the new string `evidence_status_restricted`), with no status and
+    no date: core shows that history to readers without `viewsensitive`. The upgrade rewrites the plugin's earlier
+    status entries of every pair flagged sensitive the same way. An expiry under a review policy still asks for the
+    review.
+  - The Privacy API's export of a requester's data carries their export requests without the prepared ZIPs, which
+    hold other workers' dossiers; the ZIPs are still deleted with the requester's data. Deleting a worker's data
+    now also deletes the ZIPs other requesters prepared with a dossier about that worker and marks those exports
+    expired, before the dossier rows the download checks are gone.
+  - The worker's evidence page gives a restricted card its type only: no verification state, verifier or time.
+  - The drawer's timeline puts restricted items after the readable ones, by id alone, so their place bounds no
+    issue day, and works out no gap while it holds a restricted item.
+  - The verification page's live status also masks a pair whose deciding evidence's type is sensitive when its
+    stored flag is not, shows no status today for a suspended or deleted worker, is never cached and sends no
+    referrer (a `referrer` meta tag). A verification code with a trailing newline is malformed.
+  - A pair that turns sensitive while its status stays the same has its earlier status entries in core's competency
+    history rewritten into the neutral one (`status_repository::neutralise_history()`).
+  - The drawer's audit rows of a restricted item keep their date and read "Details changed" (the new string
+    `audit_restricted`) instead of the action, which would give back the verification state the card hides.
+  Gates G600 to G629; G233, G234 and G318 retired (their behaviour changed), G216 follows the moved flag.
+
 - Version 2026100522: the plugin's report persistents are told by the report's source, not by the component. Core's
   report services build a system report from the source and the component the client sends and create its
   persistent before asking the report's `can_view()`, so a reader of the hub could have the pairs report built under

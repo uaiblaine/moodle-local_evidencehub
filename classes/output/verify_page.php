@@ -19,6 +19,7 @@ namespace local_evidencehub\output;
 use core\output\renderable;
 use core\output\renderer_base;
 use core\output\templatable;
+use local_evidencehub\local\details;
 use local_evidencehub\local\dossier;
 use local_evidencehub\local\dossier_config;
 use local_evidencehub\local\meta;
@@ -31,7 +32,8 @@ use local_evidencehub\local\status_repository;
  *
  * Reads the snapshot only, which holds the masked name and no identifier, full name or file. With the
  * verifylive setting on it adds each competency's current status, computed with no viewer rights: a pair
- * whose status row is flagged sensitive reads "Restricted". Its verdict follows the readiness basis setting: the
+ * whose status row is flagged sensitive, or whose deciding evidence's type is, reads "Restricted", and a
+ * suspended or deleted worker has no status today. Its verdict follows the readiness basis setting: the
  * snapshot's real one, or the one over the statuses the snapshot shows.
  *
  * @package    local_evidencehub
@@ -126,6 +128,10 @@ class verify_page implements renderable, templatable {
     /**
      * The current effective status of each competency of the snapshot, for no viewer in particular.
      *
+     * Restricted when the stored flag or the deciding evidence's type says so, as
+     * {@see \local_evidencehub\local\validity_badges} reads it: a type made sensitive after the last recompute
+     * must not show its pair's status. A suspended or deleted worker counts as not found: no status today.
+     *
      * @param int $userid The worker.
      * @param array $competencies The snapshot's competencies.
      * @return array Competency id => effective status code; a competency without a row is missing.
@@ -136,14 +142,17 @@ class verify_page implements renderable, templatable {
         if (!$ids) {
             return [];
         }
+        if (!$DB->record_exists('user', ['id' => $userid, 'deleted' => 0, 'suspended' => 0])) {
+            return [];
+        }
         [$insql, $params] = $DB->get_in_or_equal($ids, SQL_PARAMS_NAMED, 'vfc');
-        $rows = $DB->get_records_select(
-            status_repository::TABLE,
-            "userid = :userid AND competencyid $insql",
-            $params + ['userid' => $userid],
-            '',
-            'id, competencyid, status, issensitive'
-        );
+        $sql = "SELECT s.id, s.competencyid, s.status,
+                       CASE WHEN s.issensitive = 1 OR t.issensitive = 1 THEN 1 ELSE 0 END AS issensitive
+                  FROM {" . status_repository::TABLE . "} s
+             LEFT JOIN {" . details::TABLE . "} m ON m.id = s.metaid
+             LEFT JOIN {local_evidencehub_type} t ON t.id = m.typeid
+                 WHERE s.userid = :userid AND s.competencyid $insql";
+        $rows = $DB->get_records_sql($sql, $params + ['userid' => $userid]);
         $current = [];
         foreach ($rows as $row) {
             $current[(int) $row->competencyid] = (int) $row->issensitive === 1 ? status::EFFECTIVE_RESTRICTED : (int) $row->status;

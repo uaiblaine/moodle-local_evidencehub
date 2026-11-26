@@ -25,6 +25,7 @@ use local_evidencehub\tests\dossier_pdf_spy;
 use local_evidencehub\tests\dossier_scenario;
 use local_evidencehub\tests\hub_scenario;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\DataProvider;
 
 /**
  * The public verification page: the snapshot only, no identifier or full name, the same answer for an
@@ -456,6 +457,96 @@ final class verify_page_test extends \advanced_testcase {
         $this->assertSame(status::label(status::STATUS_VALID), $export['competencies'][0]['statuslabel']);
         $this->assertSame(status::label(status::STATUS_EXPIRED), $export['competencies'][0]['livelabel']);
         $this->assertSame(get_string('validityrestricted', 'local_evidencehub'), $export['competencies'][1]['livelabel']);
+    }
+
+    /**
+     * The live status masks a pair whose deciding evidence's type is sensitive even when its stored flag is not
+     * (a type made sensitive after the last recompute), as the pills do. The control is the same pair once the type
+     * is plain again, which shows its status.
+     *
+     * @return void
+     */
+    public function test_the_live_status_reads_the_deciding_type(): void {
+        global $DB;
+        $pair = ['userid' => $this->worker->id, 'competencyid' => $this->sensitive];
+        $DB->set_field('local_evidencehub_status', 'issensitive', 0, $pair);
+        $restricted = get_string('validityrestricted', 'local_evidencehub');
+
+        $export = (new verify_page($this->dossier, true, true))->export_for_template($this->get_renderer());
+        $this->assertSame($restricted, $export['competencies'][1]['livelabel']);
+
+        $DB->set_field('local_evidencehub_type', 'issensitive', 0, ['shortname' => 'aso']);
+        $export = (new verify_page($this->dossier, true, true))->export_for_template($this->get_renderer());
+        $status = (int) $DB->get_field('local_evidencehub_status', 'status', $pair);
+        $this->assertSame(status::label($status), $export['competencies'][1]['livelabel']);
+        $this->assertNotSame($restricted, $export['competencies'][1]['livelabel']);
+    }
+
+    /**
+     * The data provider of the accounts that have no status today.
+     *
+     * @return array Case name => [the user column set to 1].
+     */
+    public static function gone_accounts(): array {
+        return ['suspended' => ['suspended'], 'deleted' => ['deleted']];
+    }
+
+    /**
+     * A suspended or deleted worker shows no status today: every competency reads as one without live data. The
+     * control is the same page before, which shows the plain pair's status.
+     *
+     * @param string $column suspended or deleted.
+     * @return void
+     */
+    #[DataProvider('gone_accounts')]
+    public function test_no_live_status_for_a_gone_worker(string $column): void {
+        global $DB;
+        $missing = status::effective_label(status::EFFECTIVE_MISSING);
+        $DB->set_field('local_evidencehub_status', 'status', status::STATUS_EXPIRED, [
+            'userid' => $this->worker->id,
+            'competencyid' => $this->plain,
+        ]);
+        $export = (new verify_page($this->dossier, true, true))->export_for_template($this->get_renderer());
+        $this->assertSame(status::label(status::STATUS_EXPIRED), $export['competencies'][0]['livelabel']);
+
+        $DB->set_field('user', $column, 1, ['id' => $this->worker->id]);
+        $export = (new verify_page($this->dossier, true, true))->export_for_template($this->get_renderer());
+        $this->assertSame([$missing, $missing], array_column($export['competencies'], 'livelabel'));
+        // The snapshot as issued is still the page's.
+        $this->assertSame(status::label(status::STATUS_VALID), $export['competencies'][0]['statuslabel']);
+    }
+
+    /**
+     * The page is never cached and sends no referrer: the address of a page it links to would otherwise carry the
+     * page's own, the code with it when it came in the query. The control is a page core builds, cacheable by default.
+     *
+     * @return void
+     */
+    public function test_the_page_is_not_cached_and_sends_no_referrer(): void {
+        global $CFG, $PAGE;
+        $this->assertTrue((new \moodle_page())->cacheable, 'Control: a page is cacheable by default.');
+        $this->assertStringNotContainsString('no-referrer', $CFG->additionalhtmlhead ?? '', 'Control: the site adds none.');
+        $html = $this->run_page($this->dossier->code);
+        $this->assertStringContainsString('J*** P***', $html, 'Precondition: the page was built.');
+        $this->assertFalse($PAGE->cacheable);
+        // The head the page asks core to print: the captured output starts at the page's body.
+        $this->assertStringContainsString('<meta name="referrer" content="no-referrer" />', $CFG->additionalhtmlhead);
+        $this->assertStringContainsString('<meta name="robots" content="noindex" />', $CFG->additionalhtmlhead);
+    }
+
+    /**
+     * A code with a trailing newline is malformed and never reaches the database; the same code without it is read.
+     *
+     * @return void
+     */
+    public function test_a_code_with_a_trailing_newline_is_not_read(): void {
+        global $DB;
+        $reads = $DB->perf_get_reads();
+        $this->assertNull(dossier::find_by_code($this->dossier->code . "\n"));
+        $this->assertSame($reads, $DB->perf_get_reads());
+
+        $this->assertSame((int) $this->dossier->id, (int) dossier::find_by_code($this->dossier->code)->id);
+        $this->assertGreaterThan($reads, $DB->perf_get_reads(), 'Control: a well-formed code is read.');
     }
 
     /**

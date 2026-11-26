@@ -106,25 +106,27 @@ class evidence_page implements renderable, templatable {
             // Who may not read the details may neither change nor decide on them.
             $item['canedit'] = $canmanage && !$restricted;
             $item['canverify'] = $canverify && !$restricted;
-            $item['statelabel'] = meta::verify_label($state);
-            $item['badgeclass'] = match ($state) {
-                meta::VERIFY_VERIFIED => 'bg-success text-white',
-                meta::VERIFY_REJECTED => 'bg-danger text-white',
-                default => 'bg-warning text-dark',
-            };
-            if ($state !== meta::VERIFY_PENDING && $meta->verifiedby) {
-                $verifier = \core_user::get_user((int) $meta->verifiedby);
-                $item['decidedby'] = get_string('decidedby', 'local_evidencehub', (object) [
-                    'name' => $verifier ? fullname($verifier) : '',
-                    'time' => userdate((int) $meta->timeverified, get_string('strftimedatetimeshort', 'core_langconfig')),
-                ]);
-            }
             if ($restricted) {
                 // The validity dates of a restricted evidence are its details too.
                 foreach (array_keys($item['competencies']) as $index) {
                     unset($item['competencies'][$index]['expiry']);
                 }
             } else {
+                // The verification state, the verifier and the time date the sensitive evidence's handling: a
+                // restricted card carries its type only.
+                $item['statelabel'] = meta::verify_label($state);
+                $item['badgeclass'] = match ($state) {
+                    meta::VERIFY_VERIFIED => 'bg-success text-white',
+                    meta::VERIFY_REJECTED => 'bg-danger text-white',
+                    default => 'bg-warning text-dark',
+                };
+                if ($state !== meta::VERIFY_PENDING && $meta->verifiedby) {
+                    $verifier = \core_user::get_user((int) $meta->verifiedby);
+                    $item['decidedby'] = get_string('decidedby', 'local_evidencehub', (object) [
+                        'name' => $verifier ? fullname($verifier) : '',
+                        'time' => userdate((int) $meta->timeverified, get_string('strftimedatetimeshort', 'core_langconfig')),
+                    ]);
+                }
                 $item['issuedate'] = meta::iso_date((int) $meta->issuedate);
                 $item['expirydate'] = $meta->expirydate === null ? null : meta::iso_date((int) $meta->expirydate);
                 $item['noexpiry'] = (bool) $meta->noexpiry;

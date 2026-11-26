@@ -36,6 +36,7 @@ use core_reportbuilder\local\systemreports\reports_list;
 use core_reportbuilder\manager;
 use local_evidencehub\local\audit;
 use local_evidencehub\local\dossier_export;
+use local_evidencehub\local\export;
 use local_evidencehub\local\meta;
 use local_evidencehub\local\reportpreference;
 use local_evidencehub\reportbuilder\local\systemreports\hub_pairs;
@@ -331,12 +332,15 @@ final class provider_test extends \core_privacy\tests\provider_testcase {
     }
 
     /**
-     * The ZIP prepared for a requester is exported with their requests and deleted with their data; another
-     * requester's ZIP stays (the control).
+     * The ZIP prepared for a requester is never exported with their requests, whose metadata is, and it is deleted
+     * with their data; another requester's ZIP stays (the control).
+     *
+     * The ZIP holds other workers' dossiers, which the requester's own export of data may not carry: the download
+     * re-checks the requester's reading of every worker, and the export would skip that check.
      *
      * @return void
      */
-    public function test_the_prepared_zip_is_exported_and_deleted(): void {
+    public function test_the_prepared_zip_is_deleted_but_never_exported(): void {
         $path = make_request_directory() . '/zip';
         file_put_contents($path, 'zip bytes');
         $file = dossier_export::store($this->w['export'], $path);
@@ -345,12 +349,13 @@ final class provider_test extends \core_privacy\tests\provider_testcase {
         $otherfile = dossier_export::store($otherexport, $path);
 
         $this->export_context_data_for_user((int) $this->w['requester']->id, $this->ctx('requester'), 'local_evidencehub');
-        $files = writer::with_context($this->ctx('requester'))->get_files(
-            $this->path('privacy:path:requests', (string) $this->w['export']->id)
-        );
-        $this->assertSame([$file->get_filename()], array_keys($files));
-        $requests = writer::with_context($this->ctx('requester'))->get_data($this->path('privacy:path:requests'))->requests;
+        $writer = writer::with_context($this->ctx('requester'));
+        $requests = $writer->get_data($this->path('privacy:path:requests'))->requests;
+        $this->assertCount(1, $requests, 'Control: the request itself is exported.');
         $this->assertSame(get_string('export_done', 'local_evidencehub'), $requests[0]->status);
+        $this->assertSame([], $writer->get_files($this->path('privacy:path:requests', (string) $this->w['export']->id)));
+        $this->assertSame([], $writer->get_files($this->path('privacy:path:requests')));
+        $this->assertTrue(get_file_storage()->file_exists_by_hash($file->get_pathnamehash()), 'Precondition: the ZIP is kept.');
 
         provider::delete_data_for_user(new approved_contextlist(
             $this->w['requester'],
@@ -360,6 +365,56 @@ final class provider_test extends \core_privacy\tests\provider_testcase {
         $fs = get_file_storage();
         $this->assertFalse($fs->file_exists_by_hash($file->get_pathnamehash()));
         $this->assertTrue($fs->file_exists_by_hash($otherfile->get_pathnamehash()));
+    }
+
+    /**
+     * Each delete of a worker's data, entered through the finder's context, deletes the ZIPs other requesters
+     * prepared with a dossier about that worker and expires those exports, as the cleanup task does: once the
+     * worker's dossier rows are gone, the download could no longer check the requester's reading of them. The same
+     * requester's export about the other worker only keeps its ZIP and its state (the control).
+     *
+     * Changes that must make it fail: a delete that leaves the ZIP, one that leaves the export servable, or one
+     * that reads the exports after the dossier rows are gone.
+     *
+     * @param string $method user, context or users.
+     * @return void
+     */
+    #[DataProvider('deletions')]
+    public function test_deleting_a_worker_retires_the_zips_about_them(string $method): void {
+        global $DB;
+        $gen = $this->getDataGenerator()->get_plugin_generator('local_evidencehub');
+        $path = make_request_directory() . '/zip';
+        file_put_contents($path, 'zip bytes');
+        $zip = dossier_export::store($this->w['export'], $path);
+        $onlyb = $gen->create_export(['requestedby' => $this->w['requester']->id, 'templateid' => 1]);
+        $gen->create_dossier([
+            'userid' => $this->w['b']->id,
+            'templateid' => 1,
+            'exportid' => $onlyb->id,
+            'createdby' => $this->w['requester']->id,
+        ]);
+        $otherzip = dossier_export::store($onlyb, $path);
+        $fs = get_file_storage();
+        $this->assertTrue($fs->file_exists_by_hash($zip->get_pathnamehash()), 'Precondition: the ZIP about a is kept.');
+        $contextids = provider::get_contexts_for_userid((int) $this->w['a']->id)->get_contextids();
+        $this->assertContains((int) $this->ctx('a')->id, array_map('intval', $contextids));
+        $context = $this->ctx('a');
+
+        match ($method) {
+            'user' => provider::delete_data_for_user(new approved_contextlist($this->w['a'], 'local_evidencehub', $contextids)),
+            'context' => provider::delete_data_for_all_users_in_context($context),
+            'users' => provider::delete_data_for_users(
+                new approved_userlist($context, 'local_evidencehub', [(int) $this->w['a']->id])
+            ),
+        };
+
+        $this->assertFalse($fs->file_exists_by_hash($zip->get_pathnamehash()));
+        $this->assertSame(
+            export::STATUS_EXPIRED,
+            (int) $DB->get_field('local_evidencehub_export', 'status', ['id' => $this->w['export']->id])
+        );
+        $this->assertTrue($fs->file_exists_by_hash($otherzip->get_pathnamehash()));
+        $this->assertSame(export::STATUS_DONE, (int) $DB->get_field('local_evidencehub_export', 'status', ['id' => $onlyb->id]));
     }
 
     /**

@@ -40,8 +40,12 @@ $PAGE->set_context(context_system::instance());
 $PAGE->set_url(new moodle_url('/local/evidencehub/verify.php'));
 $PAGE->set_pagelayout('embedded');
 $PAGE->set_title($title);
+// The page answers for one code at one moment: no cache keeps it, and no link it prints sends its address on (the
+// meta tag below: core's send_headers() sends the site's $CFG->referrerpolicy header after anything sent here).
+$PAGE->set_cacheable(false);
 // As core_renderer does for the login page: no search engine indexes a dossier.
-$CFG->additionalhtmlhead = ($CFG->additionalhtmlhead ?? '') . '<meta name="robots" content="noindex" />';
+$CFG->additionalhtmlhead = ($CFG->additionalhtmlhead ?? '') . '<meta name="robots" content="noindex" />'
+    . '<meta name="referrer" content="no-referrer" />';
 
 // Before the code is read, so a visitor who may not verify learns nothing about it.
 \local_evidencehub\local\dossier::require_verify($code);

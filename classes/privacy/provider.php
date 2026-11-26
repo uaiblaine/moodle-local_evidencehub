@@ -362,7 +362,11 @@ class provider implements
 
     /**
      * Delete every row about one worker, the worker's own export requests and their ZIPs, and their stored filter
-     * values of the plugin's reports.
+     * values of the plugin's reports; other requesters' prepared ZIPs holding a dossier about the worker are retired.
+     *
+     * Those ZIPs are retired before the worker's dossier rows go: the download checks the requester's reading of
+     * every worker its dossier rows name ({@see dossier_export::servable_file()}), and without the rows the ZIP
+     * would still be served with the deleted worker's dossier in it.
      *
      * @param int $userid The worker.
      * @return void
@@ -373,6 +377,13 @@ class provider implements
         $DB->delete_records('local_evidencehub_audit', ['relateduserid' => $userid]);
         $DB->delete_records('local_evidencehub_meta', ['userid' => $userid]);
         $DB->delete_records('local_evidencehub_status', ['userid' => $userid]);
+        $exportids = $DB->get_fieldset_select(
+            'local_evidencehub_dossier',
+            'DISTINCT exportid',
+            'userid = :userid AND exportid IS NOT NULL',
+            ['userid' => $userid]
+        );
+        dossier_export::retire(array_map('intval', $exportids));
         $DB->delete_records('local_evidencehub_dossier', ['userid' => $userid]);
         // The dossiers of an export are about other workers and outlive the request's row.
         $DB->set_field_select(
@@ -549,7 +560,10 @@ class provider implements
     }
 
     /**
-     * The dossier export requests the user made, each with the ZIP still kept for it.
+     * The dossier export requests the user made, their metadata only.
+     *
+     * Never the ZIP kept for a request: it holds other workers' dossiers, which its download serves only while the
+     * requester still reads every one of them ({@see dossier_export::servable_file()}).
      *
      * @param \context $context The user's own context.
      * @param int $userid The user.
@@ -567,12 +581,6 @@ class provider implements
                 'timecreated' => transform::datetime($record->timecreated),
                 'timeexpires' => $record->timeexpires ? transform::datetime($record->timeexpires) : null,
             ];
-            writer::with_context($context)->export_area_files(
-                array_merge($path, [(string) $record->id]),
-                'local_evidencehub',
-                dossier_export::FILEAREA,
-                (int) $record->id
-            );
         }
         if ($entries) {
             writer::with_context($context)->export_data($path, (object) ['requests' => $entries]);
