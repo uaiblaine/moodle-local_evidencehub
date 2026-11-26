@@ -68,7 +68,7 @@ final class upgrade_test extends \advanced_testcase {
         );
         $this->assertSame([$c1 => 1, $c2 => 0, $c3 => 0], array_map('intval', $flags));
         // The run goes on to the last step's savepoint.
-        $this->assertEquals(2026100523, get_config('local_evidencehub', 'version'));
+        $this->assertEquals(2026100524, get_config('local_evidencehub', 'version'));
     }
 
     /**
@@ -131,7 +131,7 @@ final class upgrade_test extends \advanced_testcase {
         $this->assertTrue($dbman->field_exists($table, $field));
         $this->assertNull($DB->get_field('local_evidencehub_export', 'contextid', ['id' => $export->id]));
         $this->assertFalse($DB->get_columns('local_evidencehub_export')['contextid']->not_null);
-        $this->assertEquals(2026100523, get_config('local_evidencehub', 'version'));
+        $this->assertEquals(2026100524, get_config('local_evidencehub', 'version'));
     }
 
     /**
@@ -168,7 +168,7 @@ final class upgrade_test extends \advanced_testcase {
             'kept',
             $DB->get_field('user_preferences', 'value', ['userid' => $reader->id, 'name' => 'local_evidencehub_hubfilterx'])
         );
-        $this->assertEquals(2026100523, get_config('local_evidencehub', 'version'));
+        $this->assertEquals(2026100524, get_config('local_evidencehub', 'version'));
     }
 
     /**
@@ -252,6 +252,44 @@ final class upgrade_test extends \advanced_testcase {
             $this->assertNotSame('evidence_status_restricted', $entry->descidentifier, $name);
             $this->assertSame(json_encode('2027-01-15'), $entry->desca, $name);
         }
-        $this->assertEquals(2026100523, get_config('local_evidencehub', 'version'));
+        $this->assertEquals(2026100524, get_config('local_evidencehub', 'version'));
+    }
+
+    /**
+     * Upgrading from 2026100523 adds the export's two sensitive flags, 1 on every row already there (what an older
+     * ZIP holds is unknown, so its download is checked as if it held both), and 0 by default on a new row.
+     *
+     * @return void
+     */
+    public function test_the_export_sensitive_flags_are_added(): void {
+        global $DB;
+        $this->resetAfterTest();
+        $dbman = $DB->get_manager();
+        $table = new \xmldb_table('local_evidencehub_export');
+        $generator = $this->getDataGenerator()->get_plugin_generator('local_evidencehub');
+        $export = $generator->create_export(['requestedby' => 2, 'templateid' => 1]);
+        // As a 2026100523 site holds the table: neither column.
+        foreach (['hassensitive', 'hassensitivefiles'] as $name) {
+            $dbman->drop_field($table, new \xmldb_field($name));
+        }
+        set_config('version', 2026100523, 'local_evidencehub');
+
+        $this->assertTrue(xmldb_local_evidencehub_upgrade(2026100523));
+
+        $columns = $DB->get_columns('local_evidencehub_export');
+        foreach (['hassensitive', 'hassensitivefiles'] as $name) {
+            $this->assertTrue($columns[$name]->not_null, $name);
+            $this->assertSame(1, (int) $DB->get_field('local_evidencehub_export', $name, ['id' => $export->id]), $name);
+        }
+        $new = $generator->create_export(['requestedby' => 2, 'templateid' => 1]);
+        $this->assertSame(
+            [0, 0],
+            array_map('intval', array_values((array) $DB->get_record(
+                'local_evidencehub_export',
+                ['id' => $new->id],
+                'hassensitive, hassensitivefiles'
+            )))
+        );
+        $this->assertEquals(2026100524, get_config('local_evidencehub', 'version'));
     }
 }

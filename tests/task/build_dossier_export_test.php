@@ -289,4 +289,34 @@ final class build_dossier_export_test extends \advanced_testcase {
         $this->assertSame(1, $DB->count_records(dossier::TABLE, ['exportid' => $export->id]));
         $this->assertStringContainsString('could not be announced', $output);
     }
+
+    /**
+     * The task records on the export what its ZIP holds: a sensitive evidence's row and file for a requester who
+     * holds viewsensitive on a site that includes such files; the export of plain evidence flags nothing (the
+     * control).
+     *
+     * @return void
+     */
+    public function test_the_task_records_the_sensitive_content(): void {
+        global $DB;
+        $a = (int) $this->workers['a']->id;
+        $DB->set_field(
+            'local_evidencehub_meta',
+            'typeid',
+            (int) $DB->get_field('local_evidencehub_type', 'id', ['shortname' => 'aso'], MUST_EXIST),
+            ['userid' => $a]
+        );
+        $DB->set_field('local_evidencehub_status', 'issensitive', 1, ['userid' => $a]);
+        set_config('includesensitivefiles', 1, 'local_evidencehub');
+        $requester = $this->requester(array_values($this->workers), ['local/evidencehub:viewsensitive']);
+
+        $this->setUser($requester);
+        $export = $this->queue_and_run([$a]);
+        $this->assertSame(export::STATUS_DONE, (int) $export->status);
+        $this->assertSame([1, 1], [(int) $export->hassensitive, (int) $export->hassensitivefiles]);
+
+        $this->setUser($requester);
+        $export = $this->queue_and_run([(int) $this->workers['b']->id]);
+        $this->assertSame([0, 0], [(int) $export->hassensitive, (int) $export->hassensitivefiles]);
+    }
 }

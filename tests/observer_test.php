@@ -120,6 +120,52 @@ final class observer_test extends \advanced_testcase {
     }
 
     /**
+     * A verified evidence of a sensitive type of the worker, verified by a holder of viewsensitive.
+     *
+     * @return \stdClass The meta row.
+     */
+    private function verified_sensitive(): \stdClass {
+        $ue = $this->evidence_of((int) $this->worker->id);
+        $this->setUser($this->worker);
+        $meta = details::save($ue, $this->details_data(['typeid' => $this->type_id('aso'), 'expirydate' => 20270115]));
+        $this->setUser($this->user_with([
+            'local/evidencehub:verify',
+            'moodle/competency:userevidenceview',
+            'local/evidencehub:viewsensitive',
+        ]));
+        return details::verify((int) $meta->id);
+    }
+
+    /**
+     * A verifier who may not read the sensitive details changes the evidence in tool_lp: the decision is not
+     * theirs to keep, so the details go back to pending with a reset row of theirs in the trail.
+     *
+     * @return void
+     */
+    public function test_a_change_in_tool_lp_without_viewsensitive_resets_sensitive_details(): void {
+        $meta = $this->verified_sensitive();
+        $this->setUser($this->verifier);
+        $this->rename_in_tool_lp($meta);
+        $this->assertSame(meta::VERIFY_PENDING, (int) details::get((int) $meta->userevidenceid)->verifystatus);
+        $trail = $this->trail((int) $meta->id);
+        $this->assertSame([audit::ACTION_RESET, (int) $this->verifier->id], end($trail));
+    }
+
+    /**
+     * Control: the same verifier holding viewsensitive changes it in tool_lp and the decision stays.
+     *
+     * @return void
+     */
+    public function test_a_change_in_tool_lp_with_viewsensitive_keeps_sensitive_details(): void {
+        $meta = $this->verified_sensitive();
+        $this->grant($this->verifier, ['local/evidencehub:viewsensitive']);
+        $this->setUser($this->verifier);
+        $this->rename_in_tool_lp($meta);
+        $this->assertSame(meta::VERIFY_VERIFIED, (int) details::get((int) $meta->userevidenceid)->verifystatus);
+        $this->assertNotContains(audit::ACTION_RESET, array_column($this->trail((int) $meta->id), 0));
+    }
+
+    /**
      * Deleting the evidence drops its details and keeps the trail; another evidence keeps its details.
      *
      * @return void

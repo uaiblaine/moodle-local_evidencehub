@@ -527,6 +527,91 @@ final class details_test extends \advanced_testcase {
     }
 
     /**
+     * The decision rule is judged for the actor it is given, never for the current user (the administrator
+     * here): not the owner, verify and the right to read the evidence over the worker, and viewsensitive on a
+     * sensitive type.
+     *
+     * @return void
+     */
+    public function test_the_decision_rule_reads_the_actor(): void {
+        $sensitive = $this->sensitive_by_worker();
+        $plain = $this->saved_by_worker();
+        $reader = $this->user_with(['local/evidencehub:verify', 'moodle/competency:userevidenceview']);
+        $manager = $this->user_with(['local/evidencehub:verify', 'moodle/competency:userevidencemanage']);
+        $noread = $this->user_with(['local/evidencehub:verify']);
+        $noverify = $this->user_with(['moodle/competency:userevidenceview', 'local/evidencehub:viewsensitive']);
+        $this->grant($this->worker, ['local/evidencehub:verify', 'moodle/competency:userevidenceview']);
+        $this->setAdminUser();
+
+        $this->assertTrue(details::may_decide($plain, (int) $reader->id));
+        $this->assertTrue(details::may_decide($plain, (int) $manager->id), 'Managing reads, as core counts it.');
+        $this->assertFalse(details::may_decide($plain, (int) $noread->id));
+        $this->assertFalse(details::may_decide($plain, (int) $noverify->id));
+        $this->assertFalse(details::may_decide($plain, (int) $this->worker->id), 'The owner decided.');
+        $this->assertFalse(details::may_decide($sensitive, (int) $reader->id), 'Sensitive without viewsensitive.');
+        $this->grant($reader, ['local/evidencehub:viewsensitive']);
+        $this->assertTrue(details::may_decide($sensitive, (int) $reader->id));
+        $this->assertFalse(details::can_see_sensitive((int) $this->worker->id, (int) $manager->id));
+        $this->assertTrue(details::can_see_sensitive((int) $this->worker->id, (int) $this->worker->id));
+    }
+
+    /**
+     * A verifier who may not read a sensitive type changes a verified plain evidence to that type: the rule judges
+     * the row as saved, so it goes back to pending with their reset row; holding viewsensitive, the same change
+     * keeps the decision (the control).
+     *
+     * @return void
+     */
+    public function test_a_change_to_a_sensitive_type_is_judged_on_that_type(): void {
+        $editor = $this->user_with(['local/evidencehub:verify', 'moodle/competency:userevidencemanage']);
+        $tosensitive = ['typeid' => $this->type_id('aso'), 'expirydate' => 20270115];
+        foreach ([false, true] as $withviewsensitive) {
+            $meta = $this->saved_by_worker();
+            $this->setUser($this->verifier);
+            details::verify((int) $meta->id);
+            if ($withviewsensitive) {
+                $this->grant($editor, ['local/evidencehub:viewsensitive']);
+            }
+            $this->setUser($editor);
+            $ue = new \core_competency\user_evidence((int) $meta->userevidenceid);
+            $saved = details::save($ue, $this->details_data($tosensitive));
+
+            $this->assertSame($this->type_id('aso'), (int) $saved->typeid);
+            $last = array_slice($this->trail((int) $meta->id), -1)[0];
+            if ($withviewsensitive) {
+                $this->assertSame(meta::VERIFY_VERIFIED, (int) $saved->verifystatus, 'Control: viewsensitive keeps it.');
+                $this->assertSame([audit::ACTION_DETAILS, (int) $editor->id], $last);
+            } else {
+                $this->assertSame(meta::VERIFY_PENDING, (int) $saved->verifystatus);
+                $this->assertSame([audit::ACTION_RESET, (int) $editor->id], $last);
+            }
+        }
+    }
+
+    /**
+     * The pages' offer to verify is the decision rule for the current user: on a sensitive evidence a verifier
+     * without viewsensitive is not offered it, with viewsensitive they are; without the row, the rule for a plain
+     * type; a row of another worker is never verifiable under this one's name.
+     *
+     * @return void
+     */
+    public function test_the_verify_offer_is_the_decision_rule(): void {
+        $sensitive = $this->sensitive_by_worker();
+        $plain = $this->saved_by_worker();
+        $other = $this->user_with();
+        $this->setUser($this->verifier);
+        $workerid = (int) $this->worker->id;
+        $this->assertTrue(details::can_verify($workerid));
+        $this->assertTrue(details::can_verify($workerid, $plain));
+        $this->assertFalse(details::can_verify($workerid, $sensitive));
+        $this->assertFalse(details::can_verify((int) $other->id, $plain));
+        $this->grant($this->verifier, ['local/evidencehub:viewsensitive']);
+        $this->assertTrue(details::can_verify($workerid, $sensitive));
+        $this->setUser($this->worker);
+        $this->assertFalse(details::can_verify($workerid, $plain), 'The owner was offered to verify.');
+    }
+
+    /**
      * Only the owner, or a holder of viewsensitive, sees sensitive details.
      *
      * @return void

@@ -44,7 +44,7 @@ $functions = [
         'classname' => \local_evidencehub\external\report_rows::class,
         'description' => 'A page of the evidence hub\'s pairs of a learning plan template, as the reader may see them, '
             . 'with the columns, the filters and their counts.',
-        'type' => 'read',
+        'type' => 'write',
         'ajax' => true,
         'capabilities' => 'local/evidencehub:view',
     ],

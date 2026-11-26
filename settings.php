@@ -84,6 +84,13 @@ if ($hassiteconfig) {
             PARAM_INT
         ));
         $settings->add(new admin_setting_configtext(
+            'local_evidencehub/maxqueuedexports',
+            new lang_string('maxqueuedexports', 'local_evidencehub'),
+            new lang_string('maxqueuedexports_desc', 'local_evidencehub'),
+            \local_evidencehub\local\dossier_config::DEFAULT_MAXQUEUEDEXPORTS,
+            PARAM_INT
+        ));
+        $settings->add(new admin_setting_configtext(
             'local_evidencehub/exportretentiondays',
             new lang_string('exportretentiondays', 'local_evidencehub'),
             new lang_string('exportretentiondays_desc', 'local_evidencehub'),

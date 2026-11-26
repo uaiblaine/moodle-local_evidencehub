@@ -78,7 +78,8 @@ final class get_readiness extends external_api {
      * @param string $useridnumber The worker's ID number, or ''.
      * @return array ready, computed, competencies.
      * @throws invalid_parameter_exception When both or neither worker identifiers are given.
-     * @throws \moodle_exception For a guest, an unknown or unoffered template, or a worker not found.
+     * @throws \moodle_exception With competencies disabled, for a guest, an unknown or unoffered template, or a
+     *     worker not found.
      * @throws \required_capability_exception Without local/evidencehub:view in the template's context.
      */
     public static function execute(int $templateid, int $userid = 0, string $useridnumber = ''): array {
@@ -92,6 +93,7 @@ final class get_readiness extends external_api {
             'userid' => $userid,
             'useridnumber' => $useridnumber,
         ]);
+        \core_competency\api::require_enabled();
         $useridnumber = trim($useridnumber);
         if (($userid > 0) === ($useridnumber !== '')) {
             throw new invalid_parameter_exception('Give exactly one of userid or useridnumber.');
@@ -122,9 +124,10 @@ final class get_readiness extends external_api {
     /**
      * The worker the parameters name, when the caller may read them and they have an active plan from the template.
      *
-     * Every refusal is the same error, so an unknown ID number, an unreadable user and a worker without the
-     * plan cannot be told apart. An ID number finds a worker only when the caller is shown ID numbers in the
-     * template's context, the rule of the hub's search ({@see hub_query::base_sql()}).
+     * Every refusal is the same error, so an unknown ID number, an unreadable user, a suspended user and a worker
+     * without the plan cannot be told apart: a suspended account counts as not found. An ID number finds a
+     * worker only when the caller is shown ID numbers in the template's context, the rule of the hub's search
+     * ({@see hub_query::base_sql()}).
      *
      * @param \context $context The template's context.
      * @param int $templateid The template.
@@ -136,12 +139,12 @@ final class get_readiness extends external_api {
     private static function worker(\context $context, int $templateid, int $userid, string $useridnumber): int {
         global $DB;
         if ($userid > 0) {
-            $users = $DB->get_records('user', ['id' => $userid, 'deleted' => 0], '', 'id');
+            $users = $DB->get_records('user', ['id' => $userid, 'deleted' => 0, 'suspended' => 0], '', 'id');
         } else if (!in_array('idnumber', \core_user\fields::get_identity_fields($context, false), true)) {
             $users = [];
         } else {
             // An ID number two users share names neither.
-            $users = $DB->get_records('user', ['idnumber' => $useridnumber, 'deleted' => 0], '', 'id', 0, 2);
+            $users = $DB->get_records('user', ['idnumber' => $useridnumber, 'deleted' => 0, 'suspended' => 0], '', 'id', 0, 2);
         }
         $found = count($users) === 1 ? (int) reset($users)->id : 0;
         $readable = $found

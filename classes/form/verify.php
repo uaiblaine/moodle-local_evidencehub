@@ -103,11 +103,13 @@ class verify extends \core_form\dynamic_form {
      *
      * @return void
      * @throws \required_capability_exception Without local/evidencehub:verify or the right to read the evidence.
-     * @throws \moodle_exception On the user's own evidence, or details restricted for the user.
+     * @throws \moodle_exception With competencies disabled, on the user's own evidence, or details restricted for the
+     *     user.
      */
     #[\Override]
     protected function check_access_for_dynamic_submission(): void {
         global $USER;
+        \core_competency\api::require_enabled();
         $context = $this->get_context_for_dynamic_submission();
         $ownerid = (int) $this->get_meta()->userid;
         require_capability('local/evidencehub:verify', $context);

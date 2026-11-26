@@ -18,6 +18,7 @@ namespace local_evidencehub\tests;
 
 use core_files\archive_writer;
 use local_evidencehub\local\dossier_builder;
+use local_evidencehub\local\dossier_export;
 use local_evidencehub\local\dossier_plan;
 use local_evidencehub\local\export;
 use local_evidencehub\local\status;
@@ -34,8 +35,11 @@ use local_evidencehub\local\status;
  */
 trait dossier_scenario {
     /**
-     * A requester: view, exportdossier and core's templateview on the site, and core's userevidenceview over
-     * some workers only.
+     * A requester: view, exportdossier, core's templateview and viewuseridentity on the site, and core's
+     * userevidenceview over some workers only.
+     *
+     * The site shows ID numbers among the identity fields, so the requester is shown the dossier's identifier, as
+     * {@see dossier_builder} requires before printing it.
      *
      * @param array $workers The workers whose evidence the requester reads.
      * @param array $capabilities More capabilities on the site.
@@ -46,7 +50,13 @@ trait dossier_scenario {
         $user = $generator->create_user();
         $system = \context_system::instance();
         $roleid = $generator->create_role();
-        $site = ['local/evidencehub:view', 'local/evidencehub:exportdossier', 'moodle/competency:templateview'];
+        set_config('showuseridentity', 'email,idnumber');
+        $site = [
+            'local/evidencehub:view',
+            'local/evidencehub:exportdossier',
+            'moodle/competency:templateview',
+            'moodle/site:viewuseridentity',
+        ];
         foreach (array_merge($site, $capabilities) as $capability) {
             assign_capability($capability, CAP_ALLOW, $roleid, $system->id, true);
         }
@@ -119,10 +129,11 @@ trait dossier_scenario {
      * @param int $templateid The template.
      * @param array $userids The workers asked for.
      * @param \context|null $context The hub's context; the system when null.
-     * @return array plan (dossier_plan), dossiers (rows), files (path => content), manifest (lists of cells).
+     * @return array plan (dossier_plan), dossiers (rows), export (its row as stored after the build), files
+     *     (path => content), manifest (lists of cells).
      */
     protected function build_zip(int $templateid, array $userids, ?\context $context = null): array {
-        global $USER;
+        global $DB, $USER;
         $builder = new dossier_builder($context ?? \context_system::instance(), $templateid);
         $plan = $builder->prepare($userids);
         $export = $this->getDataGenerator()->get_plugin_generator('local_evidencehub')->create_export([
@@ -132,7 +143,8 @@ trait dossier_scenario {
         ]);
         $zip = archive_writer::get_file_writer('dossiers-test.zip', archive_writer::ZIP_WRITER);
         $dossiers = $builder->build($zip, $plan, $export);
-        return ['plan' => $plan, 'dossiers' => $dossiers] + $this->read_zip($zip->get_path_to_zip());
+        $stored = $DB->get_record(dossier_export::TABLE, ['id' => $export->id], '*', MUST_EXIST);
+        return ['plan' => $plan, 'dossiers' => $dossiers, 'export' => $stored] + $this->read_zip($zip->get_path_to_zip());
     }
 
     /**

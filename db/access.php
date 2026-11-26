@@ -54,8 +54,11 @@ $capabilities = [
     ],
 
     /*
-     * Evidence of a sensitive type (an occupational health certificate is health data) shows its
-     * details and files only to holders of this capability. No archetype: it is granted on purpose.
+     * Evidence of a sensitive type (an occupational health certificate is health data): the hub, its pages,
+     * services and dossiers hide its details, and leave its files out of dossiers, from a viewer other than the
+     * worker who lacks this capability. It does not hide the files in core: tool_lp serves an evidence's files to
+     * any holder of moodle/competency:userevidenceview over the worker (see README). No archetype: it is
+     * granted on purpose.
      */
     'local/evidencehub:viewsensitive' => [
         'riskbitmask' => RISK_PERSONAL,
@@ -68,15 +71,6 @@ $capabilities = [
         'riskbitmask' => RISK_CONFIG,
         'captype' => 'write',
         'contextlevel' => CONTEXT_COURSECAT,
-        'archetypes' => [
-            'manager' => CAP_ALLOW,
-        ],
-    ],
-
-    'local/evidencehub:managetypes' => [
-        'riskbitmask' => RISK_CONFIG,
-        'captype' => 'write',
-        'contextlevel' => CONTEXT_SYSTEM,
         'archetypes' => [
             'manager' => CAP_ALLOW,
         ],

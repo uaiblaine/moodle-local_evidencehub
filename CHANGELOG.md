@@ -8,6 +8,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- Version 2026100524: `local_evidencehub/maxqueuedexports` (2, at least 1): a user may have at most that many
+  dossier exports waiting or being prepared in the background; another is refused ("errordossierqueuefull") until
+  one finishes, decided under the user's queue lock so two requests at once cannot both pass. Only exports created
+  in the last 24 hours count, so a stream that died leaving its row running stops blocking the user after a day. A
+  streamed export is not counted. The hub returns to the list or the matrix with the reason when the queue is full.
+
 - Version 2026100520: the validity policy in `local_dimensions`' Competency hub. A listener of
   `\local_dimensions\hook\competency_panel_sections` (`local\policy_section`) adds a "Validity policy" section to
   the panel of the selected competency: the rows of the Validity policies page and who sets the policy (the
@@ -88,6 +94,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Removed
 
+- Version 2026100524: the capability `local/evidencehub:managetypes`, which nothing checked.
+
 - The old list of the hub: its page (`output\hub_page`, `templates/hub_page.mustache`), its reads
   (`hub_query::page()`, `page_keys()`, `page_details()`, `rows()`), its download of ticked rows (`hub_download`; the
   posted pairs' parser moved to `dossier_export::parse_pairs()`), its figures (`hub_kpis::get()`, `compute()`,
@@ -153,6 +161,24 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- Version 2026100524, external audit of 2026-11-25 (part B):
+  - A prepared dossier ZIP records what it holds (`local_evidencehub_export.hassensitive` and `hassensitivefiles`,
+    set by the builder before the first byte, for the streamed and the background export alike; rows from before
+    are marked as holding both). Its download now also needs `local/evidencehub:viewsensitive` over every worker
+    (the worker's own dossier excepted) when it holds unmasked sensitive rows, `includesensitivefiles` still on
+    when it holds sensitive files, and competencies enabled (F-05).
+  - Keeping a decision while editing a verified or rejected evidence follows the verification rule itself
+    (`details::may_decide()`, also used by `verify()` and `reject()`): a verifier who may not read the evidence,
+    or its sensitive type, sends it back to pending, through this plugin's form and tool_lp alike; a change of
+    type is judged on the type saved. `details::can_verify()`, which pages use to offer the action, is the same
+    rule for the current user (F-06).
+  - A dossier prints the identifier only where the requester may see it: the ID number to whom core shows it
+    among the identity fields, a profile field by its visibility for that worker; otherwise "u" and the user
+    id, in the PDF, the file names and `manifest.csv` (F-07).
+  - A dossier row is restricted by its evidence type's sensitive flag as well as the status row's own (F-08).
+  - `local_evidencehub_get_readiness` treats a suspended worker as not found, and refuses a call while
+    competencies are disabled; so does the verification form (F-09, F-11).
+  - `local_evidencehub_report_rows` is declared a write service: it stores the reader's last template (F-11).
 - Version 2026100523: the external security audit of 2026-11-25, part A.
   - A pair decided by evidence of a sensitive type logs a neutral entry into core's competency history ("Evidence
     hub: the validity of this competency changed.", the new string `evidence_status_restricted`), with no status and

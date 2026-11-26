@@ -197,4 +197,23 @@ final class verify_test extends \advanced_testcase {
         $form->process_dynamic_submission();
         $this->assertSame(meta::VERIFY_VERIFIED, (int) details::get((int) $ue->get('id'))->verifystatus);
     }
+
+    /**
+     * With competencies disabled on the site the form is refused to a verifier; enabled, it is reached.
+     *
+     * @return void
+     */
+    public function test_the_form_needs_competencies_enabled(): void {
+        $this->setUser($this->verifier);
+        set_config('enabled', 0, 'core_competency');
+        try {
+            $this->submitted(meta::VERIFY_VERIFIED);
+            $this->fail('The form was reached with competencies disabled.');
+        } catch (\moodle_exception $e) {
+            $this->assertSame('competenciesarenotenabled', $e->errorcode);
+        }
+        $this->assertSame(meta::VERIFY_PENDING, $this->state());
+        set_config('enabled', 1, 'core_competency');
+        $this->assertInstanceOf(verify::class, $this->submitted(meta::VERIFY_VERIFIED));
+    }
 }

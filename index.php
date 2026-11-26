@@ -90,7 +90,15 @@ if (optional_param('action', '', PARAM_ALPHA) === 'exportdossiers') {
     } catch (moodle_exception $e) {
         redirect($returnurl, $e->getMessage(), null, \core\output\notification::NOTIFY_ERROR);
     }
-    $plan = dossier_export::start($context, $templateid, $userids);
+    try {
+        $plan = dossier_export::start($context, $templateid, $userids);
+    } catch (moodle_exception $e) {
+        // A full or busy background queue is the requester's to wait for: back to the hub with the reason.
+        if (!in_array($e->errorcode, ['errordossierqueuefull', 'errordossierqueuebusy'], true)) {
+            throw $e;
+        }
+        redirect($returnurl, $e->getMessage(), null, \core\output\notification::NOTIFY_ERROR);
+    }
     if ($plan === null) {
         redirect(
             $returnurl,

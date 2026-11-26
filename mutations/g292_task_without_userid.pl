@@ -1,1 +1,1 @@
-s/\n\s*\$task->set_userid\(\(int\) \$USER->id\);//;
+s/\n\s*\$task->set_userid\(\$requesterid\);//;
